@@ -51,8 +51,9 @@ public static class Csg
         var patchesB = PatchExtractor.Extract(cutB.SubTriangles, adjB);
 
         // Step 4: Classify patches (the novel part — uses max-margin confident points)
-        int degA = PatchClassifier.ClassifyAll(patchesA, cutA.SubTriangles, b.Bvh, options.UseWindingNumber);
-        int degB = PatchClassifier.ClassifyAll(patchesB, cutB.SubTriangles, a.Bvh, options.UseWindingNumber);
+        var classifier = options.ClassificationStrategy ?? new CpuPatchClassificationStrategy();
+        int degA = classifier.ClassifyAll(patchesA, cutA.SubTriangles, b.Bvh, options.UseWindingNumber);
+        int degB = classifier.ClassifyAll(patchesB, cutB.SubTriangles, a.Bvh, options.UseWindingNumber);
 
         // Step 5: Assemble result by selecting appropriate patches
         var assembly = PatchAssembler.Assemble(

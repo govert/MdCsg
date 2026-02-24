@@ -1,0 +1,212 @@
+#version 450
+
+// Finds the confident point for each patch: the sub-triangle centroid
+// with the maximum minimum distance to any face of the other solid's BVH.
+//
+// One workgroup per patch. Threads within a workgroup cooperatively iterate
+// sub-triangles in stride pattern and do a shared-memory parallel reduction
+// to find the max margin.
+
+layout(local_size_x = 256) in;
+
+// Push constants
+layout(push_constant) uniform PushConstants {
+    uint patchCount;
+    uint bvhNodeCount;
+    uint faceCount;
+};
+
+// BVH node: 3 x vec4 = 48 bytes
+struct BvhNode {
+    // vec4 0: boundsMin.xyz, boundsMax.x
+    float boundsMinX, boundsMinY, boundsMinZ, boundsMaxX;
+    // vec4 1: boundsMax.yz, leftOrStart, right
+    float boundsMaxY, boundsMaxZ;
+    int leftOrStart, right;
+    // vec4 2: primitiveCount, pad, pad, pad
+    int primitiveCount, pad0, pad1, pad2;
+};
+
+layout(std430, binding = 0) readonly buffer BvhNodes {
+    BvhNode bvhNodes[];
+};
+
+layout(std430, binding = 1) readonly buffer FaceIndices {
+    int faceIndices[];
+};
+
+// Triangle vertices: 3 GpuVec3 per face (each GpuVec3 is 16 bytes = vec4)
+layout(std430, binding = 2) readonly buffer TriangleVertices {
+    vec4 triVerts[];
+};
+
+// Sub-triangle vertices: 3 GpuVec3 per sub-triangle
+layout(std430, binding = 3) readonly buffer SubTriangleVertices {
+    vec4 subTriVerts[];
+};
+
+// Patch offsets: patchCount + 1 entries (prefix-sum)
+layout(std430, binding = 4) readonly buffer PatchOffsets {
+    int patchOffsets[];
+};
+
+// Concatenated sub-triangle indices for all patches
+layout(std430, binding = 5) readonly buffer PatchSubTriIndices {
+    int patchSubTriIndices[];
+};
+
+// Output: per-patch confident point (xyz) and margin (w)
+layout(std430, binding = 6) writeonly buffer Results {
+    vec4 results[];  // .xyz = confident point, .w = margin
+};
+
+shared vec4 sharedBest[256]; // .xyz = point, .w = margin
+
+float aabbDistanceSq(vec3 point, vec3 bmin, vec3 bmax) {
+    vec3 d = max(bmin - point, max(vec3(0.0), point - bmax));
+    return dot(d, d);
+}
+
+float pointTriangleDistanceSq(vec3 p, vec3 a, vec3 b, vec3 c) {
+    vec3 ab = b - a;
+    vec3 ac = c - a;
+    vec3 ap = p - a;
+
+    float d1 = dot(ab, ap);
+    float d2 = dot(ac, ap);
+    if (d1 <= 0.0 && d2 <= 0.0) return dot(p - a, p - a);
+
+    vec3 bp = p - b;
+    float d3 = dot(ab, bp);
+    float d4 = dot(ac, bp);
+    if (d3 >= 0.0 && d4 <= d3) return dot(p - b, p - b);
+
+    vec3 cp = p - c;
+    float d5 = dot(ab, cp);
+    float d6 = dot(ac, cp);
+    if (d6 >= 0.0 && d5 <= d6) return dot(p - c, p - c);
+
+    float vc = d1 * d4 - d3 * d2;
+    if (vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0) {
+        float v = d1 / (d1 - d3);
+        vec3 proj = a + ab * v;
+        return dot(p - proj, p - proj);
+    }
+
+    float vb = d5 * d2 - d1 * d6;
+    if (vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0) {
+        float w = d2 / (d2 - d6);
+        vec3 proj = a + ac * w;
+        return dot(p - proj, p - proj);
+    }
+
+    float va = d3 * d6 - d5 * d4;
+    if (va <= 0.0 && (d4 - d3) >= 0.0 && (d5 - d6) >= 0.0) {
+        float w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        vec3 proj = b + (c - b) * w;
+        return dot(p - proj, p - proj);
+    }
+
+    float denom = 1.0 / (va + vb + vc);
+    float v2 = vb * denom;
+    float w2 = vc * denom;
+    vec3 closest = a + ab * v2 + ac * w2;
+    return dot(p - closest, p - closest);
+}
+
+// Iterative BVH traversal to find minimum distance from a point to any triangle
+float computeMinDistToMesh(vec3 point) {
+    if (bvhNodeCount == 0) return 1e30;
+
+    float minDistSq = 1e30;
+
+    // Explicit stack for iterative traversal
+    int stack[32];
+    int stackPtr = 0;
+    stack[0] = 0;
+    stackPtr = 1;
+
+    while (stackPtr > 0) {
+        stackPtr--;
+        int nodeIdx = stack[stackPtr];
+
+        BvhNode node = bvhNodes[nodeIdx];
+        vec3 bmin = vec3(node.boundsMinX, node.boundsMinY, node.boundsMinZ);
+        vec3 bmax = vec3(node.boundsMaxX, node.boundsMaxY, node.boundsMaxZ);
+
+        float boxDistSq = aabbDistanceSq(point, bmin, bmax);
+        if (boxDistSq >= minDistSq) continue;
+
+        if (node.primitiveCount > 0) {
+            // Leaf node
+            for (int i = 0; i < node.primitiveCount; i++) {
+                int faceIdx = faceIndices[node.leftOrStart + i];
+                vec3 v0 = triVerts[faceIdx * 3 + 0].xyz;
+                vec3 v1 = triVerts[faceIdx * 3 + 1].xyz;
+                vec3 v2 = triVerts[faceIdx * 3 + 2].xyz;
+                float dist = pointTriangleDistanceSq(point, v0, v1, v2);
+                minDistSq = min(minDistSq, dist);
+            }
+        } else {
+            // Interior node - push both children
+            if (stackPtr < 31) {
+                stack[stackPtr] = node.leftOrStart;
+                stackPtr++;
+            }
+            if (stackPtr < 31) {
+                stack[stackPtr] = node.right;
+                stackPtr++;
+            }
+        }
+    }
+
+    return sqrt(minDistSq);
+}
+
+void main() {
+    uint patchIdx = gl_WorkGroupID.x;
+    uint localId = gl_LocalInvocationID.x;
+
+    if (patchIdx >= patchCount) return;
+
+    int subTriStart = patchOffsets[patchIdx];
+    int subTriEnd = patchOffsets[patchIdx + 1];
+    int subTriCount = subTriEnd - subTriStart;
+
+    // Each thread processes sub-triangles in stride pattern
+    float bestMargin = -1.0;
+    vec3 bestPoint = vec3(0.0);
+
+    for (int i = int(localId); i < subTriCount; i += 256) {
+        int subTriIdx = patchSubTriIndices[subTriStart + i];
+        vec3 a = subTriVerts[subTriIdx * 3 + 0].xyz;
+        vec3 b = subTriVerts[subTriIdx * 3 + 1].xyz;
+        vec3 c = subTriVerts[subTriIdx * 3 + 2].xyz;
+        vec3 centroid = (a + b + c) / 3.0;
+
+        float margin = computeMinDistToMesh(centroid);
+
+        if (margin > bestMargin) {
+            bestMargin = margin;
+            bestPoint = centroid;
+        }
+    }
+
+    sharedBest[localId] = vec4(bestPoint, bestMargin);
+    barrier();
+
+    // Parallel reduction to find max margin across all threads
+    for (uint stride = 128; stride > 0; stride >>= 1) {
+        if (localId < stride) {
+            if (sharedBest[localId + stride].w > sharedBest[localId].w) {
+                sharedBest[localId] = sharedBest[localId + stride];
+            }
+        }
+        barrier();
+    }
+
+    // Thread 0 writes the result
+    if (localId == 0) {
+        results[patchIdx] = sharedBest[0];
+    }
+}

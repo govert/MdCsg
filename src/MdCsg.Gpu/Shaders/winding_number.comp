@@ -1,0 +1,89 @@
+#version 450
+
+// Classifies each patch as inside/outside using the generalized winding number.
+// One workgroup (256 threads) per patch. Threads cooperatively iterate ALL faces
+// in stride pattern, computing Van Oosterom-Strackee solid angle per face.
+// Shared-memory parallel reduction sums all solid angles.
+
+layout(local_size_x = 256) in;
+
+layout(push_constant) uniform PushConstants {
+    uint patchCount;
+    uint bvhNodeCount;
+    uint faceCount;
+};
+
+layout(std430, binding = 0) readonly buffer TriangleVertices {
+    vec4 triVerts[];
+};
+
+// Confident points from the confident_point shader
+layout(std430, binding = 1) readonly buffer ConfidentPoints {
+    vec4 confidentPoints[];  // .xyz = point, .w = margin
+};
+
+// Output: per-patch classification
+layout(std430, binding = 2) buffer ClassifyResults {
+    ivec2 classifyResults[];  // .x = isInside, .y = margin (as float bits)
+};
+
+shared float sharedSum[256];
+
+// Van Oosterom-Strackee solid angle formula
+float triangleSolidAngle(vec3 p, vec3 a, vec3 b, vec3 c) {
+    vec3 pa = a - p;
+    vec3 pb = b - p;
+    vec3 pc = c - p;
+
+    float la = length(pa);
+    float lb = length(pb);
+    float lc = length(pc);
+
+    if (la < 1e-7 || lb < 1e-7 || lc < 1e-7)
+        return 0.0;
+
+    float numerator = dot(pa, cross(pb, pc));
+    float denominator = la * lb * lc
+                      + dot(pa, pb) * lc
+                      + dot(pb, pc) * la
+                      + dot(pc, pa) * lb;
+
+    return 2.0 * atan(numerator, denominator);
+}
+
+void main() {
+    uint patchIdx = gl_WorkGroupID.x;
+    uint localId = gl_LocalInvocationID.x;
+
+    if (patchIdx >= patchCount) return;
+
+    vec3 point = confidentPoints[patchIdx].xyz;
+    float margin = confidentPoints[patchIdx].w;
+
+    // Each thread sums solid angles for faces in stride pattern
+    float partialSum = 0.0;
+    for (uint i = localId; i < faceCount; i += 256) {
+        vec3 v0 = triVerts[i * 3 + 0].xyz;
+        vec3 v1 = triVerts[i * 3 + 1].xyz;
+        vec3 v2 = triVerts[i * 3 + 2].xyz;
+        partialSum += triangleSolidAngle(point, v0, v1, v2);
+    }
+
+    sharedSum[localId] = partialSum;
+    barrier();
+
+    // Parallel reduction to sum all partial results
+    for (uint stride = 128; stride > 0; stride >>= 1) {
+        if (localId < stride) {
+            sharedSum[localId] += sharedSum[localId + stride];
+        }
+        barrier();
+    }
+
+    // Thread 0 writes the result
+    if (localId == 0) {
+        float windingNumber = sharedSum[0] / (4.0 * 3.14159265358979);
+        int isInside = (windingNumber > 0.5) ? 1 : 0;
+        classifyResults[patchIdx] = ivec2(isInside, floatBitsToInt(margin));
+    }
+}

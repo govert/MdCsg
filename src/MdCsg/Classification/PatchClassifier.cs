@@ -53,3 +53,19 @@ public static class PatchClassifier
         return degenerateCount;
     }
 }
+
+/// <summary>
+/// CPU implementation of patch classification using the existing static logic.
+/// </summary>
+public class CpuPatchClassificationStrategy : IPatchClassificationStrategy
+{
+    /// <inheritdoc />
+    public int ClassifyAll(
+        IReadOnlyList<Patch> patches,
+        IReadOnlyList<FaceCutter.SubTriangle> subTriangles,
+        BvhTree otherBvh,
+        bool useWindingNumber)
+    {
+        return PatchClassifier.ClassifyAll(patches, subTriangles, otherBvh, useWindingNumber);
+    }
+}

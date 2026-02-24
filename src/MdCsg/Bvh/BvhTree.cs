@@ -16,6 +16,9 @@ public class BvhTree
     /// <summary>The flat node array.</summary>
     public ReadOnlySpan<BvhNode> Nodes => _nodes;
 
+    /// <summary>The face index array (maps leaf primitive slots to mesh face indices).</summary>
+    public ReadOnlySpan<int> FaceIndices => _faceIndices;
+
     /// <summary>Number of nodes in the tree.</summary>
     public int NodeCount => _nodes.Length;
 

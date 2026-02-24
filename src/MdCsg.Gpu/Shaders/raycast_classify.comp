@@ -1,0 +1,141 @@
+#version 450
+
+// Classifies each patch as inside/outside using ray casting.
+// One thread per patch. Shoots 3 perturbed rays and uses majority vote.
+
+layout(local_size_x = 64) in;
+
+layout(push_constant) uniform PushConstants {
+    uint patchCount;
+    uint bvhNodeCount;
+    uint faceCount;
+};
+
+struct BvhNode {
+    float boundsMinX, boundsMinY, boundsMinZ, boundsMaxX;
+    float boundsMaxY, boundsMaxZ;
+    int leftOrStart, right;
+    int primitiveCount, pad0, pad1, pad2;
+};
+
+layout(std430, binding = 0) readonly buffer BvhNodes {
+    BvhNode bvhNodes[];
+};
+
+layout(std430, binding = 1) readonly buffer FaceIndices {
+    int faceIndices[];
+};
+
+layout(std430, binding = 2) readonly buffer TriangleVertices {
+    vec4 triVerts[];
+};
+
+// Confident points from the confident_point shader
+layout(std430, binding = 3) readonly buffer ConfidentPoints {
+    vec4 confidentPoints[];  // .xyz = point, .w = margin
+};
+
+// Output: per-patch classification
+layout(std430, binding = 4) buffer ClassifyResults {
+    ivec2 classifyResults[];  // .x = isInside (0 or 1), .y = margin (as float bits)
+};
+
+bool rayIntersectsAabb(vec3 origin, vec3 invDir, vec3 bmin, vec3 bmax) {
+    vec3 t0 = (bmin - origin) * invDir;
+    vec3 t1 = (bmax - origin) * invDir;
+    vec3 tmin = min(t0, t1);
+    vec3 tmax = max(t0, t1);
+    float tNear = max(max(tmin.x, tmin.y), tmin.z);
+    float tFar = min(min(tmax.x, tmax.y), tmax.z);
+    return tFar >= tNear && tFar >= 0.0;
+}
+
+bool rayIntersectsTriangle(vec3 origin, vec3 dir, vec3 v0, vec3 v1, vec3 v2) {
+    // Moller-Trumbore
+    vec3 edge1 = v1 - v0;
+    vec3 edge2 = v2 - v0;
+    vec3 h = cross(dir, edge2);
+    float a = dot(edge1, h);
+    if (abs(a) < 1e-7) return false;
+
+    float f = 1.0 / a;
+    vec3 s = origin - v0;
+    float u = f * dot(s, h);
+    if (u < 0.0 || u > 1.0) return false;
+
+    vec3 q = cross(s, edge1);
+    float v = f * dot(dir, q);
+    if (v < 0.0 || u + v > 1.0) return false;
+
+    float t = f * dot(edge2, q);
+    return t > 1e-7;
+}
+
+// Count ray-mesh intersections via iterative BVH traversal
+int rayCastCount(vec3 origin, vec3 dir) {
+    if (bvhNodeCount == 0) return 0;
+
+    vec3 invDir = 1.0 / dir;
+    int count = 0;
+
+    int stack[32];
+    int stackPtr = 0;
+    stack[0] = 0;
+    stackPtr = 1;
+
+    while (stackPtr > 0) {
+        stackPtr--;
+        int nodeIdx = stack[stackPtr];
+
+        BvhNode node = bvhNodes[nodeIdx];
+        vec3 bmin = vec3(node.boundsMinX, node.boundsMinY, node.boundsMinZ);
+        vec3 bmax = vec3(node.boundsMaxX, node.boundsMaxY, node.boundsMaxZ);
+
+        if (!rayIntersectsAabb(origin, invDir, bmin, bmax)) continue;
+
+        if (node.primitiveCount > 0) {
+            for (int i = 0; i < node.primitiveCount; i++) {
+                int faceIdx = faceIndices[node.leftOrStart + i];
+                vec3 v0 = triVerts[faceIdx * 3 + 0].xyz;
+                vec3 v1 = triVerts[faceIdx * 3 + 1].xyz;
+                vec3 v2 = triVerts[faceIdx * 3 + 2].xyz;
+                if (rayIntersectsTriangle(origin, dir, v0, v1, v2))
+                    count++;
+            }
+        } else {
+            if (stackPtr < 31) {
+                stack[stackPtr] = node.leftOrStart;
+                stackPtr++;
+            }
+            if (stackPtr < 31) {
+                stack[stackPtr] = node.right;
+                stackPtr++;
+            }
+        }
+    }
+
+    return count;
+}
+
+void main() {
+    uint patchIdx = gl_GlobalInvocationID.x;
+    if (patchIdx >= patchCount) return;
+
+    vec3 point = confidentPoints[patchIdx].xyz;
+    float margin = confidentPoints[patchIdx].w;
+
+    // Same perturbed directions as CPU RayCastClassifier
+    vec3 dirs[3];
+    dirs[0] = normalize(vec3(1.0, 0.00013, 0.00017));
+    dirs[1] = normalize(vec3(0.00019, 1.0, 0.00023));
+    dirs[2] = normalize(vec3(0.00029, 0.00031, 1.0));
+
+    int insideVotes = 0;
+    for (int d = 0; d < 3; d++) {
+        int hits = rayCastCount(point, dirs[d]);
+        if ((hits & 1) == 1) insideVotes++;
+    }
+
+    int isInside = (insideVotes >= 2) ? 1 : 0;
+    classifyResults[patchIdx] = ivec2(isInside, floatBitsToInt(margin));
+}

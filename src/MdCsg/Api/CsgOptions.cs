@@ -1,3 +1,5 @@
+using MdCsg.Classification;
+
 namespace MdCsg.Api;
 
 /// <summary>
@@ -5,6 +7,12 @@ namespace MdCsg.Api;
 /// </summary>
 public class CsgOptions
 {
+    /// <summary>
+    /// Optional strategy for patch classification. When null, uses the default CPU implementation.
+    /// Set this to a GPU-accelerated strategy for large meshes.
+    /// </summary>
+    public IPatchClassificationStrategy? ClassificationStrategy { get; set; }
+
     /// <summary>
     /// The snap grid size for intersection point rounding.
     /// Smaller values give more precise results but may cause topological issues

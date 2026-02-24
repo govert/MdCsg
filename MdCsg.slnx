@@ -1,12 +1,15 @@
 <Solution>
   <Folder Name="/benchmarks/">
     <Project Path="benchmarks/MdCsg.Benchmarks/MdCsg.Benchmarks.csproj" />
+    <Project Path="benchmarks/MdCsg.Gpu.Benchmarks/MdCsg.Gpu.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/MdCsg/MdCsg.csproj" />
+    <Project Path="src/MdCsg.Gpu/MdCsg.Gpu.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MdCsg.ScalingTests/MdCsg.ScalingTests.csproj" />
     <Project Path="tests/MdCsg.Tests/MdCsg.Tests.csproj" />
+    <Project Path="tests/MdCsg.Gpu.Tests/MdCsg.Gpu.Tests.csproj" />
   </Folder>
 </Solution>

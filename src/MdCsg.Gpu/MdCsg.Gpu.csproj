@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Override Directory.Build.props: GPU project targets net10.0 only -->
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <RootNamespace>MdCsg.Gpu</RootNamespace>
+    <AssemblyName>MdCsg.Gpu</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.Vulkan" Version="2.*" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.KHR" Version="2.*" />
+    <PackageReference Include="Silk.NET.Shaderc" Version="2.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MdCsg\MdCsg.csproj" />
+  </ItemGroup>
+
+  <!-- Embed GLSL source files as resources (compiled to SPIR-V at runtime) -->
+  <ItemGroup>
+    <EmbeddedResource Include="Shaders\*.comp" />
+  </ItemGroup>
+
+</Project>
