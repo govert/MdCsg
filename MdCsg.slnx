@@ -6,6 +6,7 @@
     <Project Path="src/MdCsg/MdCsg.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/MdCsg.ScalingTests/MdCsg.ScalingTests.csproj" />
     <Project Path="tests/MdCsg.Tests/MdCsg.Tests.csproj" />
   </Folder>
 </Solution>
