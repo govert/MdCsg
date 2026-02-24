@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>MdCsg</RootNamespace>
+    <AssemblyName>MdCsg</AssemblyName>
+  </PropertyGroup>
+
+</Project>

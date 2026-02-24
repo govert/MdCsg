@@ -1,0 +1,55 @@
+using MdCsg.Bvh;
+using MdCsg.Cutting;
+using MdCsg.Patches;
+
+namespace MdCsg.Classification;
+
+/// <summary>
+/// Classifies all patches of a cut mesh as inside or outside the other solid.
+/// For each patch, selects the confident point (maximum margin) and classifies it.
+/// </summary>
+public static class PatchClassifier
+{
+    /// <summary>
+    /// The minimum margin below which a patch is flagged as degenerate.
+    /// </summary>
+    public const double DegenerateMarginThreshold = 1e-10;
+
+    /// <summary>
+    /// Classifies all patches.
+    /// </summary>
+    /// <param name="patches">Patches to classify.</param>
+    /// <param name="subTriangles">All sub-triangles.</param>
+    /// <param name="otherBvh">BVH of the other solid.</param>
+    /// <param name="useWindingNumber">If true, use winding number instead of ray casting.</param>
+    /// <returns>Number of degenerate patches that could not be confidently classified.</returns>
+    public static int ClassifyAll(
+        IReadOnlyList<Patch> patches,
+        IReadOnlyList<FaceCutter.SubTriangle> subTriangles,
+        BvhTree otherBvh,
+        bool useWindingNumber = false)
+    {
+        int degenerateCount = 0;
+
+        foreach (var patch in patches)
+        {
+            var (confidentPoint, margin) = ConfidentPoint.FindConfidentPoint(patch, subTriangles, otherBvh);
+            patch.ConfidentPoint = confidentPoint;
+            patch.HasConfidentPoint = margin > DegenerateMarginThreshold;
+
+            if (!patch.HasConfidentPoint)
+            {
+                degenerateCount++;
+                // Still classify, but flag as potentially unreliable
+            }
+
+            var classification = useWindingNumber
+                ? WindingNumberClassifier.Classify(confidentPoint, otherBvh)
+                : RayCastClassifier.Classify(confidentPoint, otherBvh);
+
+            patch.IsInside = classification == SolidClassification.Inside;
+        }
+
+        return degenerateCount;
+    }
+}
