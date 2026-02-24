@@ -38,11 +38,13 @@ public class PatchExtractorTests
     [Fact]
     public void TwoAdjacentTriangles_WithIntersectionEdge_TwoPatches()
     {
-        // These share an edge, but it's an intersection edge
+        // These share edge (1,0,0)-(0,1,0), which is an intersection edge
+        // T0: edges A-B(bit0), B-C(bit1), C-A(bit2) — shared edge is B-C (bit 1)
+        // T1: edges A-B(bit0), B-C(bit1), C-A(bit2) — shared edge is C-A (bit 2)
         var subTris = new FaceCutter.SubTriangle[]
         {
-            new(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0), 0, true),
-            new(new Vec3(1, 0, 0), new Vec3(1, 1, 0), new Vec3(0, 1, 0), 0, true),
+            new(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0), 0, true, 1 << 1),
+            new(new Vec3(1, 0, 0), new Vec3(1, 1, 0), new Vec3(0, 1, 0), 0, true, 1 << 2),
         };
 
         var adj = SubTriangleAdjacency.Build(subTris);
@@ -71,11 +73,13 @@ public class PatchExtractorTests
         // T0-T1 share a non-intersection edge
         // T1-T2 share an intersection edge
         // Result: patch {T0, T1} and patch {T2}
+        // T1 edge A-B = (1,0,0)-(1,1,0) shared with T2 → bit 0
+        // T2 edge C-A = (1,1,0)-(1,0,0) shared with T1 → bit 2
         var subTris = new FaceCutter.SubTriangle[]
         {
             new(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0), 0, false),
-            new(new Vec3(1, 0, 0), new Vec3(1, 1, 0), new Vec3(0, 1, 0), 0, false),
-            new(new Vec3(1, 0, 0), new Vec3(2, 0, 0), new Vec3(1, 1, 0), 0, true),
+            new(new Vec3(1, 0, 0), new Vec3(1, 1, 0), new Vec3(0, 1, 0), 0, true, 1 << 0),
+            new(new Vec3(1, 0, 0), new Vec3(2, 0, 0), new Vec3(1, 1, 0), 0, true, 1 << 2),
         };
 
         var adj = SubTriangleAdjacency.Build(subTris);

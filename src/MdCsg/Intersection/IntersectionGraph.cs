@@ -19,14 +19,27 @@ public class IntersectionGraph
     /// <summary>Maps a face index in mesh B to its intersection segments.</summary>
     public IReadOnlyDictionary<int, List<IntersectionSegment>> FaceSegmentsB { get; }
 
+    /// <summary>
+    /// Coplanar face pairs: maps face index (from either mesh) to normal agreement info.
+    /// True = normals agree in direction.
+    /// </summary>
+    public IReadOnlyDictionary<int, bool> CoplanarFacesA { get; }
+
+    /// <summary>Coplanar face pairs for mesh B.</summary>
+    public IReadOnlyDictionary<int, bool> CoplanarFacesB { get; }
+
     private IntersectionGraph(
         List<IntersectionSegment> segments,
         Dictionary<int, List<IntersectionSegment>> faceSegmentsA,
-        Dictionary<int, List<IntersectionSegment>> faceSegmentsB)
+        Dictionary<int, List<IntersectionSegment>> faceSegmentsB,
+        Dictionary<int, bool> coplanarFacesA,
+        Dictionary<int, bool> coplanarFacesB)
     {
         Segments = segments;
         FaceSegmentsA = faceSegmentsA;
         FaceSegmentsB = faceSegmentsB;
+        CoplanarFacesA = coplanarFacesA;
+        CoplanarFacesB = coplanarFacesB;
     }
 
     /// <summary>
@@ -42,6 +55,8 @@ public class IntersectionGraph
         var segments = new List<IntersectionSegment>();
         var faceSegmentsA = new Dictionary<int, List<IntersectionSegment>>();
         var faceSegmentsB = new Dictionary<int, List<IntersectionSegment>>();
+        var coplanarFacesA = new Dictionary<int, bool>();
+        var coplanarFacesB = new Dictionary<int, bool>();
 
         foreach (var (faceA, faceB) in overlappingPairs)
         {
@@ -59,25 +74,58 @@ public class IntersectionGraph
                 if (!seg.IsDegenerate)
                 {
                     segments.Add(seg);
+                    AddToDict(faceSegmentsA, faceA, seg);
+                    AddToDict(faceSegmentsB, faceB, seg);
+                }
+            }
+            else if (TriTriIntersection.AreCoplanar(triA, triB) &&
+                     TriTriIntersection.IntersectCoplanar(triA, triB, out var segsForA, out var segsForB, out bool normalsAgree))
+            {
+                // Track which faces are coplanar
+                coplanarFacesA[faceA] = normalsAgree;
+                coplanarFacesB[faceB] = normalsAgree;
 
-                    if (!faceSegmentsA.TryGetValue(faceA, out var listA))
+                // Add clipping segments for face A (edges of triB clipped to triA)
+                foreach (var (start, end) in segsForA)
+                {
+                    var snapped = new IntersectionSegment(
+                        SnapRounding.Snap(start, gridSize),
+                        SnapRounding.Snap(end, gridSize),
+                        faceA, faceB);
+                    if (!snapped.IsDegenerate)
                     {
-                        listA = [];
-                        faceSegmentsA[faceA] = listA;
+                        segments.Add(snapped);
+                        AddToDict(faceSegmentsA, faceA, snapped);
                     }
-                    listA.Add(seg);
+                }
 
-                    if (!faceSegmentsB.TryGetValue(faceB, out var listB))
+                // Add clipping segments for face B (edges of triA clipped to triB)
+                foreach (var (start, end) in segsForB)
+                {
+                    var snapped = new IntersectionSegment(
+                        SnapRounding.Snap(start, gridSize),
+                        SnapRounding.Snap(end, gridSize),
+                        faceA, faceB);
+                    if (!snapped.IsDegenerate)
                     {
-                        listB = [];
-                        faceSegmentsB[faceB] = listB;
+                        segments.Add(snapped);
+                        AddToDict(faceSegmentsB, faceB, snapped);
                     }
-                    listB.Add(seg);
                 }
             }
         }
 
-        return new IntersectionGraph(segments, faceSegmentsA, faceSegmentsB);
+        return new IntersectionGraph(segments, faceSegmentsA, faceSegmentsB, coplanarFacesA, coplanarFacesB);
+    }
+
+    private static void AddToDict(Dictionary<int, List<IntersectionSegment>> dict, int faceIdx, IntersectionSegment seg)
+    {
+        if (!dict.TryGetValue(faceIdx, out var list))
+        {
+            list = [];
+            dict[faceIdx] = list;
+        }
+        list.Add(seg);
     }
 
     private static Triangle3 GetTriangle(HalfEdgeMesh mesh, int faceIndex)

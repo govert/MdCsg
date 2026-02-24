@@ -50,6 +50,10 @@ public static class Csg
         var patchesA = PatchExtractor.Extract(cutA.SubTriangles, adjA);
         var patchesB = PatchExtractor.Extract(cutB.SubTriangles, adjB);
 
+        // Step 3b: Mark coplanar patches
+        MarkCoplanarPatches(patchesA, cutA.SubTriangles, intersections.CoplanarFacesA);
+        MarkCoplanarPatches(patchesB, cutB.SubTriangles, intersections.CoplanarFacesB);
+
         // Step 4: Classify patches (the novel part — uses max-margin confident points)
         var classifier = options.ClassificationStrategy ?? new CpuPatchClassificationStrategy();
         int degA = classifier.ClassifyAll(patchesA, cutA.SubTriangles, b.Bvh, options.UseWindingNumber);
@@ -72,5 +76,32 @@ public static class Csg
             DegenerateCount = degA + degB,
             IntersectionSegmentCount = intersections.Segments.Count
         };
+    }
+
+    /// <summary>
+    /// Marks patches whose sub-triangles come from coplanar face regions.
+    /// A patch is coplanar if any of its original faces are in the coplanar map.
+    /// </summary>
+    private static void MarkCoplanarPatches(
+        IReadOnlyList<Patch> patches,
+        IReadOnlyList<FaceCutter.SubTriangle> subTriangles,
+        IReadOnlyDictionary<int, bool> coplanarFaces)
+    {
+        if (coplanarFaces.Count == 0) return;
+
+        foreach (var patch in patches)
+        {
+            // Check if any sub-triangle in this patch has a coplanar original face
+            // and the patch has low margin (indicating it's in the overlap region)
+            foreach (int triIdx in patch.SubTriangleIndices)
+            {
+                int origFace = subTriangles[triIdx].OriginalFaceIndex;
+                if (coplanarFaces.TryGetValue(origFace, out bool normalsAgree))
+                {
+                    patch.CoplanarNormalsAgree = normalsAgree;
+                    break;
+                }
+            }
+        }
     }
 }

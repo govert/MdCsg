@@ -27,6 +27,13 @@ public class Patch
     public int SourceMesh { get; set; }
 
     /// <summary>
+    /// Whether this patch is in a coplanar overlap region, and if so,
+    /// whether the normals of the two overlapping faces agree in direction.
+    /// null = not coplanar; true = same normal direction; false = opposite.
+    /// </summary>
+    public bool? CoplanarNormalsAgree { get; set; }
+
+    /// <summary>
     /// Creates a new patch.
     /// </summary>
     public Patch(int id)

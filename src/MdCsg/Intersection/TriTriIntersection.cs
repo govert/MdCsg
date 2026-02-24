@@ -48,7 +48,7 @@ public static class TriTriIntersection
         if (AllSameNonZeroSign(sign10, sign11, sign12))
             return false;
 
-        // Coplanar case
+        // Coplanar case — handled separately by IntersectCoplanar
         if (sign20 == PredicateSign.Zero && sign21 == PredicateSign.Zero && sign22 == PredicateSign.Zero)
             return false;
 
@@ -163,4 +163,125 @@ public static class TriTriIntersection
     private static bool AllSameNonZeroSign(PredicateSign a, PredicateSign b, PredicateSign c) =>
         (a == PredicateSign.Positive && b == PredicateSign.Positive && c == PredicateSign.Positive) ||
         (a == PredicateSign.Negative && b == PredicateSign.Negative && c == PredicateSign.Negative);
+
+    /// <summary>
+    /// Tests if two triangles are coplanar (all vertices of t2 are on t1's plane).
+    /// </summary>
+    public static bool AreCoplanar(Triangle3 t1, Triangle3 t2)
+    {
+        var s0 = Orient3D.Evaluate(t1.A, t1.B, t1.C, t2.A);
+        var s1 = Orient3D.Evaluate(t1.A, t1.B, t1.C, t2.B);
+        var s2 = Orient3D.Evaluate(t1.A, t1.B, t1.C, t2.C);
+        return s0 == PredicateSign.Zero && s1 == PredicateSign.Zero && s2 == PredicateSign.Zero;
+    }
+
+    /// <summary>
+    /// Computes intersection segments for two coplanar triangles.
+    /// Returns clipping segments: edges of t2 clipped to t1's interior (cuts for t1),
+    /// and edges of t1 clipped to t2's interior (cuts for t2).
+    /// Also returns whether the triangles' normals agree in direction.
+    /// </summary>
+    public static bool IntersectCoplanar(
+        Triangle3 t1, Triangle3 t2,
+        out List<(Vec3 Start, Vec3 End)> segsForT1,
+        out List<(Vec3 Start, Vec3 End)> segsForT2,
+        out bool normalsAgree)
+    {
+        segsForT1 = [];
+        segsForT2 = [];
+
+        var n1 = Vec3.Cross(t1.B - t1.A, t1.C - t1.A);
+        var n2 = Vec3.Cross(t2.B - t2.A, t2.C - t2.A);
+        normalsAgree = Vec3.Dot(n1, n2) > 0;
+
+        // Project to 2D
+        int dropAxis = Cutting.ConstrainedTriangulator.GetDominantAxis(n1);
+        var t1a = Cutting.ConstrainedTriangulator.ProjectTo2D(t1.A, dropAxis);
+        var t1b = Cutting.ConstrainedTriangulator.ProjectTo2D(t1.B, dropAxis);
+        var t1c = Cutting.ConstrainedTriangulator.ProjectTo2D(t1.C, dropAxis);
+
+        var t2a = Cutting.ConstrainedTriangulator.ProjectTo2D(t2.A, dropAxis);
+        var t2b = Cutting.ConstrainedTriangulator.ProjectTo2D(t2.B, dropAxis);
+        var t2c = Cutting.ConstrainedTriangulator.ProjectTo2D(t2.C, dropAxis);
+
+        // Clip edges of t2 against t1 → segments that cut t1
+        ClipEdgeAgainstTriangle(t2.A, t2.B, t2a, t2b, t1a, t1b, t1c, segsForT1);
+        ClipEdgeAgainstTriangle(t2.B, t2.C, t2b, t2c, t1a, t1b, t1c, segsForT1);
+        ClipEdgeAgainstTriangle(t2.C, t2.A, t2c, t2a, t1a, t1b, t1c, segsForT1);
+
+        // Clip edges of t1 against t2 → segments that cut t2
+        ClipEdgeAgainstTriangle(t1.A, t1.B, t1a, t1b, t2a, t2b, t2c, segsForT2);
+        ClipEdgeAgainstTriangle(t1.B, t1.C, t1b, t1c, t2a, t2b, t2c, segsForT2);
+        ClipEdgeAgainstTriangle(t1.C, t1.A, t1c, t1a, t2a, t2b, t2c, segsForT2);
+
+        return segsForT1.Count > 0 || segsForT2.Count > 0;
+    }
+
+    /// <summary>
+    /// Clips a 3D edge (p0→p1) against a 2D triangle (ta, tb, tc) using parametric clipping.
+    /// The 2D projections (p0_2d, p1_2d) are used for the clipping math.
+    /// If the clipped portion is non-degenerate, adds it to the result list.
+    /// </summary>
+    private static void ClipEdgeAgainstTriangle(
+        Vec3 p0_3d, Vec3 p1_3d,
+        Vec2 p0, Vec2 p1,
+        Vec2 ta, Vec2 tb, Vec2 tc,
+        List<(Vec3 Start, Vec3 End)> result)
+    {
+        // Parametric t ∈ [0, 1] along p0→p1
+        double tMin = 0, tMax = 1;
+
+        // Clip against each edge of the triangle using half-plane test
+        // Edge ta→tb: inside is the side where tc lies
+        if (!ClipAgainstHalfPlane(p0, p1, ta, tb, tc, ref tMin, ref tMax)) return;
+        if (!ClipAgainstHalfPlane(p0, p1, tb, tc, ta, ref tMin, ref tMax)) return;
+        if (!ClipAgainstHalfPlane(p0, p1, tc, ta, tb, ref tMin, ref tMax)) return;
+
+        if (tMax - tMin < 1e-10) return; // Degenerate
+
+        // Don't produce segments that exactly match the triangle's edges
+        // (they would be on the boundary, not cutting through the interior)
+        if (tMin < 1e-10 && tMax > 1 - 1e-10) return;
+
+        var start3d = p0_3d + (p1_3d - p0_3d) * tMin;
+        var end3d = p0_3d + (p1_3d - p0_3d) * tMax;
+
+        if (Vec3.DistanceSquared(start3d, end3d) > MathUtil.Epsilon * MathUtil.Epsilon)
+            result.Add((start3d, end3d));
+    }
+
+    /// <summary>
+    /// Clips the parametric interval [tMin, tMax] of segment p0→p1 against the half-plane
+    /// defined by edge (ea→eb) where the interior side is where 'interior' lies.
+    /// </summary>
+    private static bool ClipAgainstHalfPlane(
+        Vec2 p0, Vec2 p1,
+        Vec2 ea, Vec2 eb, Vec2 interior,
+        ref double tMin, ref double tMax)
+    {
+        // Edge normal (not normalized, pointing toward interior)
+        var edgeDir = eb - ea;
+        // Perpendicular direction: rotate 90° CCW
+        var normal = new Vec2(-edgeDir.Y, edgeDir.X);
+
+        // Ensure normal points toward interior
+        if (Vec2.Dot(normal, interior - ea) < 0)
+            normal = -normal;
+
+        double d0 = Vec2.Dot(normal, p0 - ea);
+        double d1 = Vec2.Dot(normal, p1 - ea);
+
+        if (d0 < -1e-12 && d1 < -1e-12) return false; // Both outside
+        if (d0 >= -1e-12 && d1 >= -1e-12) return true;  // Both inside
+
+        // Compute intersection parameter
+        double t = d0 / (d0 - d1);
+
+        if (d0 < 0)
+            tMin = System.Math.Max(tMin, t);
+        else
+            tMax = System.Math.Min(tMax, t);
+
+        return tMin <= tMax + 1e-12;
+    }
 }

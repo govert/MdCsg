@@ -37,7 +37,16 @@ public static class PatchAssembler
         // Select patches from mesh A
         foreach (var patch in patchesA)
         {
-            bool keep = ShouldKeepPatchFromA(patch.IsInside ?? false, operation);
+            bool keep;
+            if (patch.CoplanarNormalsAgree.HasValue && !patch.HasConfidentPoint)
+            {
+                // Coplanar patch from A: apply special rules
+                keep = ShouldKeepCoplanarPatchFromA(patch.CoplanarNormalsAgree.Value, operation);
+            }
+            else
+            {
+                keep = ShouldKeepPatchFromA(patch.IsInside ?? false, operation);
+            }
             if (!keep) continue;
 
             foreach (int triIdx in patch.SubTriangleIndices)
@@ -51,6 +60,12 @@ public static class PatchAssembler
         // Select patches from mesh B
         foreach (var patch in patchesB)
         {
+            if (patch.CoplanarNormalsAgree.HasValue && !patch.HasConfidentPoint)
+            {
+                // Coplanar patches from B are always discarded (A takes priority)
+                continue;
+            }
+
             bool keep = ShouldKeepPatchFromB(patch.IsInside ?? false, operation);
             bool flip = ShouldFlipNormalsFromB(patch.IsInside ?? false, operation);
             if (!keep) continue;
@@ -104,6 +119,20 @@ public static class PatchAssembler
     {
         // Difference: B's inside patches get flipped normals
         CsgOperation.Difference => isInsideA,
+        _ => false
+    };
+
+    /// <summary>
+    /// For coplanar patches from mesh A: determines if the patch should be kept.
+    /// Rules:
+    ///   Same normal: keep for Union and Intersection (one copy from A), discard for Difference
+    ///   Opposite normal: discard for Union and Intersection, keep for Difference
+    /// </summary>
+    private static bool ShouldKeepCoplanarPatchFromA(bool normalsAgree, CsgOperation operation) => operation switch
+    {
+        CsgOperation.Union => normalsAgree,
+        CsgOperation.Intersection => normalsAgree,
+        CsgOperation.Difference => !normalsAgree,
         _ => false
     };
 }

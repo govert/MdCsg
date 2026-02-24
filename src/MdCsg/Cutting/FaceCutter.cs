@@ -16,7 +16,12 @@ public static class FaceCutter
     /// <param name="C">Third vertex position.</param>
     /// <param name="OriginalFaceIndex">Index of the original face that was cut.</param>
     /// <param name="HasIntersectionEdge">Whether any edge of this sub-triangle is an intersection edge.</param>
-    public readonly record struct SubTriangle(Vec3 A, Vec3 B, Vec3 C, int OriginalFaceIndex, bool HasIntersectionEdge);
+    /// <param name="IntersectionEdgeFlags">Per-edge flags: bit 0 = A-B, bit 1 = B-C, bit 2 = C-A.</param>
+    public readonly record struct SubTriangle(Vec3 A, Vec3 B, Vec3 C, int OriginalFaceIndex, bool HasIntersectionEdge, byte IntersectionEdgeFlags = 0)
+    {
+        /// <summary>Returns true if the edge from vertex at index e to vertex at (e+1)%3 is an intersection edge.</summary>
+        public bool IsEdgeIntersection(int e) => (IntersectionEdgeFlags & (1 << e)) != 0;
+    }
 
     /// <summary>
     /// Cuts a triangle along the given intersection segments.
@@ -51,24 +56,22 @@ public static class FaceCutter
         var result = new List<SubTriangle>();
         foreach (var (a, b, c) in triIndices)
         {
-            // Check if any edge of this sub-triangle is a constraint edge
-            bool hasIntEdge = false;
+            // Check each edge individually: A-B (bit 0), B-C (bit 1), C-A (bit 2)
+            byte edgeFlags = 0;
             foreach (var (cs, ce) in constraintPairs)
             {
-                if (SharesEdge(a, b, c, cs, ce))
-                {
-                    hasIntEdge = true;
-                    break;
-                }
+                if (IsEdgePair(a, b, cs, ce)) edgeFlags |= 1;      // A-B
+                if (IsEdgePair(b, c, cs, ce)) edgeFlags |= 1 << 1;  // B-C
+                if (IsEdgePair(c, a, cs, ce)) edgeFlags |= 1 << 2;  // C-A
             }
 
-            result.Add(new SubTriangle(vertices[a], vertices[b], vertices[c], faceIndex, hasIntEdge));
+            result.Add(new SubTriangle(vertices[a], vertices[b], vertices[c], faceIndex, edgeFlags != 0, edgeFlags));
         }
 
         return result;
     }
 
-    private static int AddOrFindVertex(List<Vec3> vertices, Vec3 point, double tolerance = 1e-10)
+    private static int AddOrFindVertex(List<Vec3> vertices, Vec3 point, double tolerance = 1e-8)
     {
         for (int i = 0; i < vertices.Count; i++)
         {
@@ -79,10 +82,8 @@ public static class FaceCutter
         return vertices.Count - 1;
     }
 
-    private static bool SharesEdge(int a, int b, int c, int cs, int ce)
+    private static bool IsEdgePair(int e0, int e1, int cs, int ce)
     {
-        return (a == cs && b == ce) || (b == cs && a == ce) ||
-               (b == cs && c == ce) || (c == cs && b == ce) ||
-               (a == cs && c == ce) || (c == cs && a == ce);
+        return (e0 == cs && e1 == ce) || (e0 == ce && e1 == cs);
     }
 }

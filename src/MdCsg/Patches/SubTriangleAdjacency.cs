@@ -35,8 +35,8 @@ public class SubTriangleAdjacency
         for (int i = 0; i < n; i++)
             adjacency.Add([]);
 
-        // Build edge map: (snapped v1, snapped v2) → list of sub-triangle indices
-        var edgeMap = new Dictionary<(long, long), List<(int TriIndex, bool IsIntersectionEdge)>>();
+        // Build edge map: (snapped v1, snapped v2) → list of (triIndex, isThisEdgeIntersection)
+        var edgeMap = new Dictionary<(long, long), List<(int TriIndex, bool IsThisEdgeIntersection)>>();
         var toleranceInv = 1.0 / tolerance;
 
         for (int i = 0; i < n; i++)
@@ -60,7 +60,8 @@ public class SubTriangleAdjacency
                     list = [];
                     edgeMap[edgeKey] = list;
                 }
-                list.Add((i, tri.HasIntersectionEdge));
+                // Use the per-edge flag: is THIS specific edge an intersection edge?
+                list.Add((i, tri.IsEdgeIntersection(e)));
             }
         }
 
@@ -74,7 +75,8 @@ public class SubTriangleAdjacency
                 {
                     int a = tris[i].TriIndex;
                     int b = tris[j].TriIndex;
-                    bool isIntEdge = tris[i].IsIntersectionEdge || tris[j].IsIntersectionEdge;
+                    // The shared edge is an intersection edge if EITHER side says it is
+                    bool isIntEdge = tris[i].IsThisEdgeIntersection || tris[j].IsThisEdgeIntersection;
 
                     adjacency[a].Add((b, isIntEdge));
                     adjacency[b].Add((a, isIntEdge));
