@@ -30,8 +30,8 @@ public static class WindingNumberClassifier
         for (int i = 0; i < bvh.Mesh.Faces.Count; i++)
         {
             var face = bvh.Mesh.Faces[i];
-            var verts = face.GetVertices();
-            totalSolidAngle += TriangleSolidAngle(point, verts[0].Position, verts[1].Position, verts[2].Position);
+            face.GetTrianglePositions(out var a, out var b, out var c);
+            totalSolidAngle += TriangleSolidAngle(point, a, b, c);
         }
 
         return totalSolidAngle / (4.0 * System.Math.PI);

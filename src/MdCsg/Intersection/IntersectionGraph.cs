@@ -131,7 +131,7 @@ public class IntersectionGraph
     private static Triangle3 GetTriangle(HalfEdgeMesh mesh, int faceIndex)
     {
         var face = mesh.Faces[faceIndex];
-        var verts = face.GetVertices();
-        return new Triangle3(verts[0].Position, verts[1].Position, verts[2].Position);
+        face.GetTrianglePositions(out var a, out var b, out var c);
+        return new Triangle3(a, b, c);
     }
 }

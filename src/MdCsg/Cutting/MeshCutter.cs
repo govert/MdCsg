@@ -29,8 +29,8 @@ public static class MeshCutter
         for (int faceIdx = 0; faceIdx < mesh.Faces.Count; faceIdx++)
         {
             var face = mesh.Faces[faceIdx];
-            var verts = face.GetVertices();
-            var tri = new Triangle3(verts[0].Position, verts[1].Position, verts[2].Position);
+            face.GetTrianglePositions(out var va, out var vb, out var vc);
+            var tri = new Triangle3(va, vb, vc);
 
             if (faceSegments.TryGetValue(faceIdx, out var segments) && segments.Count > 0)
             {

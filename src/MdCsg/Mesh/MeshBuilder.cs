@@ -25,18 +25,27 @@ public class MeshBuilder
     public HalfEdgeMesh Build(IReadOnlyList<Triangle3> triangles)
     {
         var mesh = new HalfEdgeMesh();
-        var vertexMap = new Dictionary<long, Vertex>();
+        var vertexMap = new Dictionary<long, List<Vertex>>();
+        var weldTolSq = _weldTolerance * _weldTolerance;
 
         Vertex GetOrAddVertex(Vec3 pos)
         {
             var key = HashPosition(pos);
-            if (vertexMap.TryGetValue(key, out var existing) &&
-                Vec3.DistanceSquared(existing.Position, pos) < _weldTolerance * _weldTolerance)
+            if (vertexMap.TryGetValue(key, out var bucket))
             {
-                return existing;
+                for (int i = 0; i < bucket.Count; i++)
+                {
+                    if (Vec3.DistanceSquared(bucket[i].Position, pos) < weldTolSq)
+                        return bucket[i];
+                }
+            }
+            else
+            {
+                bucket = [];
+                vertexMap[key] = bucket;
             }
             var v = mesh.AddVertex(pos);
-            vertexMap[key] = v;
+            bucket.Add(v);
             return v;
         }
 

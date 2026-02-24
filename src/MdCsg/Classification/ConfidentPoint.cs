@@ -48,6 +48,7 @@ public static class ConfidentPoint
 
     /// <summary>
     /// Computes the minimum distance from a point to the nearest face of a mesh via BVH.
+    /// Uses iterative traversal with explicit stack for performance.
     /// </summary>
     private static double ComputeMinDistanceToMesh(Vec3 point, BvhTree bvh)
     {
@@ -55,37 +56,45 @@ public static class ConfidentPoint
             return double.MaxValue;
 
         double minDistSq = double.MaxValue;
-        ComputeMinDistRecursive(bvh, 0, point, ref minDistSq);
-        return System.Math.Sqrt(minDistSq);
-    }
 
-    private static void ComputeMinDistRecursive(BvhTree bvh, int nodeIndex, Vec3 point, ref double minDistSq)
-    {
+#if NET
+        Span<int> stack = stackalloc int[64];
+#else
+        var stack = new int[64];
+#endif
+        int top = 0;
+        stack[top++] = 0;
         var nodes = bvh.Nodes;
-        ref readonly var node = ref nodes[nodeIndex];
 
-        // Early exit if node AABB is too far
-        double boxDistSq = AabbDistanceSq(point, node.Bounds);
-        if (boxDistSq >= minDistSq)
-            return;
-
-        if (node.IsLeaf)
+        while (top > 0)
         {
-            for (int i = 0; i < node.PrimitiveCount; i++)
+            int nodeIndex = stack[--top];
+            ref readonly var node = ref nodes[nodeIndex];
+
+            double boxDistSq = AabbDistanceSq(point, node.Bounds);
+            if (boxDistSq >= minDistSq)
+                continue;
+
+            if (node.IsLeaf)
             {
-                int faceIdx = bvh.GetFaceIndex(node.LeftOrStart + i);
-                var face = bvh.Mesh.Faces[faceIdx];
-                var verts = face.GetVertices();
-                double dist = PointTriangleDistanceSq(point, verts[0].Position, verts[1].Position, verts[2].Position);
-                if (dist < minDistSq)
-                    minDistSq = dist;
+                for (int i = 0; i < node.PrimitiveCount; i++)
+                {
+                    int faceIdx = bvh.GetFaceIndex(node.LeftOrStart + i);
+                    var face = bvh.Mesh.Faces[faceIdx];
+                    face.GetTrianglePositions(out var ta, out var tb, out var tc);
+                    double dist = PointTriangleDistanceSq(point, ta, tb, tc);
+                    if (dist < minDistSq)
+                        minDistSq = dist;
+                }
+            }
+            else
+            {
+                stack[top++] = node.Right;
+                stack[top++] = node.LeftOrStart;
             }
         }
-        else
-        {
-            ComputeMinDistRecursive(bvh, node.LeftOrStart, point, ref minDistSq);
-            ComputeMinDistRecursive(bvh, node.Right, point, ref minDistSq);
-        }
+
+        return System.Math.Sqrt(minDistSq);
     }
 
     private static double AabbDistanceSq(Vec3 point, Aabb box)

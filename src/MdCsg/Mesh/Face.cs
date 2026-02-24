@@ -42,16 +42,23 @@ public class Face
         return result;
     }
 
+    /// <summary>Gets the three triangle vertex positions without allocating.</summary>
+    public void GetTrianglePositions(out Vec3 a, out Vec3 b, out Vec3 c)
+    {
+        var e0 = Edge;
+        a = e0.Target.Position;
+        var e1 = e0.Next;
+        b = e1.Target.Position;
+        c = e1.Next.Target.Position;
+    }
+
     /// <summary>Returns the centroid of this face.</summary>
     public Vec3 Centroid
     {
         get
         {
-            var vertices = GetVertices();
-            var sum = Vec3.Zero;
-            foreach (var v in vertices)
-                sum = sum + v.Position;
-            return sum / vertices.Count;
+            GetTrianglePositions(out var a, out var b, out var c);
+            return (a + b + c) / 3.0;
         }
     }
 
@@ -60,9 +67,8 @@ public class Face
     {
         get
         {
-            var verts = GetVertices();
-            if (verts.Count < 3) return Vec3.Zero;
-            return Vec3.Cross(verts[1].Position - verts[0].Position, verts[2].Position - verts[0].Position);
+            GetTrianglePositions(out var a, out var b, out var c);
+            return Vec3.Cross(b - a, c - a);
         }
     }
 

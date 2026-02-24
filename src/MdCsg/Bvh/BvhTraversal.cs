@@ -69,7 +69,7 @@ public static class BvhTraversal
     private static Aabb GetFaceBounds(BvhTree tree, int faceIndex)
     {
         var face = tree.Mesh.Faces[faceIndex];
-        var verts = face.GetVertices();
-        return Aabb.FromTriangle(verts[0].Position, verts[1].Position, verts[2].Position);
+        face.GetTrianglePositions(out var a, out var b, out var c);
+        return Aabb.FromTriangle(a, b, c);
     }
 }

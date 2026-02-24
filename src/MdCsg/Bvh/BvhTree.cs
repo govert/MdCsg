@@ -49,9 +49,9 @@ public class BvhTree
         {
             faceIndices[i] = i;
             var face = mesh.Faces[i];
-            var verts = face.GetVertices();
-            bounds[i] = Aabb.FromTriangle(verts[0].Position, verts[1].Position, verts[2].Position);
-            centroids[i] = face.Centroid;
+            face.GetTrianglePositions(out var a, out var b, out var c);
+            bounds[i] = Aabb.FromTriangle(a, b, c);
+            centroids[i] = (a + b + c) / 3.0;
         }
 
         var nodes = new List<BvhNode>();
@@ -149,7 +149,7 @@ public class BvhTree
             }
         }
 
-        // Partition indices by best axis
+        // Partition indices by best axis using nth_element partitioning (O(n) vs O(n log n))
         double splitRange = centroidSize[bestAxis];
         if (splitRange < 1e-30)
         {
@@ -157,10 +157,9 @@ public class BvhTree
         }
         else
         {
-            Array.Sort(indices, start, count,
-                Comparer<int>.Create((a, b) => centroids[a][bestAxis].CompareTo(centroids[b][bestAxis])));
             if (bestSplit <= start) bestSplit = start + 1;
             if (bestSplit >= end) bestSplit = end - 1;
+            NthElement(indices, centroids, bestAxis, start, end, bestSplit);
         }
 
         // Build children
@@ -176,6 +175,49 @@ public class BvhTree
         };
 
         return nodeIndex;
+    }
+
+    /// <summary>
+    /// Partitions so elements before nth are less-or-equal and after nth are greater-or-equal.
+    /// O(n) expected time via quickselect.
+    /// </summary>
+    private static void NthElement(int[] indices, Vec3[] centroids, int axis, int start, int end, int nth)
+    {
+        while (start < end - 1)
+        {
+            // Choose pivot as median of three
+            int mid = start + (end - start) / 2;
+            double vStart = centroids[indices[start]][axis];
+            double vMid = centroids[indices[mid]][axis];
+            double vEnd = centroids[indices[end - 1]][axis];
+
+            int pivotIdx;
+            if ((vStart <= vMid && vMid <= vEnd) || (vEnd <= vMid && vMid <= vStart))
+                pivotIdx = mid;
+            else if ((vMid <= vStart && vStart <= vEnd) || (vEnd <= vStart && vStart <= vMid))
+                pivotIdx = start;
+            else
+                pivotIdx = end - 1;
+
+            // Move pivot to end
+            (indices[pivotIdx], indices[end - 1]) = (indices[end - 1], indices[pivotIdx]);
+            double pivotVal = centroids[indices[end - 1]][axis];
+
+            int store = start;
+            for (int i = start; i < end - 1; i++)
+            {
+                if (centroids[indices[i]][axis] <= pivotVal)
+                {
+                    (indices[store], indices[i]) = (indices[i], indices[store]);
+                    store++;
+                }
+            }
+            (indices[store], indices[end - 1]) = (indices[end - 1], indices[store]);
+
+            if (store == nth) return;
+            if (store < nth) start = store + 1;
+            else end = store;
+        }
     }
 
     private static double SafeSurfaceArea(Aabb box)
@@ -212,34 +254,41 @@ public class BvhTree
 
     /// <summary>
     /// Counts the number of ray-face intersections (for inside/outside testing).
+    /// Uses iterative traversal with an explicit stack for performance.
     /// </summary>
     public int RayCastCount(Ray ray)
     {
         if (_nodes.Length == 0) return 0;
+
         int count = 0;
-        RayCastCountRecursive(0, ray, ref count);
-        return count;
-    }
+        Span<int> stack = stackalloc int[64];
+        int top = 0;
+        stack[top++] = 0;
 
-    private void RayCastCountRecursive(int nodeIndex, Ray ray, ref int count)
-    {
-        ref readonly var node = ref _nodes[nodeIndex];
-        if (!RayIntersectsAabb(ray, node.Bounds)) return;
-
-        if (node.IsLeaf)
+        while (top > 0)
         {
-            for (int i = 0; i < node.PrimitiveCount; i++)
+            int nodeIndex = stack[--top];
+            ref readonly var node = ref _nodes[nodeIndex];
+
+            if (!RayIntersectsAabb(ray, node.Bounds)) continue;
+
+            if (node.IsLeaf)
             {
-                var faceIdx = _faceIndices[node.LeftOrStart + i];
-                if (RayIntersectsTriangle(ray, _mesh.Faces[faceIdx]))
-                    count++;
+                for (int i = 0; i < node.PrimitiveCount; i++)
+                {
+                    var faceIdx = _faceIndices[node.LeftOrStart + i];
+                    if (RayIntersectsTriangle(ray, _mesh.Faces[faceIdx]))
+                        count++;
+                }
+            }
+            else
+            {
+                stack[top++] = node.Right;
+                stack[top++] = node.LeftOrStart;
             }
         }
-        else
-        {
-            RayCastCountRecursive(node.LeftOrStart, ray, ref count);
-            RayCastCountRecursive(node.Right, ray, ref count);
-        }
+
+        return count;
     }
 
     private static bool RayIntersectsAabb(Ray ray, Aabb box)
@@ -262,10 +311,7 @@ public class BvhTree
 
     private static bool RayIntersectsTriangle(Ray ray, Face face)
     {
-        var verts = face.GetVertices();
-        var v0 = verts[0].Position;
-        var v1 = verts[1].Position;
-        var v2 = verts[2].Position;
+        face.GetTrianglePositions(out var v0, out var v1, out var v2);
 
         // Moller-Trumbore
         var edge1 = v1 - v0;

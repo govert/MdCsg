@@ -17,12 +17,7 @@ public static class VolumeCalculator
         double volume = 0;
         foreach (var face in mesh.Faces)
         {
-            var verts = face.GetVertices();
-            if (verts.Count < 3) continue;
-
-            var a = verts[0].Position;
-            var b = verts[1].Position;
-            var c = verts[2].Position;
+            face.GetTrianglePositions(out var a, out var b, out var c);
 
             // Signed volume of tetrahedron formed by triangle and origin
             volume += Vec3.Dot(a, Vec3.Cross(b, c)) / 6.0;
