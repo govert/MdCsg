@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/MdCsg.Benchmarks/MdCsg.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/MdCsg/MdCsg.csproj" />
   </Folder>

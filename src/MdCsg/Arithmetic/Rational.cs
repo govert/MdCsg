@@ -140,7 +140,14 @@ public readonly struct Rational : IEquatable<Rational>, IComparable<Rational>
     public override bool Equals(object? obj) => obj is Rational r && Equals(r);
 
     /// <inheritdoc />
-    public override int GetHashCode() => HashCode.Combine(Numerator, Denominator);
+    public override int GetHashCode()
+    {
+#if NET
+        return HashCode.Combine(Numerator, Denominator);
+#else
+        unchecked { return Numerator.GetHashCode() * 397 ^ Denominator.GetHashCode(); }
+#endif
+    }
 
     /// <inheritdoc />
     public override string ToString() =>

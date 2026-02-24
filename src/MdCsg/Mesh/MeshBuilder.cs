@@ -107,6 +107,10 @@ public class MeshBuilder
         long x = (long)System.Math.Round(pos.X * invTol);
         long y = (long)System.Math.Round(pos.Y * invTol);
         long z = (long)System.Math.Round(pos.Z * invTol);
+#if NET
         return HashCode.Combine(x, y, z);
+#else
+        unchecked { return (x * 397L ^ y) * 397L ^ z; }
+#endif
     }
 }

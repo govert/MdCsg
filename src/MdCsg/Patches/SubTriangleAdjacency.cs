@@ -65,8 +65,9 @@ public class SubTriangleAdjacency
         }
 
         // Connect triangles that share edges
-        foreach (var (_, tris) in edgeMap)
+        foreach (var kvp in edgeMap)
         {
+            var tris = kvp.Value;
             for (int i = 0; i < tris.Count; i++)
             {
                 for (int j = i + 1; j < tris.Count; j++)
@@ -89,6 +90,10 @@ public class SubTriangleAdjacency
         long x = (long)System.Math.Round(v.X * invTol);
         long y = (long)System.Math.Round(v.Y * invTol);
         long z = (long)System.Math.Round(v.Z * invTol);
+#if NET
         return HashCode.Combine(x, y, z);
+#else
+        unchecked { return (x * 397L ^ y) * 397L ^ z; }
+#endif
     }
 }

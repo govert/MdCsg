@@ -47,7 +47,20 @@ public static class ExpansionArithmetic
     public static (double Product, double Error) TwoProduct(double a, double b)
     {
         var p = a * b;
+#if NET
         var e = System.Math.FusedMultiplyAdd(a, b, -p);
+#else
+        // Dekker split: exact error term without FMA
+        var c = Splitter * a;
+        var abig = c - a;
+        var ahi = c - abig;
+        var alo = a - ahi;
+        c = Splitter * b;
+        var bbig = c - b;
+        var bhi = c - bbig;
+        var blo = b - bhi;
+        var e = ((ahi * bhi - p) + ahi * blo + alo * bhi) + alo * blo;
+#endif
         return (p, e);
     }
 

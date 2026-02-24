@@ -1,4 +1,6 @@
+#if NET7_0_OR_GREATER
 using System.Numerics;
+#endif
 
 namespace MdCsg.Math;
 
@@ -8,10 +10,12 @@ namespace MdCsg.Math;
 /// <param name="X">The X component.</param>
 /// <param name="Y">The Y component.</param>
 public readonly record struct Vec2(double X, double Y)
+#if NET7_0_OR_GREATER
     : IAdditionOperators<Vec2, Vec2, Vec2>,
       ISubtractionOperators<Vec2, Vec2, Vec2>,
       IUnaryNegationOperators<Vec2, Vec2>,
       IMultiplyOperators<Vec2, double, Vec2>
+#endif
 {
     /// <summary>The zero vector.</summary>
     public static readonly Vec2 Zero = new(0, 0);

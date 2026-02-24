@@ -18,7 +18,7 @@ public static class PatchExtractor
     {
         int n = subTriangles.Count;
         var patchOf = new int[n];
-        Array.Fill(patchOf, -1);
+        for (int k = 0; k < n; k++) patchOf[k] = -1;
 
         var patches = new List<Patch>();
 

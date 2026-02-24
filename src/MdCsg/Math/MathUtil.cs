@@ -28,6 +28,10 @@ public static class MathUtil
     /// </summary>
     public static double Fma(double a, double b, double c)
     {
+#if NET
         return System.Math.FusedMultiplyAdd(a, b, c);
+#else
+        return a * b + c;
+#endif
     }
 }

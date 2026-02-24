@@ -1,0 +1,134 @@
+# MdCsg
+
+A Constructive Solid Geometry library in C# implementing the **Patch-Confident CSG** algorithm.
+
+The core idea: instead of expensive exact arithmetic everywhere or fragile epsilon-based comparisons, the algorithm makes classification decisions only at points with **maximum geometric margin**, where double-precision floating-point is provably correct. This achieves O(n log n + k) complexity while maintaining numerical robustness.
+
+## Features
+
+- **Boolean operations**: union, intersection, difference on closed triangle meshes
+- **Robust predicates**: Shewchuk-style adaptive precision with automatic escalation (double → expansion → exact rational)
+- **Patch-confident classification**: max-margin point selection eliminates misclassification without exact arithmetic on the hot path
+- **SAH-accelerated BVH**: surface area heuristic bounding volume hierarchy for O(n log n + k) intersection detection
+- **Dual classifier**: ray-casting (fast) or generalized winding number (handles non-manifold input)
+- **Zero external dependencies**: pure .NET, no native code, AOT-compatible
+- **Multi-target**: .NET 10 and .NET Framework 4.8 from a single codebase
+
+## Quick Start
+
+```csharp
+using MdCsg.Api;
+using MdCsg.Math;
+
+// Create two overlapping cubes
+var cubeA = MeshFactory.CreateCube(Vec3.Zero, size: 1.0);
+var cubeB = MeshFactory.CreateCube(new Vec3(0.5, 0.5, 0.5), size: 1.0);
+
+// Boolean operations
+var union        = Csg.Union(cubeA, cubeB);
+var intersection = Csg.Intersect(cubeA, cubeB);
+var difference   = Csg.Difference(cubeA, cubeB);
+
+// Inspect the result
+Console.WriteLine($"Faces: {union.FaceCount}, Vertices: {union.VertexCount}");
+```
+
+### Creating Solids
+
+```csharp
+// From triangle soup
+var triangles = new List<Triangle3> { /* your triangles */ };
+var solid = Solid.FromTriangles(triangles);
+
+// From indexed mesh
+var positions = new List<Vec3> { /* vertices */ };
+var indices = new List<(int, int, int)> { /* triangle indices */ };
+var solid = Solid.FromIndexed(positions, indices);
+```
+
+### Options
+
+```csharp
+var options = new CsgOptions
+{
+    GridSize = 1e-8,           // snap rounding grid resolution
+    UseWindingNumber = true,   // winding number classifier (vs ray-casting)
+    WeldTolerance = 1e-8,      // vertex welding distance
+};
+var result = Csg.Union(a, b, options);
+```
+
+## Architecture
+
+The library is organized in layers, each building on the one below:
+
+```
+Layer 0  Math/           Vec2, Vec3, Plane, Aabb, Triangle3, Ray, Segment
+Layer 1  Arithmetic/     Shewchuk expansion arithmetic, exact Rational, adaptive precision
+Layer 2  Predicates/     Orient2D, Orient3D, InCircle, PlaneClassification
+Layer 3  Mesh/           Half-edge DCEL mesh (Vertex, HalfEdge, Face, MeshBuilder)
+Layer 4  Bvh/            SAH-based BVH with flat array layout, dual-tree traversal
+Layer 5  Intersection/   Moller tri-tri intersection, snap rounding, intersection graph
+Layer 6  Cutting/        Constrained triangulation, face/mesh cutting along intersections
+Layer 7  Patches/        Flood-fill patch extraction bounded by intersection edges
+Layer 8  Classification/ Confident point selection, ray-cast & winding number classifiers
+Layer 9  Operations/     Patch assembly (select/flip by operation), mesh stitching
+Layer 10 Api/            Public API: Solid, Csg, CsgOptions, CsgResult
+```
+
+### The Patch-Confident Algorithm
+
+Standard CSG algorithms classify every point on the mesh surface as inside or outside the other solid. This requires either exact arithmetic (slow) or epsilon-based comparisons (fragile).
+
+The patch-confident approach:
+
+1. **Cut** both meshes along their intersection curves
+2. **Extract patches** — connected groups of sub-triangles bounded by intersection edges
+3. **For each patch**, find the sub-triangle centroid with the **maximum distance** to any face of the other solid (the "confident point")
+4. **Classify** only at that confident point, where the geometric margin guarantees double-precision is correct
+5. **Assemble** the result by selecting patches based on their classification and the operation
+
+This gives the correctness of exact arithmetic with the speed of floating-point.
+
+## Building
+
+Requires .NET SDK 10.0 or later (builds both net10.0 and net48 targets).
+
+```bash
+dotnet build
+dotnet test
+```
+
+## Benchmarks
+
+```bash
+dotnet run -c Release -f net10.0 --project benchmarks/MdCsg.Benchmarks/MdCsg.Benchmarks.csproj
+dotnet run -c Release -f net48 --project benchmarks/MdCsg.Benchmarks/MdCsg.Benchmarks.csproj
+```
+
+See [docs/net48-port.md](docs/net48-port.md) for the full .NET Framework 4.8 port details and performance comparison.
+
+## Project Structure
+
+```
+MdCsg/
+├── src/MdCsg/                    # Library (net10.0 + net48)
+│   ├── Arithmetic/               # Expansion arithmetic, Rational, adaptive precision
+│   ├── Math/                     # Vec2, Vec3, Plane, Aabb, Triangle3, Ray, Segment
+│   ├── Predicates/               # Orient2D, Orient3D, InCircle, PlaneClassification
+│   ├── Mesh/                     # Half-edge DCEL mesh, builder, validator
+│   ├── Bvh/                      # BVH tree, traversal
+│   ├── Intersection/             # Tri-tri intersection, snap rounding, intersection graph
+│   ├── Cutting/                  # Constrained triangulator, face/mesh cutter
+│   ├── Patches/                  # Patch extraction, sub-triangle adjacency
+│   ├── Classification/           # Confident point, ray-cast & winding number classifiers
+│   ├── Operations/               # Patch assembly, mesh stitching
+│   └── Api/                      # Solid, Csg, CsgOptions, CsgResult
+├── tests/MdCsg.Tests/            # 134 tests (xUnit)
+├── benchmarks/MdCsg.Benchmarks/  # BenchmarkDotNet performance tests
+└── docs/                         # Documentation
+```
+
+## License
+
+[MIT](LICENSE)
