@@ -27,7 +27,7 @@ public class PredicateSignEnumTests
     [Fact]
     public void AllValues_AreDefined()
     {
-        var values = Enum.GetValues<PredicateSign>();
+        var values = Enum.GetValues(typeof(PredicateSign));
         Assert.Equal(3, values.Length);
     }
 
