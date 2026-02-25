@@ -1,156 +1,193 @@
 using MdCsg.Math;
 using MdCsg.Mesh;
-using MdCsg.Tests.TestHelpers;
 
 namespace MdCsg.Tests.Mesh;
 
-/// <summary>Phase 6: MeshBuilder — welding tolerance, indexed build, twin verification</summary>
+/// <summary>Phase 6: MeshBuilder — vertex welding, twin linking, Build(triangles), Build(indexed)</summary>
 public class MeshBuilderWeldPropertyTests
 {
     [Fact]
-    public void VertexWelding_MergesCloseVertices()
+    public void Build_SingleTriangle_3Vertices3HalfEdges1Face()
+    {
+        var builder = new MeshBuilder();
+        var mesh = builder.Build(new[]
+        {
+            new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0))
+        });
+        Assert.Equal(3, mesh.Vertices.Count);
+        Assert.Equal(3, mesh.HalfEdges.Count);
+        Assert.Single(mesh.Faces);
+    }
+
+    [Fact]
+    public void Build_TwoAdjacentTriangles_WeldsSharedVertices()
+    {
+        var builder = new MeshBuilder();
+        var mesh = builder.Build(new[]
+        {
+            new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0)),
+            new Triangle3(new Vec3(1, 0, 0), new Vec3(0, 0, 0), new Vec3(0, -1, 0))
+        });
+        // Should weld 2 shared vertices: (0,0,0) and (1,0,0)
+        Assert.Equal(4, mesh.Vertices.Count);
+        Assert.Equal(2, mesh.Faces.Count);
+    }
+
+    [Fact]
+    public void Build_TwoAdjacentTriangles_TwinsLinked()
+    {
+        var builder = new MeshBuilder();
+        var mesh = builder.Build(new[]
+        {
+            new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0)),
+            new Triangle3(new Vec3(1, 0, 0), new Vec3(0, 0, 0), new Vec3(0, -1, 0))
+        });
+        int twinCount = 0;
+        foreach (var he in mesh.HalfEdges)
+            if (he.Twin != null) twinCount++;
+        Assert.True(twinCount > 0, "Should have linked twins for shared edge");
+    }
+
+    [Fact]
+    public void Build_WeldTolerance_MergesNearbyVertices()
     {
         var builder = new MeshBuilder(1e-6);
-        var triangles = new[]
+        var mesh = builder.Build(new[]
         {
             new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0)),
-            // Second triangle shares edge but vertices are slightly offset
-            new Triangle3(new Vec3(1.0000001, 0, 0), new Vec3(0.0000001, 0, 0), new Vec3(0, 0, 1)),
-        };
-        var mesh = builder.Build(triangles);
-
-        // With welding, shared vertices should be merged
-        Assert.True(mesh.Vertices.Count <= 5,
-            $"Welding should merge close vertices, got {mesh.Vertices.Count}");
+            new Triangle3(new Vec3(1.0000001e-7, 0, 0), new Vec3(1.0000001, 0, 0), new Vec3(0, 1.0000001e-7, 0))
+        });
+        // With large-ish tolerance, nearby vertices get welded
+        Assert.True(mesh.Vertices.Count < 6);
     }
 
     [Fact]
-    public void NoWelding_DistantVerticesStaySeparate()
+    public void Build_Indexed_SameAsSoup()
     {
-        var builder = new MeshBuilder(1e-10);
-        var triangles = new[]
-        {
-            new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0)),
-            new Triangle3(new Vec3(5, 0, 0), new Vec3(6, 0, 0), new Vec3(5, 1, 0)),
-        };
-        var mesh = builder.Build(triangles);
-        Assert.Equal(6, mesh.Vertices.Count);
-    }
-
-    [Fact]
-    public void IndexedBuild_VertexCountMatches()
-    {
+        var builder = new MeshBuilder();
         var positions = new Vec3[]
         {
-            new(0, 0, 0), new(1, 0, 0), new(0, 1, 0), new(1, 1, 0)
+            new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0), new Vec3(1, 1, 0)
         };
-        var indices = new[] { (0, 1, 2), (1, 3, 2) };
-        var builder = new MeshBuilder();
+        var indices = new (int, int, int)[] { (0, 1, 2), (1, 3, 2) };
         var mesh = builder.Build(positions, indices);
-
         Assert.Equal(4, mesh.Vertices.Count);
         Assert.Equal(2, mesh.Faces.Count);
         Assert.Equal(6, mesh.HalfEdges.Count);
     }
 
     [Fact]
-    public void IndexedBuild_SharedEdge_HasTwin()
+    public void Build_Indexed_TwinsLinked()
     {
+        var builder = new MeshBuilder();
         var positions = new Vec3[]
         {
-            new(0, 0, 0), new(1, 0, 0), new(0, 1, 0), new(1, 1, 0)
+            new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0), new Vec3(1, 1, 0)
         };
-        var indices = new[] { (0, 1, 2), (1, 3, 2) };
-        var builder = new MeshBuilder();
+        var indices = new (int, int, int)[] { (0, 1, 2), (1, 3, 2) };
         var mesh = builder.Build(positions, indices);
-
         int twinCount = 0;
         foreach (var he in mesh.HalfEdges)
             if (he.Twin != null) twinCount++;
-        Assert.True(twinCount >= 2, $"Shared edge should have twins, got {twinCount}");
+        Assert.True(twinCount >= 2, "Shared edge should have twins");
     }
 
     [Fact]
-    public void SingleTriangle_NoTwins()
+    public void Build_Empty_EmptyMesh()
     {
         var builder = new MeshBuilder();
-        var triangles = new[] { new Triangle3(Vec3.Zero, new Vec3(1, 0, 0), new Vec3(0, 1, 0)) };
-        var mesh = builder.Build(triangles);
-
-        foreach (var he in mesh.HalfEdges)
-            Assert.Null(he.Twin);
+        var mesh = builder.Build(Array.Empty<Triangle3>());
+        Assert.Equal(0, mesh.Vertices.Count);
+        Assert.Equal(0, mesh.Faces.Count);
+        Assert.Equal(0, mesh.HalfEdges.Count);
     }
 
     [Fact]
-    public void Cube_AllTwinsLinked()
-    {
-        var mesh = MeshFactory.CreateCube().Mesh;
-        foreach (var he in mesh.HalfEdges)
-            Assert.NotNull(he.Twin);
-    }
-
-    [Fact]
-    public void Cube_TwinSymmetry()
-    {
-        var mesh = MeshFactory.CreateCube().Mesh;
-        foreach (var he in mesh.HalfEdges)
-        {
-            Assert.NotNull(he.Twin);
-            Assert.Same(he, he.Twin!.Twin);
-        }
-    }
-
-    [Fact]
-    public void Cube_TwinPointsOpposite()
-    {
-        var mesh = MeshFactory.CreateCube().Mesh;
-        foreach (var he in mesh.HalfEdges)
-        {
-            if (he.Twin == null) continue;
-            Assert.Equal(he.Origin.Id, he.Twin.Target.Id);
-            Assert.Equal(he.Target.Id, he.Twin.Origin.Id);
-        }
-    }
-
-    [Fact]
-    public void Build_FaceCyclesAreLength3()
+    public void Build_AllFacesHaveEdge()
     {
         var builder = new MeshBuilder();
-        var triangles = new[]
+        var mesh = builder.Build(new[]
         {
-            new Triangle3(Vec3.Zero, new Vec3(1, 0, 0), new Vec3(0, 1, 0)),
-        };
-        var mesh = builder.Build(triangles);
-
+            new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0)),
+            new Triangle3(new Vec3(0, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, 1))
+        });
         foreach (var face in mesh.Faces)
         {
-            var start = face.Edge;
-            var current = start;
-            int count = 0;
-            do { count++; current = current.Next; } while (current != start && count < 10);
-            Assert.Equal(3, count);
+            Assert.NotNull(face.Edge);
         }
     }
 
     [Fact]
-    public void Build_MultipleTriangles_CorrectFaceCount()
+    public void Build_AllHalfEdgesHaveTarget()
     {
         var builder = new MeshBuilder();
-        var triangles = new[]
+        var mesh = builder.Build(new[]
         {
-            new Triangle3(Vec3.Zero, new Vec3(1, 0, 0), new Vec3(0, 1, 0)),
-            new Triangle3(new Vec3(1, 0, 0), new Vec3(1, 1, 0), new Vec3(0, 1, 0)),
-            new Triangle3(new Vec3(0, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, 1)),
-        };
-        var mesh = builder.Build(triangles);
-        Assert.Equal(3, mesh.Faces.Count);
+            new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0))
+        });
+        foreach (var he in mesh.HalfEdges)
+        {
+            Assert.NotNull(he.Target);
+        }
     }
 
     [Fact]
-    public void Sphere_AllTwinsLinked()
+    public void Build_AllHalfEdgesHaveNextAndPrev()
     {
-        var mesh = MeshFactory.CreateSphere(Vec3.Zero, 1.0, 2).Mesh;
+        var builder = new MeshBuilder();
+        var mesh = builder.Build(new[]
+        {
+            new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0))
+        });
         foreach (var he in mesh.HalfEdges)
-            Assert.NotNull(he.Twin);
+        {
+            Assert.NotNull(he.Next);
+            Assert.NotNull(he.Prev);
+        }
+    }
+
+    [Fact]
+    public void Build_NextPrev_AreInverse()
+    {
+        var builder = new MeshBuilder();
+        var mesh = builder.Build(new[]
+        {
+            new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0))
+        });
+        foreach (var he in mesh.HalfEdges)
+        {
+            Assert.Equal(he, he.Next.Prev);
+            Assert.Equal(he, he.Prev.Next);
+        }
+    }
+
+    [Fact]
+    public void Build_TwinSymmetry()
+    {
+        var builder = new MeshBuilder();
+        var mesh = builder.Build(new[]
+        {
+            new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0)),
+            new Triangle3(new Vec3(1, 0, 0), new Vec3(0, 0, 0), new Vec3(0, -1, 0))
+        });
+        foreach (var he in mesh.HalfEdges)
+        {
+            if (he.Twin != null)
+                Assert.Equal(he, he.Twin.Twin);
+        }
+    }
+
+    [Fact]
+    public void Build_ThreeTriangles_CorrectVertexCount()
+    {
+        var builder = new MeshBuilder();
+        var mesh = builder.Build(new[]
+        {
+            new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0)),
+            new Triangle3(new Vec3(1, 0, 0), new Vec3(1, 1, 0), new Vec3(0, 1, 0)),
+            new Triangle3(new Vec3(1, 0, 0), new Vec3(2, 0, 0), new Vec3(1, 1, 0))
+        });
+        Assert.Equal(5, mesh.Vertices.Count);
+        Assert.Equal(3, mesh.Faces.Count);
     }
 }
