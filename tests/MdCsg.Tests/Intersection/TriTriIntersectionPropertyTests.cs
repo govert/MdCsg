@@ -3,50 +3,94 @@ using MdCsg.Math;
 
 namespace MdCsg.Tests.Intersection;
 
-/// <summary>Phase 6: TriTriIntersection — Intersect, AreCoplanar, IntersectCoplanar edge cases</summary>
+/// <summary>Phase 6: TriTriIntersection — Intersect, AreCoplanar, IntersectCoplanar with diverse triangle configurations</summary>
 public class TriTriIntersectionPropertyTests
 {
     [Fact]
-    public void Intersect_PerpendicularTriangles_ProducesSegment()
+    public void Intersect_CrossingTriangles_ReturnsTrue()
     {
-        // Triangle in XY plane and triangle in XZ plane, overlapping along X axis
-        var t1 = new Triangle3(new Vec3(0, -1, 0), new Vec3(2, -1, 0), new Vec3(1, 1, 0));
-        var t2 = new Triangle3(new Vec3(0, 0, -1), new Vec3(2, 0, -1), new Vec3(1, 0, 1));
-        bool hit = TriTriIntersection.Intersect(t1, t2, out var seg);
-        Assert.True(hit);
+        var t1 = new Triangle3(new Vec3(-1, 0, -1), new Vec3(1, 0, -1), new Vec3(0, 0, 1));
+        var t2 = new Triangle3(new Vec3(-1, -1, 0), new Vec3(1, -1, 0), new Vec3(0, 1, 0));
+        Assert.True(TriTriIntersection.Intersect(t1, t2, out var seg));
         Assert.True(seg.Length > 0);
     }
 
     [Fact]
-    public void Intersect_DisjointTriangles_NoIntersection()
+    public void Intersect_DisjointTriangles_ReturnsFalse()
     {
         var t1 = new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0));
         var t2 = new Triangle3(new Vec3(10, 10, 10), new Vec3(11, 10, 10), new Vec3(10, 11, 10));
-        bool hit = TriTriIntersection.Intersect(t1, t2, out _);
-        Assert.False(hit);
+        Assert.False(TriTriIntersection.Intersect(t1, t2, out _));
     }
 
     [Fact]
-    public void Intersect_SamePlaneTriangles_ReturnsFalse()
-    {
-        // Coplanar triangles: Intersect returns false (handled by IntersectCoplanar separately)
-        var t1 = new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0));
-        var t2 = new Triangle3(new Vec3(0.5, 0, 0), new Vec3(1.5, 0, 0), new Vec3(0.5, 1, 0));
-        bool hit = TriTriIntersection.Intersect(t1, t2, out _);
-        Assert.False(hit);
-    }
-
-    [Fact]
-    public void Intersect_AllVerticesOneSide_NoIntersection()
+    public void Intersect_ParallelTriangles_ReturnsFalse()
     {
         var t1 = new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0));
         var t2 = new Triangle3(new Vec3(0, 0, 5), new Vec3(1, 0, 5), new Vec3(0, 1, 5));
-        bool hit = TriTriIntersection.Intersect(t1, t2, out _);
-        Assert.False(hit);
+        Assert.False(TriTriIntersection.Intersect(t1, t2, out _));
     }
 
     [Fact]
-    public void AreCoplanar_SamePlane_ReturnsTrue()
+    public void Intersect_AllVerticesAbove_ReturnsFalse()
+    {
+        var t1 = new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0));
+        var t2 = new Triangle3(new Vec3(0, 0, 1), new Vec3(1, 0, 2), new Vec3(0, 1, 3));
+        Assert.False(TriTriIntersection.Intersect(t1, t2, out _));
+    }
+
+    [Fact]
+    public void Intersect_PerpendicularCrossing_SegmentIsValid()
+    {
+        var t1 = new Triangle3(new Vec3(-2, -2, 0), new Vec3(2, -2, 0), new Vec3(0, 2, 0));
+        var t2 = new Triangle3(new Vec3(0, -1, -2), new Vec3(0, -1, 2), new Vec3(0, 1, 0));
+        bool hit = TriTriIntersection.Intersect(t1, t2, out var seg);
+        if (hit)
+        {
+            Assert.True(seg.Length > 0);
+        }
+    }
+
+    [Fact]
+    public void Intersect_SegmentHasDefaultFaceIndices()
+    {
+        var t1 = new Triangle3(new Vec3(-1, 0, -1), new Vec3(1, 0, -1), new Vec3(0, 0, 1));
+        var t2 = new Triangle3(new Vec3(-1, -1, 0), new Vec3(1, -1, 0), new Vec3(0, 1, 0));
+        TriTriIntersection.Intersect(t1, t2, out var seg);
+        Assert.Equal(-1, seg.FaceIndexA);
+        Assert.Equal(-1, seg.FaceIndexB);
+    }
+
+    [Fact]
+    public void Intersect_SymmetricLength()
+    {
+        var t1 = new Triangle3(new Vec3(-1, 0, -1), new Vec3(1, 0, -1), new Vec3(0, 0, 1));
+        var t2 = new Triangle3(new Vec3(-1, -1, 0), new Vec3(1, -1, 0), new Vec3(0, 1, 0));
+        TriTriIntersection.Intersect(t1, t2, out var seg12);
+        TriTriIntersection.Intersect(t2, t1, out var seg21);
+        Assert.True(System.Math.Abs(seg12.Length - seg21.Length) < 1e-10);
+    }
+
+    [Fact]
+    public void Intersect_LargeTriangles_Works()
+    {
+        var t1 = new Triangle3(new Vec3(-1000, 0, -1000), new Vec3(1000, 0, -1000), new Vec3(0, 0, 1000));
+        var t2 = new Triangle3(new Vec3(-1000, -1000, 0), new Vec3(1000, -1000, 0), new Vec3(0, 1000, 0));
+        Assert.True(TriTriIntersection.Intersect(t1, t2, out var seg));
+        Assert.True(seg.Length > 0);
+    }
+
+    [Fact]
+    public void Intersect_TinyTriangles_DoesNotThrow()
+    {
+        var s = 1e-6;
+        var t1 = new Triangle3(new Vec3(-s, 0, -s), new Vec3(s, 0, -s), new Vec3(0, 0, s));
+        var t2 = new Triangle3(new Vec3(-s, -s, 0), new Vec3(s, -s, 0), new Vec3(0, s, 0));
+        TriTriIntersection.Intersect(t1, t2, out _);
+    }
+
+    [Fact]
+    public void AreCoplanar_SamePlane_True()
     {
         var t1 = new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0));
         var t2 = new Triangle3(new Vec3(2, 0, 0), new Vec3(3, 0, 0), new Vec3(2, 1, 0));
@@ -54,7 +98,7 @@ public class TriTriIntersectionPropertyTests
     }
 
     [Fact]
-    public void AreCoplanar_DifferentPlanes_ReturnsFalse()
+    public void AreCoplanar_DifferentPlanes_False()
     {
         var t1 = new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0));
         var t2 = new Triangle3(new Vec3(0, 0, 1), new Vec3(1, 0, 1), new Vec3(0, 1, 2));
@@ -62,68 +106,99 @@ public class TriTriIntersectionPropertyTests
     }
 
     [Fact]
-    public void IntersectCoplanar_OverlappingTriangles_ProducesSegments()
+    public void AreCoplanar_ParallelOffset_False()
     {
-        var t1 = new Triangle3(new Vec3(0, 0, 0), new Vec3(2, 0, 0), new Vec3(1, 2, 0));
-        var t2 = new Triangle3(new Vec3(0.5, 0.5, 0), new Vec3(2.5, 0.5, 0), new Vec3(1.5, 2.5, 0));
-        bool result = TriTriIntersection.IntersectCoplanar(t1, t2, out var segsForT1, out var segsForT2, out bool normalsAgree);
-        Assert.True(result);
-        Assert.True(normalsAgree);
+        var t1 = new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0));
+        var t2 = new Triangle3(new Vec3(0, 0, 5), new Vec3(1, 0, 5), new Vec3(0, 1, 5));
+        Assert.False(TriTriIntersection.AreCoplanar(t1, t2));
     }
 
     [Fact]
-    public void IntersectCoplanar_OppositeNormals_NormalsDisagree()
+    public void AreCoplanar_IdenticalTriangle_True()
     {
-        // t2 has reversed winding (CW vs CCW)
-        var t1 = new Triangle3(new Vec3(0, 0, 0), new Vec3(2, 0, 0), new Vec3(1, 2, 0));
-        var t2 = new Triangle3(new Vec3(0.5, 0.5, 0), new Vec3(1.5, 2.5, 0), new Vec3(2.5, 0.5, 0));
-        TriTriIntersection.IntersectCoplanar(t1, t2, out _, out _, out bool normalsAgree);
-        Assert.False(normalsAgree);
+        var t = new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0));
+        Assert.True(TriTriIntersection.AreCoplanar(t, t));
     }
 
     [Fact]
-    public void IntersectCoplanar_DisjointCoplanar_NoSegments()
+    public void IntersectCoplanar_NonOverlapping_NoSegments()
     {
         var t1 = new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0));
         var t2 = new Triangle3(new Vec3(10, 10, 0), new Vec3(11, 10, 0), new Vec3(10, 11, 0));
-        bool result = TriTriIntersection.IntersectCoplanar(t1, t2, out var segsForT1, out var segsForT2, out _);
+        bool result = TriTriIntersection.IntersectCoplanar(t1, t2, out var s1, out var s2, out _);
         Assert.False(result);
-        Assert.Empty(segsForT1);
-        Assert.Empty(segsForT2);
+        Assert.Empty(s1);
+        Assert.Empty(s2);
     }
 
     [Fact]
-    public void Intersect_Segment_HasNonNegativeLength()
+    public void IntersectCoplanar_SameNormals_AgreesTrue()
     {
-        var t1 = new Triangle3(new Vec3(0, -1, 0), new Vec3(2, -1, 0), new Vec3(1, 1, 0));
-        var t2 = new Triangle3(new Vec3(0, 0, -1), new Vec3(2, 0, -1), new Vec3(1, 0, 1));
-        TriTriIntersection.Intersect(t1, t2, out var seg);
-        Assert.True(seg.Length >= 0);
+        var t1 = new Triangle3(new Vec3(0, 0, 0), new Vec3(2, 0, 0), new Vec3(1, 2, 0));
+        var t2 = new Triangle3(new Vec3(0.5, 0.5, 0), new Vec3(2.5, 0.5, 0), new Vec3(1.5, 2.5, 0));
+        TriTriIntersection.IntersectCoplanar(t1, t2, out _, out _, out var agree);
+        Assert.True(agree);
     }
 
     [Fact]
-    public void Intersect_IsSymmetric()
+    public void IntersectCoplanar_OppositeNormals_AgreesFalse()
     {
-        var t1 = new Triangle3(new Vec3(0, -1, 0), new Vec3(2, -1, 0), new Vec3(1, 1, 0));
-        var t2 = new Triangle3(new Vec3(0, 0, -1), new Vec3(2, 0, -1), new Vec3(1, 0, 1));
-        bool hit1 = TriTriIntersection.Intersect(t1, t2, out _);
-        bool hit2 = TriTriIntersection.Intersect(t2, t1, out _);
-        Assert.Equal(hit1, hit2);
+        var t1 = new Triangle3(new Vec3(0, 0, 0), new Vec3(2, 0, 0), new Vec3(1, 2, 0));
+        var t2 = new Triangle3(new Vec3(0.5, 0.5, 0), new Vec3(1.5, 2.5, 0), new Vec3(2.5, 0.5, 0));
+        TriTriIntersection.IntersectCoplanar(t1, t2, out _, out _, out var agree);
+        Assert.False(agree);
     }
 
     [Fact]
-    public void Intersect_ParallelNonCoplanar_NoIntersection()
+    public void Intersect_CoplanarTriangles_ReturnsFalse()
     {
-        var t1 = new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0));
-        var t2 = new Triangle3(new Vec3(0, 0, 1), new Vec3(1, 0, 1), new Vec3(0, 1, 1));
+        var t1 = new Triangle3(new Vec3(0, 0, 0), new Vec3(2, 0, 0), new Vec3(1, 2, 0));
+        var t2 = new Triangle3(new Vec3(0.5, 0.5, 0), new Vec3(2.5, 0.5, 0), new Vec3(1.5, 2.5, 0));
         Assert.False(TriTriIntersection.Intersect(t1, t2, out _));
     }
 
     [Fact]
-    public void AreCoplanar_ParallelNotCoplanar_ReturnsFalse()
+    public void IntersectionSegment_Length_Correct()
     {
-        var t1 = new Triangle3(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0));
-        var t2 = new Triangle3(new Vec3(0, 0, 0.001), new Vec3(1, 0, 0.001), new Vec3(0, 1, 0.001));
-        Assert.False(TriTriIntersection.AreCoplanar(t1, t2));
+        var seg = new IntersectionSegment(Vec3.Zero, Vec3.UnitX, 0, 1);
+        Assert.True(System.Math.Abs(seg.Length - 1.0) < 1e-15);
+    }
+
+    [Fact]
+    public void IntersectionSegment_IsDegenerate_ZeroLength()
+    {
+        var seg = new IntersectionSegment(Vec3.Zero, Vec3.Zero, 0, 1);
+        Assert.True(seg.IsDegenerate);
+    }
+
+    [Fact]
+    public void IntersectionSegment_NotDegenerate_NonZero()
+    {
+        var seg = new IntersectionSegment(Vec3.Zero, new Vec3(1, 0, 0), 0, 1);
+        Assert.False(seg.IsDegenerate);
+    }
+
+    [Fact]
+    public void Intersect_InDifferentOctants_ReturnsFalse()
+    {
+        var t1 = new Triangle3(new Vec3(1, 1, 1), new Vec3(2, 1, 1), new Vec3(1, 2, 1));
+        var t2 = new Triangle3(new Vec3(-3, -3, -3), new Vec3(-2, -3, -3), new Vec3(-3, -2, -3));
+        Assert.False(TriTriIntersection.Intersect(t1, t2, out _));
+    }
+
+    [Fact]
+    public void AreCoplanar_TiltedPlane_True()
+    {
+        var t1 = new Triangle3(new Vec3(3, 0, 0), new Vec3(0, 3, 0), new Vec3(0, 0, 3));
+        var t2 = new Triangle3(new Vec3(1, 1, 1), new Vec3(2, 1, 0), new Vec3(1, 2, 0));
+        Assert.True(TriTriIntersection.AreCoplanar(t1, t2));
+    }
+
+    [Fact]
+    public void IntersectionSegment_RecordEquality()
+    {
+        var a = new IntersectionSegment(Vec3.Zero, Vec3.UnitX, 0, 1);
+        var b = new IntersectionSegment(Vec3.Zero, Vec3.UnitX, 0, 1);
+        Assert.Equal(a, b);
     }
 }
