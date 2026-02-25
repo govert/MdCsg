@@ -111,7 +111,7 @@ public class ExpansionArithmeticPropertyTests
     {
         // Adjacent IEEE doubles
         double a = 1.0;
-        double b = double.BitIncrement(1.0) - 1.0;
+        double b = 1.0 + 2.2204460492503131e-16 - 1.0; // next representable double after 1.0, minus 1.0
         var (sum, err) = ExpansionArithmetic.TwoSum(a, b);
         Assert.Equal(a + b, sum + err);
     }

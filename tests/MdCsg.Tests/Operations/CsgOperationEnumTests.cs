@@ -24,7 +24,7 @@ public class CsgOperationEnumTests
     [Fact]
     public void CsgOperation_AllValues()
     {
-        var values = Enum.GetValues<CsgOperation>();
+        var values = Enum.GetValues(typeof(CsgOperation));
         Assert.Equal(3, values.Length);
     }
 

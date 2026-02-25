@@ -142,7 +142,7 @@ public class PointTriangleDistanceTests
         // Closest point on BC: B + t*(C-B) where t projects p onto BC
         var bc = C - B;
         double t = Vec3.Dot(p - B, bc) / Vec3.Dot(bc, bc);
-        t = System.Math.Clamp(t, 0, 1);
+        t = System.Math.Max(0, System.Math.Min(1, t));
         var closest = B + bc * t;
         double expected = Vec3.DistanceSquared(p, closest);
         Assert.True(System.Math.Abs(d - expected) < 1e-10, $"Expected {expected}, got {d}");

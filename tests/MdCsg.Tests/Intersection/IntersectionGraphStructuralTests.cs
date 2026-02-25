@@ -36,11 +36,11 @@ public class IntersectionGraphStructuralTests
         var meshA = MeshFactory.CreateCube().Mesh;
         var meshB = MeshFactory.CreateCube(new Vec3(0.5, 0.5, 0.5)).Mesh;
         var graph = IntersectionGraph.Compute(meshA, meshB);
-        foreach (var (faceIdx, segs) in graph.FaceSegmentsA)
+        foreach (var kvp in graph.FaceSegmentsA)
         {
-            Assert.True(faceIdx >= 0 && faceIdx < meshA.Faces.Count);
-            foreach (var seg in segs)
-                Assert.Equal(faceIdx, seg.FaceIndexA);
+            Assert.True(kvp.Key >= 0 && kvp.Key < meshA.Faces.Count);
+            foreach (var seg in kvp.Value)
+                Assert.Equal(kvp.Key, seg.FaceIndexA);
         }
     }
 
@@ -50,11 +50,11 @@ public class IntersectionGraphStructuralTests
         var meshA = MeshFactory.CreateCube().Mesh;
         var meshB = MeshFactory.CreateCube(new Vec3(0.5, 0.5, 0.5)).Mesh;
         var graph = IntersectionGraph.Compute(meshA, meshB);
-        foreach (var (faceIdx, segs) in graph.FaceSegmentsB)
+        foreach (var kvp in graph.FaceSegmentsB)
         {
-            Assert.True(faceIdx >= 0 && faceIdx < meshB.Faces.Count);
-            foreach (var seg in segs)
-                Assert.Equal(faceIdx, seg.FaceIndexB);
+            Assert.True(kvp.Key >= 0 && kvp.Key < meshB.Faces.Count);
+            foreach (var seg in kvp.Value)
+                Assert.Equal(kvp.Key, seg.FaceIndexB);
         }
     }
 
@@ -135,9 +135,9 @@ public class IntersectionGraphStructuralTests
         var meshA = MeshFactory.CreateCube().Mesh;
         var meshB = MeshFactory.CreateCube(new Vec3(0.5, 0, 0)).Mesh;
         var graph = IntersectionGraph.Compute(meshA, meshB);
-        foreach (var (key, _) in graph.CoplanarFacesA)
-            Assert.True(key >= 0 && key < meshA.Faces.Count);
-        foreach (var (key, _) in graph.CoplanarFacesB)
-            Assert.True(key >= 0 && key < meshB.Faces.Count);
+        foreach (var kvp in graph.CoplanarFacesA)
+            Assert.True(kvp.Key >= 0 && kvp.Key < meshA.Faces.Count);
+        foreach (var kvp in graph.CoplanarFacesB)
+            Assert.True(kvp.Key >= 0 && kvp.Key < meshB.Faces.Count);
     }
 }
