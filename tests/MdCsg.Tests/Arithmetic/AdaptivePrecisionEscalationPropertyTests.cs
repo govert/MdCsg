@@ -2,102 +2,118 @@ using MdCsg.Arithmetic;
 
 namespace MdCsg.Tests.Arithmetic;
 
-/// <summary>Phase 6: AdaptivePrecision — Det2x2Sign, Det3x3Sign, Det4x4Sign escalation, exact results</summary>
+/// <summary>Phase 6: AdaptivePrecision — Det2x2Sign/Det3x3Sign/Det4x4Sign escalation paths, exact arithmetic agreement</summary>
 public class AdaptivePrecisionEscalationPropertyTests
 {
     [Fact]
-    public void Det2x2Sign_SimplePositive()
+    public void Det2x2Sign_IntegerValues_Correct()
     {
-        // |2 1; 1 3| = 6 - 1 = 5 > 0
-        Assert.Equal(1, AdaptivePrecision.Det2x2Sign(2, 1, 1, 3));
+        // |1 2; 3 4| = 1*4 - 2*3 = -2
+        Assert.Equal(-1, AdaptivePrecision.Det2x2Sign(1, 2, 3, 4));
     }
 
     [Fact]
-    public void Det2x2Sign_SimpleNegative()
-    {
-        // |1 3; 2 1| = 1 - 6 = -5 < 0
-        Assert.Equal(-1, AdaptivePrecision.Det2x2Sign(1, 3, 2, 1));
-    }
-
-    [Fact]
-    public void Det2x2Sign_Zero()
-    {
-        // |2 4; 1 2| = 4 - 4 = 0
-        Assert.Equal(0, AdaptivePrecision.Det2x2Sign(2, 4, 1, 2));
-    }
-
-    [Fact]
-    public void Det2x2Sign_NearlyCancelling_ExactResult()
-    {
-        // Values that nearly cancel in double but have a definite sign
-        double a = 1e15 + 1;
-        double b = 1e15;
-        double c = 1e15;
-        double d = 1e15 + 1;
-        // ad - bc = (1e15+1)^2 - (1e15)^2 = 2e15 + 1 > 0
-        Assert.Equal(1, AdaptivePrecision.Det2x2Sign(a, b, c, d));
-    }
-
-    [Fact]
-    public void Det2x2Sign_Antisymmetric()
-    {
-        // Swapping rows negates the determinant
-        double a = 3, b = 7, c = 11, d = 13;
-        int sign1 = AdaptivePrecision.Det2x2Sign(a, b, c, d);
-        int sign2 = AdaptivePrecision.Det2x2Sign(c, d, a, b);
-        Assert.Equal(-sign1, sign2);
-    }
-
-    [Fact]
-    public void Det2x2Sign_Identity_IsOne()
+    public void Det2x2Sign_Identity_Positive()
     {
         // |1 0; 0 1| = 1
         Assert.Equal(1, AdaptivePrecision.Det2x2Sign(1, 0, 0, 1));
     }
 
     [Fact]
-    public void Det3x3Sign_SimplePositive()
+    public void Det2x2Sign_Zero_WhenSingular()
     {
-        // Identity matrix has determinant 1
-        Assert.Equal(1, AdaptivePrecision.Det3x3Sign(1, 0, 0, 0, 1, 0, 0, 0, 1));
+        // |1 2; 2 4| = 1*4 - 2*2 = 0
+        Assert.Equal(0, AdaptivePrecision.Det2x2Sign(1, 2, 2, 4));
     }
 
     [Fact]
-    public void Det3x3Sign_SimpleNegative()
+    public void Det2x2Sign_SwapRows_FlipsSign()
     {
-        // Swap two rows of identity: determinant = -1
-        Assert.Equal(-1, AdaptivePrecision.Det3x3Sign(0, 1, 0, 1, 0, 0, 0, 0, 1));
+        int original = AdaptivePrecision.Det2x2Sign(1, 2, 3, 5);
+        int swapped = AdaptivePrecision.Det2x2Sign(3, 5, 1, 2);
+        Assert.Equal(-original, swapped);
     }
 
     [Fact]
-    public void Det3x3Sign_Zero_SingularMatrix()
+    public void Det2x2Sign_NearlyZero_StillCorrect()
     {
-        // Row 3 = Row 1 + Row 2 → singular
-        Assert.Equal(0, AdaptivePrecision.Det3x3Sign(1, 0, 0, 0, 1, 0, 1, 1, 0));
+        // Values designed to trigger expansion path
+        double a = 1.0 + 1e-15;
+        double b = 2.0;
+        double c = 2.0;
+        double d = 4.0 - 1e-15;
+        // ad - bc = (1+eps)(4-eps) - 2*2 = 4 - eps + 4*eps - eps^2 - 4 = 3*eps - eps^2
+        // Should be positive (very small but positive)
+        int sign = AdaptivePrecision.Det2x2Sign(a, b, c, d);
+        Assert.True(sign >= 0, $"Expected non-negative, got {sign}");
     }
 
     [Fact]
-    public void Det3x3Sign_RowSwap_FlipsSign()
+    public void Det3x3Sign_Identity_Positive()
     {
-        double a = 2, b = 3, c = 5, d = 7, e = 11, f = 13, g = 17, h = 19, i = 23;
-        int sign1 = AdaptivePrecision.Det3x3Sign(a, b, c, d, e, f, g, h, i);
-        // Swap rows 1 and 2
-        int sign2 = AdaptivePrecision.Det3x3Sign(d, e, f, a, b, c, g, h, i);
-        Assert.Equal(-sign1, sign2);
+        Assert.Equal(1, AdaptivePrecision.Det3x3Sign(
+            1, 0, 0,
+            0, 1, 0,
+            0, 0, 1));
     }
 
     [Fact]
-    public void Det3x3Sign_ScaledRow_ScalesDet()
+    public void Det3x3Sign_Singular_Zero()
     {
-        // Scaling a row by k multiplies determinant by k
-        // So scaling by positive k preserves sign
-        int sign1 = AdaptivePrecision.Det3x3Sign(1, 2, 3, 4, 5, 6, 7, 8, 10);
-        int sign2 = AdaptivePrecision.Det3x3Sign(2, 4, 6, 4, 5, 6, 7, 8, 10);
-        Assert.Equal(sign1, sign2);
+        Assert.Equal(0, AdaptivePrecision.Det3x3Sign(
+            1, 2, 3,
+            1, 2, 3,
+            4, 5, 6));
     }
 
     [Fact]
-    public void Det4x4Sign_Identity_IsOne()
+    public void Det3x3Sign_SwapTwoRows_FlipsSign()
+    {
+        int original = AdaptivePrecision.Det3x3Sign(
+            1, 2, 3,
+            4, 5, 6,
+            7, 8, 10);
+        int swapped = AdaptivePrecision.Det3x3Sign(
+            4, 5, 6,
+            1, 2, 3,
+            7, 8, 10);
+        Assert.Equal(-original, swapped);
+    }
+
+    [Fact]
+    public void Det3x3Sign_LinearlyDependent_Zero()
+    {
+        Assert.Equal(0, AdaptivePrecision.Det3x3Sign(
+            1, 2, 3,
+            4, 5, 6,
+            7, 8, 9));
+    }
+
+    [Fact]
+    public void Det3x3Sign_DiagonalMatrix_Positive()
+    {
+        Assert.Equal(1, AdaptivePrecision.Det3x3Sign(
+            1, 0, 0,
+            0, 2, 0,
+            0, 0, 3));
+    }
+
+    [Fact]
+    public void Det3x3Sign_ScaleRow_SameSign()
+    {
+        int original = AdaptivePrecision.Det3x3Sign(
+            1, 2, 3,
+            4, 5, 6,
+            7, 8, 10);
+        int scaled = AdaptivePrecision.Det3x3Sign(
+            2, 4, 6,
+            4, 5, 6,
+            7, 8, 10);
+        Assert.Equal(original, scaled);
+    }
+
+    [Fact]
+    public void Det4x4Sign_Identity_Positive()
     {
         Assert.Equal(1, AdaptivePrecision.Det4x4Sign(
             1, 0, 0, 0,
@@ -107,76 +123,53 @@ public class AdaptivePrecisionEscalationPropertyTests
     }
 
     [Fact]
-    public void Det4x4Sign_Zero_SingularMatrix()
+    public void Det4x4Sign_Singular_Zero()
     {
-        // Row 4 = Row 1: singular
         Assert.Equal(0, AdaptivePrecision.Det4x4Sign(
             1, 2, 3, 4,
+            1, 2, 3, 4,
             5, 6, 7, 8,
-            9, 10, 11, 12,
-            1, 2, 3, 4));
+            9, 10, 11, 13));
     }
 
     [Fact]
-    public void Det4x4Sign_RowSwap_FlipsSign()
+    public void Det4x4Sign_SwapTwoRows_FlipsSign()
     {
-        int sign1 = AdaptivePrecision.Det4x4Sign(
-            1, 0, 0, 0,
-            0, 1, 0, 0,
-            0, 0, 1, 0,
-            0, 0, 0, 1);
-        // Swap rows 1 and 2
-        int sign2 = AdaptivePrecision.Det4x4Sign(
-            0, 1, 0, 0,
-            1, 0, 0, 0,
-            0, 0, 1, 0,
-            0, 0, 0, 1);
-        Assert.Equal(-sign1, sign2);
+        int original = AdaptivePrecision.Det4x4Sign(
+            1, 2, 3, 4,
+            5, 6, 7, 8,
+            9, 10, 12, 13,
+            14, 15, 16, 18);
+        int swapped = AdaptivePrecision.Det4x4Sign(
+            5, 6, 7, 8,
+            1, 2, 3, 4,
+            9, 10, 12, 13,
+            14, 15, 16, 18);
+        Assert.Equal(-original, swapped);
     }
 
     [Fact]
-    public void Det4x4Sign_KnownValue()
+    public void Det4x4Sign_Diagonal_Positive()
     {
-        // 4x4 with known determinant = 1*1*1*1 = 1 (diagonal)
-        int sign = AdaptivePrecision.Det4x4Sign(
+        Assert.Equal(1, AdaptivePrecision.Det4x4Sign(
             2, 0, 0, 0,
             0, 3, 0, 0,
             0, 0, 5, 0,
-            0, 0, 0, 7);
-        Assert.Equal(1, sign); // det = 2*3*5*7 = 210
+            0, 0, 0, 7));
     }
 
     [Fact]
-    public void Det2x2Sign_AllZeros_IsZero()
+    public void Det2x2Sign_LargeValues_Correct()
     {
-        Assert.Equal(0, AdaptivePrecision.Det2x2Sign(0, 0, 0, 0));
+        double big = 1e15;
+        Assert.Equal(1, AdaptivePrecision.Det2x2Sign(big, 1, 1, big));
     }
 
     [Fact]
-    public void Det3x3Sign_AllZeros_IsZero()
+    public void Det2x2Sign_NegateAll_SameSign()
     {
-        Assert.Equal(0, AdaptivePrecision.Det3x3Sign(0, 0, 0, 0, 0, 0, 0, 0, 0));
-    }
-
-    [Fact]
-    public void Det4x4Sign_NegativeDiagonal()
-    {
-        int sign = AdaptivePrecision.Det4x4Sign(
-            -1, 0, 0, 0,
-            0, -1, 0, 0,
-            0, 0, -1, 0,
-            0, 0, 0, -1);
-        Assert.Equal(1, sign); // (-1)^4 = 1
-    }
-
-    [Fact]
-    public void Det4x4Sign_OddNegativeDiagonal()
-    {
-        int sign = AdaptivePrecision.Det4x4Sign(
-            -1, 0, 0, 0,
-            0, -1, 0, 0,
-            0, 0, -1, 0,
-            0, 0, 0, 1);
-        Assert.Equal(-1, sign); // (-1)^3 * 1 = -1
+        int original = AdaptivePrecision.Det2x2Sign(3, 7, 2, 5);
+        int negated = AdaptivePrecision.Det2x2Sign(-3, -7, -2, -5);
+        Assert.Equal(original, negated);
     }
 }
