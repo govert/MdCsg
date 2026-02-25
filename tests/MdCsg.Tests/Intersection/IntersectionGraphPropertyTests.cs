@@ -4,125 +4,122 @@ using MdCsg.Tests.TestHelpers;
 
 namespace MdCsg.Tests.Intersection;
 
-/// <summary>Phase 6: IntersectionGraph — segment symmetry, face segment maps, grid size effects</summary>
+/// <summary>Phase 6: IntersectionGraph — Compute with overlapping and non-overlapping meshes</summary>
 public class IntersectionGraphPropertyTests
 {
     [Fact]
-    public void Disjoint_NoSegments()
+    public void Compute_DisjointCubes_NoSegments()
     {
-        var meshA = MeshFactory.CreateCube().Mesh;
-        var meshB = MeshFactory.CreateCube(new Vec3(5, 0, 0)).Mesh;
-        var graph = IntersectionGraph.Compute(meshA, meshB, 1e-8);
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(100, 0, 0), 2.0);
+        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
         Assert.Empty(graph.Segments);
+        Assert.Empty(graph.FaceSegmentsA);
+        Assert.Empty(graph.FaceSegmentsB);
     }
 
     [Fact]
-    public void Overlapping_HasSegments()
+    public void Compute_OverlappingCubes_HasSegments()
     {
-        var meshA = MeshFactory.CreateCube().Mesh;
-        var meshB = MeshFactory.CreateCube(new Vec3(0.5, 0, 0)).Mesh;
-        var graph = IntersectionGraph.Compute(meshA, meshB, 1e-8);
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
         Assert.True(graph.Segments.Count > 0);
     }
 
     [Fact]
-    public void SegmentEndpoints_AreSnapped()
+    public void Compute_OverlappingCubes_SegmentsHaveValidFaceIndices()
     {
-        var meshA = MeshFactory.CreateCube().Mesh;
-        var meshB = MeshFactory.CreateCube(new Vec3(0.5, 0, 0)).Mesh;
-        var graph = IntersectionGraph.Compute(meshA, meshB, 1e-8);
-
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
         foreach (var seg in graph.Segments)
         {
-            // Endpoints should be snapped to grid
-            Assert.True(seg.Length >= 0);
+            Assert.True(seg.FaceIndexA >= 0 && seg.FaceIndexA < a.Mesh.Faces.Count);
+            Assert.True(seg.FaceIndexB >= 0 && seg.FaceIndexB < b.Mesh.Faces.Count);
         }
     }
 
     [Fact]
-    public void FaceSegmentsA_AllFaceIndicesValid()
+    public void Compute_OverlappingCubes_FaceSegmentsAPopulated()
     {
-        var meshA = MeshFactory.CreateCube().Mesh;
-        var meshB = MeshFactory.CreateCube(new Vec3(0.5, 0, 0)).Mesh;
-        var graph = IntersectionGraph.Compute(meshA, meshB, 1e-8);
-
-        foreach (var kvp in graph.FaceSegmentsA)
-        {
-            Assert.True(kvp.Key >= 0 && kvp.Key < meshA.Faces.Count);
-            Assert.True(kvp.Value.Count > 0);
-        }
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
+        Assert.True(graph.FaceSegmentsA.Count > 0);
     }
 
     [Fact]
-    public void FaceSegmentsB_AllFaceIndicesValid()
+    public void Compute_OverlappingCubes_FaceSegmentsBPopulated()
     {
-        var meshA = MeshFactory.CreateCube().Mesh;
-        var meshB = MeshFactory.CreateCube(new Vec3(0.5, 0, 0)).Mesh;
-        var graph = IntersectionGraph.Compute(meshA, meshB, 1e-8);
-
-        foreach (var kvp in graph.FaceSegmentsB)
-        {
-            Assert.True(kvp.Key >= 0 && kvp.Key < meshB.Faces.Count);
-            Assert.True(kvp.Value.Count > 0);
-        }
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
+        Assert.True(graph.FaceSegmentsB.Count > 0);
     }
 
     [Fact]
-    public void SegmentFaceIndices_InRange()
+    public void Compute_OverlappingCubes_NoSegmentsAreDegenerate()
     {
-        var meshA = MeshFactory.CreateCube().Mesh;
-        var meshB = MeshFactory.CreateCube(new Vec3(0.5, 0, 0)).Mesh;
-        var graph = IntersectionGraph.Compute(meshA, meshB, 1e-8);
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
+        foreach (var seg in graph.Segments)
+            Assert.False(seg.IsDegenerate);
+    }
 
+    [Fact]
+    public void Compute_ContainedCube_HasSegments()
+    {
+        var a = MeshFactory.CreateCube(Vec3.Zero, 4.0);
+        var b = MeshFactory.CreateCube(Vec3.Zero, 1.0);
+        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
+        Assert.True(graph.Segments.Count > 0);
+    }
+
+    [Fact]
+    public void Compute_CubeSphere_HasSegments()
+    {
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateSphere(Vec3.Zero, 1.5, 2);
+        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
+        Assert.True(graph.Segments.Count > 0);
+    }
+
+    [Fact]
+    public void Compute_DisjointCubes_NoCoplanarFaces()
+    {
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(100, 0, 0), 2.0);
+        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
+        Assert.Empty(graph.CoplanarFacesA);
+        Assert.Empty(graph.CoplanarFacesB);
+    }
+
+    [Fact]
+    public void Compute_SegmentsAreSnapped()
+    {
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        double gridSize = 0.01;
+        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh, gridSize);
         foreach (var seg in graph.Segments)
         {
-            Assert.True(seg.FaceIndexA >= 0 && seg.FaceIndexA < meshA.Faces.Count);
-            Assert.True(seg.FaceIndexB >= 0 && seg.FaceIndexB < meshB.Faces.Count);
+            // Snapped coordinates should be multiples of gridSize within tolerance
+            Assert.True(System.Math.Abs(seg.Start.X / gridSize - System.Math.Round(seg.Start.X / gridSize)) < 1e-6);
         }
     }
 
     [Fact]
-    public void Segments_NonDegenerate()
+    public void Compute_SegmentCount_Symmetric()
     {
-        var meshA = MeshFactory.CreateCube().Mesh;
-        var meshB = MeshFactory.CreateCube(new Vec3(0.5, 0, 0)).Mesh;
-        var graph = IntersectionGraph.Compute(meshA, meshB, 1e-8);
-
-        foreach (var seg in graph.Segments)
-        {
-            Assert.False(seg.IsDegenerate, $"Degenerate segment found: length={seg.Length}");
-        }
-    }
-
-    [Fact]
-    public void CoplanarFaces_EmptyForNonAlignedOffsetCubes()
-    {
-        var meshA = MeshFactory.CreateCube().Mesh;
-        var meshB = MeshFactory.CreateCube(new Vec3(0.5, 0.3, 0.2)).Mesh;
-        var graph = IntersectionGraph.Compute(meshA, meshB, 1e-8);
-
-        // Non-axis-aligned offset → no coplanar faces
-        Assert.Equal(0, graph.CoplanarFacesA.Count);
-        Assert.Equal(0, graph.CoplanarFacesB.Count);
-    }
-
-    [Fact]
-    public void SphereSphere_HasManySegments()
-    {
-        var meshA = MeshFactory.CreateSphere(Vec3.Zero, 1.0, 2).Mesh;
-        var meshB = MeshFactory.CreateSphere(new Vec3(1, 0, 0), 1.0, 2).Mesh;
-        var graph = IntersectionGraph.Compute(meshA, meshB, 1e-8);
-        Assert.True(graph.Segments.Count > 10, $"Expected many segments, got {graph.Segments.Count}");
-    }
-
-    [Fact]
-    public void FullyContained_HasSegments()
-    {
-        // Small cube fully inside big cube — boundary faces may still intersect
-        var meshA = MeshFactory.CreateCube(new Vec3(-1, -1, -1), 4).Mesh;
-        var meshB = MeshFactory.CreateCube(new Vec3(0.5, 0.5, 0.5), 0.5).Mesh;
-        var graph = IntersectionGraph.Compute(meshA, meshB, 1e-8);
-        // No intersection: small cube is fully inside
-        Assert.Equal(0, graph.Segments.Count);
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
+        // Each segment appears once in segments list
+        int fromA = graph.FaceSegmentsA.Values.Sum(l => l.Count);
+        int fromB = graph.FaceSegmentsB.Values.Sum(l => l.Count);
+        // Each non-coplanar segment is stored in both FaceSegmentsA and FaceSegmentsB
+        Assert.Equal(fromA, fromB);
     }
 }

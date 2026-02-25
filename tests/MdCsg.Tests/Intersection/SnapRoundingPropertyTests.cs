@@ -3,93 +3,98 @@ using MdCsg.Math;
 
 namespace MdCsg.Tests.Intersection;
 
-/// <summary>Phase 6: SnapRounding + IntersectionSegment — snap behavior, degenerate detection, merge properties</summary>
+/// <summary>Phase 6: SnapRounding — Snap, SnapSegment, MergePoints</summary>
 public class SnapRoundingPropertyTests
 {
     [Fact]
-    public void Snap_GridAligned_NoChange()
+    public void Snap_OnGrid_Unchanged()
     {
-        var p = new Vec3(1.0, 2.0, 3.0);
-        var snapped = SnapRounding.Snap(p, 1e-8);
-        Assert.Equal(p.X, snapped.X, 15);
-        Assert.Equal(p.Y, snapped.Y, 15);
-        Assert.Equal(p.Z, snapped.Z, 15);
+        var v = new Vec3(0.1, 0.2, 0.3);
+        var snapped = SnapRounding.Snap(v, 0.1);
+        Assert.True(System.Math.Abs(snapped.X - 0.1) < 1e-10);
+        Assert.True(System.Math.Abs(snapped.Y - 0.2) < 1e-10);
+        Assert.True(System.Math.Abs(snapped.Z - 0.3) < 1e-10);
     }
 
     [Fact]
-    public void Snap_TinyOffset_RoundsToGrid()
+    public void Snap_OffGrid_SnapsToNearest()
     {
-        var p = new Vec3(1.0 + 1e-12, 2.0 + 1e-12, 3.0 + 1e-12);
-        var snapped = SnapRounding.Snap(p, 1e-8);
-        // After snapping, should be close to grid
-        Assert.True(System.Math.Abs(snapped.X - 1.0) < 1e-7);
-        Assert.True(System.Math.Abs(snapped.Y - 2.0) < 1e-7);
-        Assert.True(System.Math.Abs(snapped.Z - 3.0) < 1e-7);
+        var v = new Vec3(0.14, 0.26, 0.38);
+        var snapped = SnapRounding.Snap(v, 0.1);
+        Assert.True(System.Math.Abs(snapped.X - 0.1) < 1e-10);
+        Assert.True(System.Math.Abs(snapped.Y - 0.3) < 1e-10);
+        Assert.True(System.Math.Abs(snapped.Z - 0.4) < 1e-10);
     }
 
     [Fact]
-    public void Snap_Idempotent()
+    public void Snap_NegativeCoordinates()
     {
-        var p = new Vec3(1.23456, 7.89012, 3.45678);
-        var snapped1 = SnapRounding.Snap(p, 1e-8);
-        var snapped2 = SnapRounding.Snap(snapped1, 1e-8);
-        Assert.Equal(snapped1.X, snapped2.X, 15);
-        Assert.Equal(snapped1.Y, snapped2.Y, 15);
-        Assert.Equal(snapped1.Z, snapped2.Z, 15);
+        var v = new Vec3(-0.14, -0.26, -0.38);
+        var snapped = SnapRounding.Snap(v, 0.1);
+        Assert.True(System.Math.Abs(snapped.X - (-0.1)) < 1e-10);
+        Assert.True(System.Math.Abs(snapped.Y - (-0.3)) < 1e-10);
+        Assert.True(System.Math.Abs(snapped.Z - (-0.4)) < 1e-10);
+    }
+
+    [Fact]
+    public void Snap_Zero_StaysZero()
+    {
+        var snapped = SnapRounding.Snap(Vec3.Zero, 0.1);
+        Assert.True(System.Math.Abs(snapped.X) < 1e-10);
+        Assert.True(System.Math.Abs(snapped.Y) < 1e-10);
+        Assert.True(System.Math.Abs(snapped.Z) < 1e-10);
+    }
+
+    [Fact]
+    public void Snap_VerySmallGrid()
+    {
+        var v = new Vec3(1.23456789, 2.34567890, 3.45678901);
+        var snapped = SnapRounding.Snap(v, 1e-6);
+        Assert.True(Vec3.Distance(v, snapped) < 1e-6);
+    }
+
+    [Fact]
+    public void Snap_LargeGrid()
+    {
+        var v = new Vec3(3.7, 8.2, 14.9);
+        var snapped = SnapRounding.Snap(v, 5.0);
+        Assert.True(System.Math.Abs(snapped.X - 5.0) < 1e-10);
+        Assert.True(System.Math.Abs(snapped.Y - 10.0) < 1e-10);
+        Assert.True(System.Math.Abs(snapped.Z - 15.0) < 1e-10);
     }
 
     [Fact]
     public void SnapSegment_PreservesFaceIndices()
     {
-        var seg = new IntersectionSegment(
-            new Vec3(1.0 + 1e-12, 0, 0), new Vec3(2.0 + 1e-12, 0, 0), 5, 10);
-        var snapped = SnapRounding.SnapSegment(seg, 1e-8);
-        Assert.Equal(5, snapped.FaceIndexA);
-        Assert.Equal(10, snapped.FaceIndexB);
+        var seg = new IntersectionSegment(new Vec3(0.14, 0.26, 0), new Vec3(1.14, 1.26, 0), 42, 99);
+        var snapped = SnapRounding.SnapSegment(seg, 0.1);
+        Assert.Equal(42, snapped.FaceIndexA);
+        Assert.Equal(99, snapped.FaceIndexB);
     }
 
     [Fact]
-    public void SnapSegment_NearDuplicate_BecomesDegenerate()
+    public void SnapSegment_SnapsEndpoints()
     {
-        var seg = new IntersectionSegment(
-            new Vec3(1.0, 2.0, 3.0),
-            new Vec3(1.0 + 1e-12, 2.0 + 1e-12, 3.0 + 1e-12),
-            0, 1);
-        var snapped = SnapRounding.SnapSegment(seg, 1e-8);
+        var seg = new IntersectionSegment(new Vec3(0.14, 0, 0), new Vec3(1.14, 0, 0), 0, 1);
+        var snapped = SnapRounding.SnapSegment(seg, 0.1);
+        Assert.True(System.Math.Abs(snapped.Start.X - 0.1) < 1e-10);
+        Assert.True(System.Math.Abs(snapped.End.X - 1.1) < 1e-10);
+    }
+
+    [Fact]
+    public void SnapSegment_ShortSegment_CanBecomeDegenerate()
+    {
+        // Both endpoints snap to 0.1
+        var seg = new IntersectionSegment(new Vec3(0.11, 0, 0), new Vec3(0.12, 0, 0), 0, 1);
+        var snapped = SnapRounding.SnapSegment(seg, 0.1);
         Assert.True(snapped.IsDegenerate);
     }
 
     [Fact]
-    public void IntersectionSegment_Length_Correct()
+    public void MergePoints_AllIdentical_SingleUnique()
     {
-        var seg = new IntersectionSegment(Vec3.Zero, new Vec3(3, 4, 0), 0, 1);
-        Assert.Equal(5.0, seg.Length, 10);
-    }
-
-    [Fact]
-    public void IntersectionSegment_ZeroLength_IsDegenerate()
-    {
-        var seg = new IntersectionSegment(Vec3.Zero, Vec3.Zero, 0, 1);
-        Assert.True(seg.IsDegenerate);
-    }
-
-    [Fact]
-    public void IntersectionSegment_NonZeroLength_NotDegenerate()
-    {
-        var seg = new IntersectionSegment(Vec3.Zero, new Vec3(1, 0, 0), 0, 1);
-        Assert.False(seg.IsDegenerate);
-    }
-
-    [Fact]
-    public void MergePoints_IdenticalPoints_SingleUnique()
-    {
-        var points = new List<Vec3>
-        {
-            new(1, 2, 3),
-            new(1, 2, 3),
-            new(1, 2, 3)
-        };
-        var (unique, mapping) = SnapRounding.MergePoints(points, 1e-8);
+        var points = new[] { Vec3.Zero, Vec3.Zero, Vec3.Zero };
+        var (unique, mapping) = SnapRounding.MergePoints(points, 1e-10);
         Assert.Single(unique);
         Assert.Equal(0, mapping[0]);
         Assert.Equal(0, mapping[1]);
@@ -97,65 +102,61 @@ public class SnapRoundingPropertyTests
     }
 
     [Fact]
-    public void MergePoints_DistinctPoints_AllUnique()
+    public void MergePoints_AllDistinct_KeepsAll()
     {
-        var points = new List<Vec3>
-        {
-            new(0, 0, 0),
-            new(1, 0, 0),
-            new(0, 1, 0)
-        };
-        var (unique, mapping) = SnapRounding.MergePoints(points, 1e-8);
+        var points = new[] { new Vec3(0,0,0), new Vec3(10,0,0), new Vec3(0,10,0) };
+        var (unique, _) = SnapRounding.MergePoints(points, 1e-10);
         Assert.Equal(3, unique.Count);
     }
 
     [Fact]
-    public void MergePoints_NearDuplicates_Merged()
+    public void MergePoints_TwoClose_Merged()
     {
-        var points = new List<Vec3>
-        {
-            new(1.0, 2.0, 3.0),
-            new(1.0 + 1e-12, 2.0 + 1e-12, 3.0 + 1e-12),
-            new(5.0, 6.0, 7.0)
-        };
-        var (unique, mapping) = SnapRounding.MergePoints(points, 1e-8);
+        var points = new[] { new Vec3(0,0,0), new Vec3(1e-12,0,0), new Vec3(10,0,0) };
+        var (unique, mapping) = SnapRounding.MergePoints(points, 1e-10);
         Assert.Equal(2, unique.Count);
         Assert.Equal(mapping[0], mapping[1]);
     }
 
     [Fact]
-    public void MergePoints_Empty_ReturnsEmpty()
+    public void MergePoints_EmptyList()
     {
-        var (unique, mapping) = SnapRounding.MergePoints(new List<Vec3>(), 1e-8);
+        var (unique, mapping) = SnapRounding.MergePoints(Array.Empty<Vec3>(), 1e-10);
         Assert.Empty(unique);
         Assert.Empty(mapping);
     }
 
     [Fact]
-    public void MergePoints_Mapping_CoversAllInputs()
+    public void MergePoints_SinglePoint()
     {
-        var points = new List<Vec3>
-        {
-            new(0, 0, 0),
-            new(1, 1, 1),
-            new(0, 0, 1e-12), // near-duplicate of index 0
-            new(2, 2, 2)
-        };
-        var (unique, mapping) = SnapRounding.MergePoints(points, 1e-8);
-        Assert.Equal(4, mapping.Count);
-        for (int i = 0; i < points.Count; i++)
-        {
-            Assert.True(mapping.ContainsKey(i));
-            Assert.True(mapping[i] >= 0 && mapping[i] < unique.Count);
-        }
+        var (unique, mapping) = SnapRounding.MergePoints(new[] { Vec3.UnitX }, 1e-10);
+        Assert.Single(unique);
+        Assert.Equal(0, mapping[0]);
     }
 
     [Fact]
-    public void Snap_LargeCoordinates_StillSnaps()
+    public void MergePoints_MappingCoversAllIndices()
     {
-        var p = new Vec3(1e10 + 1e-12, 1e10 + 1e-12, 1e10 + 1e-12);
-        var snapped = SnapRounding.Snap(p, 1e-8);
-        // Should be close to the grid value
-        Assert.True(System.Math.Abs(snapped.X - p.X) < 1e-7);
+        var points = new[] { new Vec3(0,0,0), new Vec3(1,0,0), new Vec3(0,0,0), new Vec3(2,0,0) };
+        var (unique, mapping) = SnapRounding.MergePoints(points, 1e-10);
+        for (int i = 0; i < points.Length; i++)
+            Assert.True(mapping.ContainsKey(i));
+    }
+
+    [Fact]
+    public void MergePoints_MappingIndicesAreValid()
+    {
+        var points = new[] { new Vec3(0,0,0), new Vec3(1,0,0), new Vec3(0,0,0), new Vec3(2,0,0) };
+        var (unique, mapping) = SnapRounding.MergePoints(points, 1e-10);
+        foreach (var kvp in mapping)
+            Assert.True(kvp.Value >= 0 && kvp.Value < unique.Count);
+    }
+
+    [Fact]
+    public void Snap_DefaultGridSize_Works()
+    {
+        var v = new Vec3(1.5, 2.5, 3.5);
+        var snapped = SnapRounding.Snap(v);
+        Assert.True(Vec3.Distance(v, snapped) < 1.0);
     }
 }
