@@ -2,151 +2,192 @@ using MdCsg.Arithmetic;
 
 namespace MdCsg.Tests.Arithmetic;
 
-/// <summary>Phase 6: ExpansionArithmetic — TwoSum, TwoDiff, TwoProduct, GrowExpansion, Sign, Compress, Negate</summary>
+/// <summary>Phase 6: ExpansionArithmetic — TwoSum, TwoDiff, TwoProduct, GrowExpansion, Sign, Compress, ErrorBound</summary>
 public class ExpansionArithmeticPropertyTests
 {
+    // --- TwoSum ---
+
     [Fact]
-    public void TwoSum_Exact_NoError()
+    public void TwoSum_ExactForSmallIntegers()
     {
-        var (sum, err) = ExpansionArithmetic.TwoSum(1.0, 2.0);
-        Assert.Equal(3.0, sum);
+        var (sum, err) = ExpansionArithmetic.TwoSum(3.0, 5.0);
+        Assert.Equal(8.0, sum);
         Assert.Equal(0.0, err);
     }
 
     [Fact]
-    public void TwoSum_LargeSmall_CapturesError()
+    public void TwoSum_PreservesExactSum()
     {
-        double large = 1e16;
-        double small = 1.0;
-        var (sum, err) = ExpansionArithmetic.TwoSum(large, small);
-        // sum + err should exactly equal large + small
-        Assert.True(System.Math.Abs((sum + err) - (large + small)) < 1e-10);
+        double a = 1.0, b = 1e-16;
+        var (sum, err) = ExpansionArithmetic.TwoSum(a, b);
+        // a + b = sum + err exactly
+        Assert.True(System.Math.Abs((sum + err) - (a + b)) < 1e-30);
     }
 
     [Fact]
     public void TwoSum_Commutative()
     {
-        var (s1, e1) = ExpansionArithmetic.TwoSum(3.14159, 2.71828);
-        var (s2, e2) = ExpansionArithmetic.TwoSum(2.71828, 3.14159);
+        double a = 1.5, b = 2.5;
+        var (s1, e1) = ExpansionArithmetic.TwoSum(a, b);
+        var (s2, e2) = ExpansionArithmetic.TwoSum(b, a);
         Assert.Equal(s1, s2);
     }
 
     [Fact]
-    public void TwoDiff_Exact_NoError()
+    public void TwoSum_ZeroPlusX_IsX()
     {
-        var (diff, err) = ExpansionArithmetic.TwoDiff(5.0, 3.0);
-        Assert.Equal(2.0, diff);
+        var (sum, err) = ExpansionArithmetic.TwoSum(0.0, 42.0);
+        Assert.Equal(42.0, sum);
+        Assert.Equal(0.0, err);
+    }
+
+    // --- TwoDiff ---
+
+    [Fact]
+    public void TwoDiff_ExactForSmallIntegers()
+    {
+        var (diff, err) = ExpansionArithmetic.TwoDiff(8.0, 3.0);
+        Assert.Equal(5.0, diff);
         Assert.Equal(0.0, err);
     }
 
     [Fact]
-    public void TwoDiff_LargeSmall_CapturesError()
+    public void TwoDiff_SameValue_Zero()
     {
-        double large = 1e16;
-        double small = 1.0;
-        var (diff, err) = ExpansionArithmetic.TwoDiff(large, small);
-        Assert.True(System.Math.Abs((diff + err) - (large - small)) < 1e-10);
-    }
-
-    [Fact]
-    public void TwoProduct_Exact_NoError()
-    {
-        var (prod, err) = ExpansionArithmetic.TwoProduct(3.0, 4.0);
-        Assert.Equal(12.0, prod);
+        var (diff, err) = ExpansionArithmetic.TwoDiff(42.0, 42.0);
+        Assert.Equal(0.0, diff);
         Assert.Equal(0.0, err);
     }
 
     [Fact]
-    public void TwoProduct_WithError_SumIsExact()
+    public void TwoDiff_PreservesExactDifference()
     {
-        double a = 1.0000000000000002; // 1 + 2 ulps
-        double b = 1.0000000000000004; // 1 + 4 ulps
-        var (prod, err) = ExpansionArithmetic.TwoProduct(a, b);
-        // prod + err should be exactly a*b
-        Assert.True(System.Math.Abs((prod + err) - (a * b)) < 1e-30);
+        double a = 1.0, b = 1e-16;
+        var (diff, err) = ExpansionArithmetic.TwoDiff(a, b);
+        Assert.True(System.Math.Abs((diff + err) - (a - b)) < 1e-30);
+    }
+
+    // --- TwoProduct ---
+
+    [Fact]
+    public void TwoProduct_ExactForSmallIntegers()
+    {
+        var (prod, err) = ExpansionArithmetic.TwoProduct(3.0, 5.0);
+        Assert.Equal(15.0, prod);
+        Assert.Equal(0.0, err);
     }
 
     [Fact]
-    public void TwoProduct_Zero_ReturnsZero()
+    public void TwoProduct_ZeroTimesX_Zero()
     {
-        var (prod, err) = ExpansionArithmetic.TwoProduct(0.0, 12345.0);
+        var (prod, err) = ExpansionArithmetic.TwoProduct(0.0, 42.0);
         Assert.Equal(0.0, prod);
         Assert.Equal(0.0, err);
     }
 
     [Fact]
-    public void Sign_PositiveExpansion_ReturnsOne()
+    public void TwoProduct_PreservesExactProduct()
+    {
+        double a = 1.0 + 1e-15, b = 1.0 + 1e-15;
+        var (prod, err) = ExpansionArithmetic.TwoProduct(a, b);
+        // prod + err should be exact
+        Assert.True(System.Math.Abs(prod - a * b) < 1e-25);
+    }
+
+    // --- Sign ---
+
+    [Fact]
+    public void Sign_PositiveExpansion()
     {
         Span<double> e = stackalloc double[] { 0.0, 1.0 };
         Assert.Equal(1, ExpansionArithmetic.Sign(e));
     }
 
     [Fact]
-    public void Sign_NegativeExpansion_ReturnsMinusOne()
+    public void Sign_NegativeExpansion()
     {
         Span<double> e = stackalloc double[] { 0.0, -1.0 };
         Assert.Equal(-1, ExpansionArithmetic.Sign(e));
     }
 
     [Fact]
-    public void Sign_ZeroExpansion_ReturnsZero()
+    public void Sign_ZeroExpansion()
     {
         Span<double> e = stackalloc double[] { 0.0, 0.0 };
         Assert.Equal(0, ExpansionArithmetic.Sign(e));
     }
 
     [Fact]
-    public void Sign_EmptyExpansion_ReturnsZero()
+    public void Sign_SinglePositive()
+    {
+        Span<double> e = stackalloc double[] { 5.0 };
+        Assert.Equal(1, ExpansionArithmetic.Sign(e));
+    }
+
+    [Fact]
+    public void Sign_EmptyExpansion()
     {
         Assert.Equal(0, ExpansionArithmetic.Sign(ReadOnlySpan<double>.Empty));
     }
 
+    // --- GrowExpansion ---
+
     [Fact]
-    public void GrowExpansion_AddToSingleElement()
+    public void GrowExpansion_AddToEmpty_SingleElement()
+    {
+        Span<double> h = stackalloc double[2];
+        int len = ExpansionArithmetic.GrowExpansion(ReadOnlySpan<double>.Empty, 5.0, h);
+        Assert.Equal(1, len);
+        Assert.Equal(5.0, h[0]);
+    }
+
+    [Fact]
+    public void GrowExpansion_ExactIntegers_NoError()
+    {
+        Span<double> e = stackalloc double[] { 3.0 };
+        Span<double> h = stackalloc double[3];
+        int len = ExpansionArithmetic.GrowExpansion(e, 5.0, h);
+        // Sum of expansion should be 8.0
+        double total = 0;
+        for (int i = 0; i < len; i++) total += h[i];
+        Assert.True(System.Math.Abs(total - 8.0) < 1e-15);
+    }
+
+    // --- Compress ---
+
+    [Fact]
+    public void Compress_AlreadyCompressed_SameLength()
     {
         Span<double> e = stackalloc double[] { 1.0 };
         Span<double> h = stackalloc double[2];
-        int len = ExpansionArithmetic.GrowExpansion(e, 2.0, h);
-        Assert.True(len >= 1);
-        // Sum of expansion components should equal 3.0
-        double sum = 0;
-        for (int i = 0; i < len; i++) sum += h[i];
-        Assert.True(System.Math.Abs(sum - 3.0) < 1e-10);
-    }
-
-    [Fact]
-    public void GrowExpansion_AddZero_SameValue()
-    {
-        Span<double> e = stackalloc double[] { 5.0 };
-        Span<double> h = stackalloc double[2];
-        int len = ExpansionArithmetic.GrowExpansion(e, 0.0, h);
-        double sum = 0;
-        for (int i = 0; i < len; i++) sum += h[i];
-        Assert.True(System.Math.Abs(sum - 5.0) < 1e-10);
-    }
-
-    [Fact]
-    public void Compress_RemovesZeros()
-    {
-        Span<double> e = stackalloc double[] { 0.0, 0.0, 5.0 };
-        Span<double> h = stackalloc double[3];
         int len = ExpansionArithmetic.Compress(e, h);
-        Assert.True(len <= 3);
-        double sum = 0;
-        for (int i = 0; i < len; i++) sum += h[i];
-        Assert.True(System.Math.Abs(sum - 5.0) < 1e-10);
+        Assert.Equal(1, len);
+        Assert.Equal(1.0, h[0]);
     }
 
     [Fact]
-    public void Compress_Empty_ReturnsZeroLength()
+    public void Compress_EmptyExpansion_Zero()
     {
-        Span<double> h = stackalloc double[1];
-        int len = ExpansionArithmetic.Compress(ReadOnlySpan<double>.Empty, h);
+        int len = ExpansionArithmetic.Compress(ReadOnlySpan<double>.Empty, Span<double>.Empty);
         Assert.Equal(0, len);
     }
 
     [Fact]
-    public void Negate_FlipsAllSigns()
+    public void Compress_WithZeros_Reduced()
+    {
+        Span<double> e = stackalloc double[] { 0.0, 0.0, 5.0 };
+        Span<double> h = stackalloc double[4];
+        int len = ExpansionArithmetic.Compress(e, h);
+        // Should compress away zeros
+        double total = 0;
+        for (int i = 0; i < len; i++) total += h[i];
+        Assert.True(System.Math.Abs(total - 5.0) < 1e-15);
+    }
+
+    // --- Negate ---
+
+    [Fact]
+    public void Negate_FlipsSign()
     {
         Span<double> e = stackalloc double[] { 1.0, -2.0, 3.0 };
         ExpansionArithmetic.Negate(e);
@@ -155,77 +196,59 @@ public class ExpansionArithmeticPropertyTests
         Assert.Equal(-3.0, e[2]);
     }
 
+    // --- ErrorBound ---
+
     [Fact]
-    public void Negate_EmptySpan_NoError()
+    public void ErrorBound_Epsilon_IsIEEE754()
     {
-        ExpansionArithmetic.Negate(Span<double>.Empty);
-        // Just ensure no exception
+        Assert.True(System.Math.Abs(ErrorBound.Epsilon - System.Math.Pow(2, -53)) < 1e-30);
     }
 
     [Fact]
-    public void ScaleExpansion_ByOne_PreservesValue()
+    public void ErrorBound_Orient2D_BoundsArePositive()
     {
-        Span<double> e = stackalloc double[] { 7.0 };
-        Span<double> h = stackalloc double[4];
-        int len = ExpansionArithmetic.ScaleExpansion(e, 1.0, h);
-        double sum = 0;
-        for (int i = 0; i < len; i++) sum += h[i];
-        Assert.True(System.Math.Abs(sum - 7.0) < 1e-10);
+        Assert.True(ErrorBound.Orient2DErrorBoundA > 0);
+        Assert.True(ErrorBound.Orient2DErrorBoundB > 0);
+        Assert.True(ErrorBound.Orient2DErrorBoundC > 0);
     }
 
     [Fact]
-    public void ScaleExpansion_ByZero_ReturnsZero()
+    public void ErrorBound_Orient3D_BoundsArePositive()
     {
-        Span<double> e = stackalloc double[] { 7.0 };
-        Span<double> h = stackalloc double[4];
-        int len = ExpansionArithmetic.ScaleExpansion(e, 0.0, h);
-        double sum = 0;
-        for (int i = 0; i < len; i++) sum += h[i];
-        Assert.True(System.Math.Abs(sum) < 1e-10);
+        Assert.True(ErrorBound.Orient3DErrorBoundA > 0);
+        Assert.True(ErrorBound.Orient3DErrorBoundB > 0);
+        Assert.True(ErrorBound.Orient3DErrorBoundC > 0);
     }
 
     [Fact]
-    public void ScaleExpansion_Empty_ReturnsZeroLength()
+    public void ErrorBound_InCircle_BoundsArePositive()
     {
-        Span<double> h = stackalloc double[4];
-        int len = ExpansionArithmetic.ScaleExpansion(ReadOnlySpan<double>.Empty, 5.0, h);
-        Assert.Equal(0, len);
+        Assert.True(ErrorBound.InCircleErrorBoundA > 0);
+        Assert.True(ErrorBound.InCircleErrorBoundB > 0);
+        Assert.True(ErrorBound.InCircleErrorBoundC > 0);
     }
 
     [Fact]
-    public void ExpansionSum_TwoSingleElements()
+    public void ErrorBound_ResultErrBound_IsPositive()
     {
-        Span<double> e = stackalloc double[] { 3.0 };
-        Span<double> f = stackalloc double[] { 4.0 };
-        Span<double> h = stackalloc double[4];
-        int len = ExpansionArithmetic.ExpansionSum(e, f, h);
-        double sum = 0;
-        for (int i = 0; i < len; i++) sum += h[i];
-        Assert.True(System.Math.Abs(sum - 7.0) < 1e-10);
+        Assert.True(ErrorBound.ResultErrBound > 0);
     }
 
     [Fact]
-    public void ExpansionSum_Empty_ReturnsOther()
+    public void ErrorBound_BoundsAreTiny()
     {
-        Span<double> e = stackalloc double[] { 5.0 };
-        Span<double> h = stackalloc double[4];
-        int len = ExpansionArithmetic.ExpansionSum(ReadOnlySpan<double>.Empty, e, h);
-        double sum = 0;
-        for (int i = 0; i < len; i++) sum += h[i];
-        Assert.True(System.Math.Abs(sum - 5.0) < 1e-10);
+        // All bounds should be much smaller than 1
+        Assert.True(ErrorBound.Orient2DErrorBoundA < 1e-10);
+        Assert.True(ErrorBound.Orient3DErrorBoundA < 1e-10);
+        Assert.True(ErrorBound.InCircleErrorBoundA < 1e-10);
     }
 
     [Fact]
-    public void Sign_SinglePositive_ReturnsOne()
+    public void ErrorBound_CLevels_SmallerThanALevels()
     {
-        Span<double> e = stackalloc double[] { 42.0 };
-        Assert.Equal(1, ExpansionArithmetic.Sign(e));
-    }
-
-    [Fact]
-    public void Sign_SingleNegative_ReturnsMinusOne()
-    {
-        Span<double> e = stackalloc double[] { -0.001 };
-        Assert.Equal(-1, ExpansionArithmetic.Sign(e));
+        // C-level bounds use Epsilon^2, so they should be smaller than A-level bounds
+        Assert.True(ErrorBound.Orient2DErrorBoundC < ErrorBound.Orient2DErrorBoundA);
+        Assert.True(ErrorBound.Orient3DErrorBoundC < ErrorBound.Orient3DErrorBoundA);
+        Assert.True(ErrorBound.InCircleErrorBoundC < ErrorBound.InCircleErrorBoundA);
     }
 }

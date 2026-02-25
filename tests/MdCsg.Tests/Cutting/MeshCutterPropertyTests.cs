@@ -1,112 +1,149 @@
+using MdCsg.Api;
 using MdCsg.Cutting;
 using MdCsg.Intersection;
 using MdCsg.Math;
-using MdCsg.Mesh;
 using MdCsg.Tests.TestHelpers;
 
 namespace MdCsg.Tests.Cutting;
 
-/// <summary>Phase 6: MeshCutter — Cut with/without segments, sub-triangle counts, original face indices</summary>
+/// <summary>Phase 6: MeshCutter — Cut with various segment configs, CsgResult metadata</summary>
 public class MeshCutterPropertyTests
 {
     [Fact]
-    public void Cut_NoSegments_SubTriangleCountEqualsFaceCount()
+    public void Cut_NoSegments_PreservesFaces()
     {
         var cube = MeshFactory.CreateCube(Vec3.Zero, 2.0);
-        var emptySegments = new Dictionary<int, List<IntersectionSegment>>();
-        var result = MeshCutter.Cut(cube.Mesh, emptySegments);
+        var empty = new Dictionary<int, List<IntersectionSegment>>();
+        var result = MeshCutter.Cut(cube.Mesh, empty);
         Assert.Equal(cube.Mesh.Faces.Count, result.SubTriangles.Count);
     }
 
     [Fact]
-    public void Cut_NoSegments_OriginalFaceIndicesMatch()
+    public void Cut_NoSegments_SubTrianglesHaveNoIntersectionEdges()
     {
         var cube = MeshFactory.CreateCube(Vec3.Zero, 2.0);
-        var emptySegments = new Dictionary<int, List<IntersectionSegment>>();
-        var result = MeshCutter.Cut(cube.Mesh, emptySegments);
-        for (int i = 0; i < result.SubTriangles.Count; i++)
-        {
-            Assert.Equal(i, result.SubTriangles[i].OriginalFaceIndex);
-        }
-    }
-
-    [Fact]
-    public void Cut_NoSegments_NoIntersectionEdges()
-    {
-        var cube = MeshFactory.CreateCube(Vec3.Zero, 2.0);
-        var emptySegments = new Dictionary<int, List<IntersectionSegment>>();
-        var result = MeshCutter.Cut(cube.Mesh, emptySegments);
+        var empty = new Dictionary<int, List<IntersectionSegment>>();
+        var result = MeshCutter.Cut(cube.Mesh, empty);
         foreach (var st in result.SubTriangles)
-        {
             Assert.False(st.HasIntersectionEdge);
-        }
     }
 
     [Fact]
-    public void Cut_WithSegments_MoreSubTrianglesThanFaces()
+    public void Cut_NoSegments_PreservesFaceIndices()
     {
         var cube = MeshFactory.CreateCube(Vec3.Zero, 2.0);
-        var sphere = MeshFactory.CreateSphere(new Vec3(1, 0, 0), 1.0, 2);
-        var graph = IntersectionGraph.Compute(cube.Mesh, sphere.Mesh);
-        if (graph.FaceSegmentsA.Count == 0) return; // skip if no intersection
+        var empty = new Dictionary<int, List<IntersectionSegment>>();
+        var result = MeshCutter.Cut(cube.Mesh, empty);
+        for (int i = 0; i < result.SubTriangles.Count; i++)
+            Assert.Equal(i, result.SubTriangles[i].OriginalFaceIndex);
+    }
 
-        var result = MeshCutter.Cut(cube.Mesh, graph.FaceSegmentsA);
+    [Fact]
+    public void Cut_WithSegments_ProducesMoreSubTriangles()
+    {
+        var cube = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var otherCube = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        var graph = IntersectionGraph.Compute(cube.Mesh, otherCube.Mesh);
+        var result = MeshCutter.Cut(cube.Mesh, (Dictionary<int, List<IntersectionSegment>>)graph.FaceSegmentsA);
         Assert.True(result.SubTriangles.Count >= cube.Mesh.Faces.Count);
     }
 
     [Fact]
-    public void Cut_WithSegments_AllOriginalFaceIndicesValid()
+    public void Cut_WithSegments_SomeHaveIntersectionEdges()
     {
         var cube = MeshFactory.CreateCube(Vec3.Zero, 2.0);
-        var sphere = MeshFactory.CreateSphere(new Vec3(1, 0, 0), 1.0, 2);
-        var graph = IntersectionGraph.Compute(cube.Mesh, sphere.Mesh);
-        var result = MeshCutter.Cut(cube.Mesh, graph.FaceSegmentsA);
-        foreach (var st in result.SubTriangles)
-        {
-            Assert.True(st.OriginalFaceIndex >= 0 && st.OriginalFaceIndex < cube.Mesh.Faces.Count);
-        }
+        var otherCube = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        var graph = IntersectionGraph.Compute(cube.Mesh, otherCube.Mesh);
+        var result = MeshCutter.Cut(cube.Mesh, (Dictionary<int, List<IntersectionSegment>>)graph.FaceSegmentsA);
+        Assert.True(result.SubTriangles.Any(st => st.HasIntersectionEdge));
     }
 
     [Fact]
-    public void Cut_ProducesMesh()
+    public void Cut_ResultMeshHasFaces()
     {
         var cube = MeshFactory.CreateCube(Vec3.Zero, 2.0);
-        var emptySegments = new Dictionary<int, List<IntersectionSegment>>();
-        var result = MeshCutter.Cut(cube.Mesh, emptySegments);
-        Assert.NotNull(result.Mesh);
+        var otherCube = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        var graph = IntersectionGraph.Compute(cube.Mesh, otherCube.Mesh);
+        var result = MeshCutter.Cut(cube.Mesh, (Dictionary<int, List<IntersectionSegment>>)graph.FaceSegmentsA);
         Assert.True(result.Mesh.Faces.Count > 0);
     }
 
     [Fact]
-    public void Cut_Sphere_NoSegments_SubTriangleCountMatchesFaces()
+    public void Cut_OriginalFaceIdsTransferred()
     {
-        var sphere = MeshFactory.CreateSphere(Vec3.Zero, 1.0, 1);
-        var emptySegments = new Dictionary<int, List<IntersectionSegment>>();
-        var result = MeshCutter.Cut(sphere.Mesh, emptySegments);
-        Assert.Equal(sphere.Mesh.Faces.Count, result.SubTriangles.Count);
+        var cube = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var empty = new Dictionary<int, List<IntersectionSegment>>();
+        var result = MeshCutter.Cut(cube.Mesh, empty);
+        for (int i = 0; i < result.Mesh.Faces.Count; i++)
+        {
+            Assert.True(result.Mesh.Faces[i].OriginalFaceId >= 0);
+        }
     }
 
+    // --- CsgResult tests ---
+
     [Fact]
-    public void Cut_OverlappingCubes_BothMeshesHaveMoreSubTriangles()
+    public void CsgResult_Union_HasPositiveFaceCount()
     {
         var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
         var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
-        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
-        
-        var cutA = MeshCutter.Cut(a.Mesh, graph.FaceSegmentsA);
-        var cutB = MeshCutter.Cut(b.Mesh, graph.FaceSegmentsB);
-        
-        Assert.True(cutA.SubTriangles.Count >= a.Mesh.Faces.Count);
-        Assert.True(cutB.SubTriangles.Count >= b.Mesh.Faces.Count);
+        var result = Csg.Union(a, b);
+        Assert.True(result.FaceCount > 0);
+        Assert.True(result.VertexCount > 0);
     }
 
     [Fact]
-    public void CutResult_IsRecord()
+    public void CsgResult_Union_HasIntersectionSegments()
     {
-        var mesh = new HalfEdgeMesh();
-        var subTris = new List<FaceCutter.SubTriangle>();
-        var result = new MeshCutter.CutResult(mesh, subTris);
-        Assert.Same(mesh, result.Mesh);
-        Assert.Same(subTris, result.SubTriangles);
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        var result = Csg.Union(a, b);
+        Assert.True(result.IntersectionSegmentCount > 0);
+    }
+
+    [Fact]
+    public void CsgResult_Disjoint_NoIntersectionSegments()
+    {
+        var a = MeshFactory.CreateCube(Vec3.Zero, 1.0);
+        var b = MeshFactory.CreateCube(new Vec3(100, 0, 0), 1.0);
+        var result = Csg.Union(a, b);
+        Assert.Equal(0, result.IntersectionSegmentCount);
+    }
+
+    [Fact]
+    public void CsgResult_HasPatchCounts()
+    {
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        var result = Csg.Union(a, b);
+        Assert.True(result.PatchCountA > 0);
+        Assert.True(result.PatchCountB > 0);
+    }
+
+    [Fact]
+    public void CsgResult_FaceCount_MatchesMeshFaces()
+    {
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        var result = Csg.Union(a, b);
+        Assert.Equal(result.Mesh.Faces.Count, result.FaceCount);
+    }
+
+    [Fact]
+    public void CsgResult_VertexCount_MatchesMeshVertices()
+    {
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        var result = Csg.Union(a, b);
+        Assert.Equal(result.Mesh.Vertices.Count, result.VertexCount);
+    }
+
+    [Fact]
+    public void CsgResult_DegenerateCount_NonNegative()
+    {
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        var result = Csg.Union(a, b);
+        Assert.True(result.DegenerateCount >= 0);
     }
 }
