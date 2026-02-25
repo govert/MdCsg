@@ -16,6 +16,35 @@ public static class PatchClassifier
     public const double DegenerateMarginThreshold = 1e-10;
 
     /// <summary>
+    /// Classifies all patches using an <see cref="IPointClassifier"/> for the other solid.
+    /// </summary>
+    /// <param name="patches">Patches to classify.</param>
+    /// <param name="subTriangles">All sub-triangles.</param>
+    /// <param name="classifier">Classifier for the other solid (BVH-backed or plane-backed).</param>
+    /// <returns>Number of degenerate patches that could not be confidently classified.</returns>
+    public static int ClassifyAll(
+        IReadOnlyList<Patch> patches,
+        IReadOnlyList<FaceCutter.SubTriangle> subTriangles,
+        IPointClassifier classifier)
+    {
+        int degenerateCount = 0;
+
+        foreach (var patch in patches)
+        {
+            var (confidentPoint, margin) = ConfidentPoint.FindConfidentPoint(patch, subTriangles, classifier);
+            patch.ConfidentPoint = confidentPoint;
+            patch.HasConfidentPoint = margin > DegenerateMarginThreshold;
+
+            if (!patch.HasConfidentPoint)
+                degenerateCount++;
+
+            patch.IsInside = classifier.Classify(confidentPoint) == SolidClassification.Inside;
+        }
+
+        return degenerateCount;
+    }
+
+    /// <summary>
     /// Classifies all patches.
     /// </summary>
     /// <param name="patches">Patches to classify.</param>

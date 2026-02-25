@@ -13,6 +13,8 @@ namespace MdCsg.Api;
 /// </summary>
 public static class Csg
 {
+    // ── Mesh × Mesh ──────────────────────────────────────────────
+
     /// <summary>
     /// Computes the union A ∪ B.
     /// </summary>
@@ -30,6 +32,48 @@ public static class Csg
     /// </summary>
     public static CsgResult Difference(Solid a, Solid b, CsgOptions? options = null) =>
         Evaluate(a, b, CsgOperation.Difference, options ?? new CsgOptions());
+
+    // ── Mesh × HalfSpace ────────────────────────────────────────
+
+    /// <summary>Union of a mesh and a half-space produces an infinite result.</summary>
+    public static CsgResult Union(Solid a, HalfSpace b, CsgOptions? options = null) =>
+        throw new NotSupportedException("Union of a mesh and a half-space produces an infinite result.");
+
+    /// <summary>Clips mesh A to the interior of half-space B.</summary>
+    public static CsgResult Intersect(Solid a, HalfSpace b, CsgOptions? options = null) =>
+        CsgHalfSpace.Evaluate(a, b, CsgOperation.Intersection, options ?? new CsgOptions());
+
+    /// <summary>Subtracts a half-space from mesh A, keeping the part outside the half-space.</summary>
+    public static CsgResult Difference(Solid a, HalfSpace b, CsgOptions? options = null) =>
+        CsgHalfSpace.Evaluate(a, b, CsgOperation.Difference, options ?? new CsgOptions());
+
+    // ── HalfSpace × Mesh ────────────────────────────────────────
+
+    /// <summary>Union of a half-space and a mesh produces an infinite result.</summary>
+    public static CsgResult Union(HalfSpace a, Solid b, CsgOptions? options = null) =>
+        throw new NotSupportedException("Union of a half-space and a mesh produces an infinite result.");
+
+    /// <summary>Clips mesh B to the interior of half-space A (commutative with Intersect(Solid, HalfSpace)).</summary>
+    public static CsgResult Intersect(HalfSpace a, Solid b, CsgOptions? options = null) =>
+        CsgHalfSpace.Evaluate(b, a, CsgOperation.Intersection, options ?? new CsgOptions());
+
+    /// <summary>Subtracting a mesh from a half-space produces an infinite result.</summary>
+    public static CsgResult Difference(HalfSpace a, Solid b, CsgOptions? options = null) =>
+        throw new NotSupportedException("Subtracting a mesh from a half-space produces an infinite result.");
+
+    // ── HalfSpace × HalfSpace ───────────────────────────────────
+
+    /// <summary>HalfSpace-HalfSpace operations are not supported.</summary>
+    public static CsgResult Union(HalfSpace a, HalfSpace b, CsgOptions? options = null) =>
+        throw new NotSupportedException("CSG operations between two half-spaces are not supported.");
+
+    /// <summary>HalfSpace-HalfSpace operations are not supported.</summary>
+    public static CsgResult Intersect(HalfSpace a, HalfSpace b, CsgOptions? options = null) =>
+        throw new NotSupportedException("CSG operations between two half-spaces are not supported.");
+
+    /// <summary>HalfSpace-HalfSpace operations are not supported.</summary>
+    public static CsgResult Difference(HalfSpace a, HalfSpace b, CsgOptions? options = null) =>
+        throw new NotSupportedException("CSG operations between two half-spaces are not supported.");
 
     /// <summary>
     /// Evaluates a CSG boolean operation between two solids.

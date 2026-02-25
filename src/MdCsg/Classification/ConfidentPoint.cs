@@ -47,10 +47,39 @@ public static class ConfidentPoint
     }
 
     /// <summary>
+    /// Finds the confident point for a patch using an <see cref="IPointClassifier"/>
+    /// to compute distance-to-surface instead of direct BVH traversal.
+    /// </summary>
+    public static (Vec3 Point, double Margin) FindConfidentPoint(
+        Patch patch,
+        IReadOnlyList<FaceCutter.SubTriangle> subTriangles,
+        IPointClassifier classifier)
+    {
+        Vec3 bestPoint = Vec3.Zero;
+        double bestMargin = -1;
+
+        foreach (int triIdx in patch.SubTriangleIndices)
+        {
+            var tri = subTriangles[triIdx];
+            var centroid = (tri.A + tri.B + tri.C) / 3.0;
+
+            double margin = classifier.DistanceToSurface(centroid);
+
+            if (margin > bestMargin)
+            {
+                bestMargin = margin;
+                bestPoint = centroid;
+            }
+        }
+
+        return (bestPoint, bestMargin);
+    }
+
+    /// <summary>
     /// Computes the minimum distance from a point to the nearest face of a mesh via BVH.
     /// Uses iterative traversal with explicit stack for performance.
     /// </summary>
-    private static double ComputeMinDistanceToMesh(Vec3 point, BvhTree bvh)
+    internal static double ComputeMinDistanceToMesh(Vec3 point, BvhTree bvh)
     {
         if (bvh.NodeCount == 0)
             return double.MaxValue;

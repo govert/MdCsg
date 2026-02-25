@@ -19,6 +19,15 @@ public readonly record struct Plane(Vec3 Normal, double Distance)
     }
 
     /// <summary>
+    /// Creates a plane from a point on the plane and its normal direction.
+    /// </summary>
+    public static Plane FromPointAndNormal(Vec3 point, Vec3 normal)
+    {
+        var n = normal.Normalized;
+        return new Plane(n, Vec3.Dot(n, point));
+    }
+
+    /// <summary>
     /// Returns the signed distance from a point to this plane.
     /// Positive means the point is on the side the normal points to.
     /// </summary>
