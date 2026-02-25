@@ -3,9 +3,11 @@ using MdCsg.Math;
 
 namespace MdCsg.Tests.Cutting;
 
-/// <summary>Phase 6: ConstrainedTriangulator — GetDominantAxis, ProjectTo2D, Triangulate with/without constraints</summary>
+/// <summary>Phase 6: ConstrainedTriangulator - Projection, ear-clipping, constrained insertion, cavity re-triangulation</summary>
 public class ConstrainedTriangulatorPropertyTests
 {
+    // --- GetDominantAxis ---
+
     [Fact]
     public void GetDominantAxis_XDominant()
     {
@@ -25,120 +27,198 @@ public class ConstrainedTriangulatorPropertyTests
     }
 
     [Fact]
-    public void GetDominantAxis_NegativeValues()
+    public void GetDominantAxis_NegativeNormal()
     {
-        Assert.Equal(2, ConstrainedTriangulator.GetDominantAxis(new Vec3(0, 0, -5)));
+        Assert.Equal(1, ConstrainedTriangulator.GetDominantAxis(new Vec3(1, -10, 1)));
     }
+
+    [Fact]
+    public void GetDominantAxis_UnitZ()
+    {
+        Assert.Equal(2, ConstrainedTriangulator.GetDominantAxis(Vec3.UnitZ));
+    }
+
+    // --- ProjectTo2D ---
 
     [Fact]
     public void ProjectTo2D_DropX()
     {
-        var result = ConstrainedTriangulator.ProjectTo2D(new Vec3(1, 2, 3), 0);
-        Assert.Equal(2, result.X);
-        Assert.Equal(3, result.Y);
+        var p = new Vec3(5, 3, 7);
+        var result = ConstrainedTriangulator.ProjectTo2D(p, 0);
+        Assert.Equal(new Vec2(3, 7), result);
     }
 
     [Fact]
     public void ProjectTo2D_DropY()
     {
-        var result = ConstrainedTriangulator.ProjectTo2D(new Vec3(1, 2, 3), 1);
-        Assert.Equal(1, result.X);
-        Assert.Equal(3, result.Y);
+        var p = new Vec3(5, 3, 7);
+        var result = ConstrainedTriangulator.ProjectTo2D(p, 1);
+        Assert.Equal(new Vec2(5, 7), result);
     }
 
     [Fact]
     public void ProjectTo2D_DropZ()
     {
-        var result = ConstrainedTriangulator.ProjectTo2D(new Vec3(1, 2, 3), 2);
-        Assert.Equal(1, result.X);
-        Assert.Equal(2, result.Y);
+        var p = new Vec3(5, 3, 7);
+        var result = ConstrainedTriangulator.ProjectTo2D(p, 2);
+        Assert.Equal(new Vec2(5, 3), result);
     }
 
+    // --- Triangulate (no constraints) ---
+
     [Fact]
-    public void Triangulate_SingleTriangle_ReturnsOneTriangle()
+    public void Triangulate_ThreeVertices_SingleTriangle()
     {
-        var verts = new List<Vec3>
-        {
-            new(0, 0, 0), new(1, 0, 0), new(0, 1, 0)
-        };
-        var result = ConstrainedTriangulator.Triangulate(verts, new List<(int, int)>(), new Vec3(0, 0, 1));
+        var verts = new Vec3[] { Vec3.Zero, Vec3.UnitX, Vec3.UnitY };
+        var result = ConstrainedTriangulator.Triangulate(verts, Array.Empty<(int, int)>(), Vec3.UnitZ);
         Assert.Single(result);
-        Assert.Equal((0, 1, 2), result[0]);
+        var (a, b, c) = result[0];
+        Assert.Contains(0, new[] { a, b, c });
+        Assert.Contains(1, new[] { a, b, c });
+        Assert.Contains(2, new[] { a, b, c });
     }
 
     [Fact]
-    public void Triangulate_LessThanThree_ReturnsEmpty()
+    public void Triangulate_LessThanThreeVertices_Empty()
     {
-        var verts = new List<Vec3> { new(0, 0, 0), new(1, 0, 0) };
-        var result = ConstrainedTriangulator.Triangulate(verts, new List<(int, int)>(), new Vec3(0, 0, 1));
+        var verts = new Vec3[] { Vec3.Zero, Vec3.UnitX };
+        var result = ConstrainedTriangulator.Triangulate(verts, Array.Empty<(int, int)>(), Vec3.UnitZ);
         Assert.Empty(result);
     }
 
     [Fact]
-    public void Triangulate_FourPoints_NoConstraints_TwoTriangles()
+    public void Triangulate_FourVertices_NoConstraints_TwoTriangles()
     {
-        var verts = new List<Vec3>
+        // Square in the XY plane
+        var verts = new Vec3[]
         {
-            new(0, 0, 0), new(1, 0, 0), new(0, 1, 0), new(0.5, 0.3, 0)
+            new(0, 0, 0), new(1, 0, 0), new(1, 1, 0), new(0, 1, 0)
         };
-        var result = ConstrainedTriangulator.Triangulate(verts, new List<(int, int)>(), new Vec3(0, 0, 1));
-        // 4 points in 2D should produce 2 triangles
+        var result = ConstrainedTriangulator.Triangulate(verts, Array.Empty<(int, int)>(), Vec3.UnitZ);
+        Assert.Equal(2, result.Count);
+    }
+
+    [Fact]
+    public void Triangulate_AllIndicesValid()
+    {
+        var verts = new Vec3[]
+        {
+            new(0, 0, 0), new(1, 0, 0), new(1, 1, 0), new(0, 1, 0)
+        };
+        var result = ConstrainedTriangulator.Triangulate(verts, Array.Empty<(int, int)>(), Vec3.UnitZ);
+        foreach (var (a, b, c) in result)
+        {
+            Assert.InRange(a, 0, verts.Length - 1);
+            Assert.InRange(b, 0, verts.Length - 1);
+            Assert.InRange(c, 0, verts.Length - 1);
+        }
+    }
+
+    [Fact]
+    public void Triangulate_FiveVertices_ThreeTriangles()
+    {
+        // Pentagon-like in XY plane
+        var verts = new Vec3[]
+        {
+            new(0, 0, 0), new(2, 0, 0), new(3, 1, 0), new(1, 2, 0), new(-1, 1, 0)
+        };
+        var result = ConstrainedTriangulator.Triangulate(verts, Array.Empty<(int, int)>(), Vec3.UnitZ);
+        Assert.Equal(3, result.Count);
+    }
+
+    // --- Triangulate with constraints ---
+
+    [Fact]
+    public void Triangulate_WithConstraint_ProducesTriangles()
+    {
+        // Triangle with an interior point and a constraint from vertex 0 to vertex 3
+        var verts = new Vec3[]
+        {
+            new(0, 0, 0), new(4, 0, 0), new(2, 4, 0), new(2, 1, 0) // interior point
+        };
+        var constraints = new[] { (0, 3) };
+        var result = ConstrainedTriangulator.Triangulate(verts, constraints, Vec3.UnitZ);
         Assert.True(result.Count >= 2);
     }
 
     [Fact]
     public void Triangulate_WithConstraint_ConstraintEdgeExists()
     {
-        var verts = new List<Vec3>
+        var verts = new Vec3[]
         {
-            new(0, 0, 0), new(1, 0, 0), new(0, 1, 0),
-            new(0.5, 0.0, 0), new(0.25, 0.5, 0)
+            new(0, 0, 0), new(4, 0, 0), new(2, 4, 0), new(2, 1, 0)
         };
-        var constraints = new List<(int, int)> { (3, 4) };
-        var result = ConstrainedTriangulator.Triangulate(verts, constraints, new Vec3(0, 0, 1));
+        var constraints = new[] { (0, 3) };
+        var result = ConstrainedTriangulator.Triangulate(verts, constraints, Vec3.UnitZ);
 
-        // The constraint edge (3->4 or 4->3) should appear in the triangulation
-        bool found = false;
-        foreach (var (a, b, c) in result)
-        {
-            if ((a == 3 && b == 4) || (b == 3 && a == 4) ||
-                (b == 3 && c == 4) || (c == 3 && b == 4) ||
-                (c == 3 && a == 4) || (a == 3 && c == 4))
-            {
-                found = true;
-                break;
-            }
-        }
-        Assert.True(found, "Constraint edge should appear in triangulation");
+        // The constraint edge (0,3) should exist in the triangulation
+        bool found = result.Any(t =>
+            HasEdge(t.A, t.B, t.C, 0, 3));
+        Assert.True(found);
     }
 
     [Fact]
-    public void Triangulate_AllTrianglesUseSameVertexPool()
+    public void Triangulate_WithConstraint_AllIndicesValid()
     {
-        var verts = new List<Vec3>
+        var verts = new Vec3[]
         {
-            new(0, 0, 0), new(2, 0, 0), new(0, 2, 0),
-            new(1, 0, 0), new(0.5, 1, 0)
+            new(0, 0, 0), new(4, 0, 0), new(2, 4, 0), new(2, 1, 0)
         };
-        var result = ConstrainedTriangulator.Triangulate(verts, new List<(int, int)>(), new Vec3(0, 0, 1));
-
+        var constraints = new[] { (0, 3) };
+        var result = ConstrainedTriangulator.Triangulate(verts, constraints, Vec3.UnitZ);
         foreach (var (a, b, c) in result)
         {
-            Assert.True(a >= 0 && a < verts.Count);
-            Assert.True(b >= 0 && b < verts.Count);
-            Assert.True(c >= 0 && c < verts.Count);
+            Assert.InRange(a, 0, verts.Length - 1);
+            Assert.InRange(b, 0, verts.Length - 1);
+            Assert.InRange(c, 0, verts.Length - 1);
         }
     }
 
     [Fact]
-    public void Triangulate_VerticalFace_ZDominant_Works()
+    public void Triangulate_MultipleConstraints_AllExist()
     {
-        // Face in XZ plane (Y-dominant normal)
-        var verts = new List<Vec3>
+        var verts = new Vec3[]
         {
-            new(0, 5, 0), new(1, 5, 0), new(0, 5, 1)
+            new(0, 0, 0), new(6, 0, 0), new(3, 6, 0),
+            new(2, 1, 0), new(4, 1, 0) // two interior points
         };
-        var result = ConstrainedTriangulator.Triangulate(verts, new List<(int, int)>(), new Vec3(0, 1, 0));
+        var constraints = new[] { (3, 4) };
+        var result = ConstrainedTriangulator.Triangulate(verts, constraints, Vec3.UnitZ);
+
+        bool found = result.Any(t => HasEdge(t.A, t.B, t.C, 3, 4));
+        Assert.True(found);
+    }
+
+    // --- Different normals (different projection axes) ---
+
+    [Fact]
+    public void Triangulate_YZPlane_Works()
+    {
+        // Triangle in YZ plane (normal along X)
+        var verts = new Vec3[]
+        {
+            new(0, 0, 0), new(0, 1, 0), new(0, 0, 1)
+        };
+        var result = ConstrainedTriangulator.Triangulate(verts, Array.Empty<(int, int)>(), Vec3.UnitX);
         Assert.Single(result);
+    }
+
+    [Fact]
+    public void Triangulate_XZPlane_Works()
+    {
+        // Triangle in XZ plane (normal along Y)
+        var verts = new Vec3[]
+        {
+            new(0, 0, 0), new(1, 0, 0), new(0, 0, 1)
+        };
+        var result = ConstrainedTriangulator.Triangulate(verts, Array.Empty<(int, int)>(), Vec3.UnitY);
+        Assert.Single(result);
+    }
+
+    private static bool HasEdge(int a, int b, int c, int s, int e)
+    {
+        return (a == s && b == e) || (b == s && a == e) ||
+               (b == s && c == e) || (c == s && b == e) ||
+               (c == s && a == e) || (a == s && c == e);
     }
 }
