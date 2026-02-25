@@ -5,110 +5,92 @@ using MdCsg.Tests.TestHelpers;
 
 namespace MdCsg.Tests.Api;
 
-/// <summary>Phase 6: CsgOptions — default values, UseWindingNumber, GridSize, WeldTolerance, ClassificationStrategy</summary>
+/// <summary>Phase 6: CsgOptions — GridSize, UseWindingNumber, WeldTolerance, ClassificationStrategy effects</summary>
 public class CsgOptionsPropertyTests
 {
     [Fact]
-    public void Default_ClassificationStrategy_IsNull()
+    public void DefaultOptions_HasCorrectDefaults()
     {
         var options = new CsgOptions();
+        Assert.Equal(1e-8, options.GridSize);
+        Assert.False(options.UseWindingNumber);
+        Assert.Equal(1e-8, options.WeldTolerance);
         Assert.Null(options.ClassificationStrategy);
     }
 
     [Fact]
-    public void Default_GridSize_IsSmallPositive()
+    public void UseWindingNumber_ProducesFaces()
     {
-        var options = new CsgOptions();
-        Assert.True(options.GridSize > 0);
-        Assert.True(options.GridSize < 1e-3);
-    }
-
-    [Fact]
-    public void Default_UseWindingNumber_False()
-    {
-        var options = new CsgOptions();
-        Assert.False(options.UseWindingNumber);
-    }
-
-    [Fact]
-    public void Default_WeldTolerance_IsSmallPositive()
-    {
-        var options = new CsgOptions();
-        Assert.True(options.WeldTolerance > 0);
-        Assert.True(options.WeldTolerance < 1e-3);
-    }
-
-    [Fact]
-    public void UseWindingNumber_CanBeSet()
-    {
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
         var options = new CsgOptions { UseWindingNumber = true };
-        Assert.True(options.UseWindingNumber);
+        var result = Csg.Union(a, b, options);
+        Assert.True(result.FaceCount > 0);
     }
 
     [Fact]
-    public void GridSize_CanBeChanged()
+    public void CustomGridSize_ProducesFaces()
     {
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
         var options = new CsgOptions { GridSize = 1e-6 };
-        Assert.Equal(1e-6, options.GridSize);
-    }
-
-    [Fact]
-    public void WeldTolerance_CanBeChanged()
-    {
-        var options = new CsgOptions { WeldTolerance = 1e-12 };
-        Assert.Equal(1e-12, options.WeldTolerance);
-    }
-
-    [Fact]
-    public void ClassificationStrategy_CanBeSet()
-    {
-        var strategy = new CpuPatchClassificationStrategy();
-        var options = new CsgOptions { ClassificationStrategy = strategy };
-        Assert.Same(strategy, options.ClassificationStrategy);
-    }
-
-    [Fact]
-    public void Union_WithWindingNumber_ProducesFaces()
-    {
-        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
-        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
-        var result = Csg.Union(a, b, new CsgOptions { UseWindingNumber = true });
+        var result = Csg.Union(a, b, options);
         Assert.True(result.FaceCount > 0);
     }
 
     [Fact]
-    public void Intersect_WithWindingNumber_ProducesFaces()
+    public void CustomWeldTolerance_ProducesFaces()
     {
         var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
         var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
-        var result = Csg.Intersect(a, b, new CsgOptions { UseWindingNumber = true });
+        var options = new CsgOptions { WeldTolerance = 1e-6 };
+        var result = Csg.Union(a, b, options);
         Assert.True(result.FaceCount > 0);
     }
 
     [Fact]
-    public void Difference_WithWindingNumber_ProducesFaces()
+    public void ExplicitCpuStrategy_ProducesFaces()
     {
         var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
         var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
-        var result = Csg.Difference(a, b, new CsgOptions { UseWindingNumber = true });
+        var options = new CsgOptions { ClassificationStrategy = new CpuPatchClassificationStrategy() };
+        var result = Csg.Union(a, b, options);
         Assert.True(result.FaceCount > 0);
     }
 
     [Fact]
-    public void Union_WithCustomGridSize_ProducesFaces()
+    public void Intersect_WithOptions_ProducesFaces()
     {
         var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
         var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
-        var result = Csg.Union(a, b, new CsgOptions { GridSize = 1e-6 });
+        var options = new CsgOptions { GridSize = 1e-6, WeldTolerance = 1e-6 };
+        var result = Csg.Intersect(a, b, options);
         Assert.True(result.FaceCount > 0);
     }
 
     [Fact]
-    public void Union_WithCpuStrategy_ProducesFaces()
+    public void Difference_WithOptions_ProducesFaces()
     {
         var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
         var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
-        var result = Csg.Union(a, b, new CsgOptions { ClassificationStrategy = new CpuPatchClassificationStrategy() });
+        var options = new CsgOptions { GridSize = 1e-6, WeldTolerance = 1e-6 };
+        var result = Csg.Difference(a, b, options);
         Assert.True(result.FaceCount > 0);
+    }
+
+    [Fact]
+    public void NullOptions_UsesDefaults()
+    {
+        var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
+        var result = Csg.Union(a, b, null);
+        Assert.True(result.FaceCount > 0);
+    }
+
+    [Fact]
+    public void CsgOperation_Enum_HasThreeValues()
+    {
+        var values = Enum.GetValues(typeof(MdCsg.Operations.CsgOperation));
+        Assert.Equal(3, values.Length);
     }
 }

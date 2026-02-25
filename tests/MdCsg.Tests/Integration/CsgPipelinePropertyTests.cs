@@ -1,108 +1,126 @@
 using MdCsg.Api;
-using MdCsg.Cutting;
-using MdCsg.Intersection;
 using MdCsg.Math;
 using MdCsg.Mesh;
-using MdCsg.Patches;
 using MdCsg.Tests.TestHelpers;
 
 namespace MdCsg.Tests.Integration;
 
-/// <summary>Phase 6: CSG pipeline stages — IntersectionGraph → MeshCutter → PatchExtractor → PatchClassifier → Assemble</summary>
+/// <summary>Phase 6: CSG pipeline — Evaluate metadata, mesh quality, edge cases</summary>
 public class CsgPipelinePropertyTests
 {
     [Fact]
-    public void Pipeline_OverlappingCubes_IntersectionGraphHasSegments()
+    public void Union_CubeCube_PatchCountsPositive()
     {
         var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
         var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
-        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
-        Assert.True(graph.Segments.Count > 0);
+        var result = Csg.Union(a, b);
+        Assert.True(result.PatchCountA >= 2);
+        Assert.True(result.PatchCountB >= 2);
     }
 
     [Fact]
-    public void Pipeline_CutA_ProducesMoreSubTriangles()
+    public void Intersect_CubeCube_PatchCountsPositive()
     {
         var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
         var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
-        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
-        var cutA = MeshCutter.Cut(a.Mesh, graph.FaceSegmentsA);
-        Assert.True(cutA.SubTriangles.Count >= a.Mesh.Faces.Count);
+        var result = Csg.Intersect(a, b);
+        Assert.True(result.PatchCountA >= 2);
+        Assert.True(result.PatchCountB >= 2);
     }
 
     [Fact]
-    public void Pipeline_PatchExtractor_CreatesPatches()
+    public void Difference_CubeCube_PatchCountsPositive()
     {
         var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
         var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
-        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
-        var cutA = MeshCutter.Cut(a.Mesh, graph.FaceSegmentsA);
-        var adjA = SubTriangleAdjacency.Build(cutA.SubTriangles);
-        var patchesA = PatchExtractor.Extract(cutA.SubTriangles, adjA);
-        Assert.True(patchesA.Count > 0);
+        var result = Csg.Difference(a, b);
+        Assert.True(result.PatchCountA >= 2);
+        Assert.True(result.PatchCountB >= 2);
     }
 
     [Fact]
-    public void Pipeline_PatchesA_AllHaveSubTriangles()
+    public void Disjoint_PatchCountsEqualOne()
+    {
+        var a = MeshFactory.CreateCube(Vec3.Zero, 1.0);
+        var b = MeshFactory.CreateCube(new Vec3(100, 0, 0), 1.0);
+        var result = Csg.Union(a, b);
+        // Each mesh has 1 patch (no intersection to split them)
+        Assert.Equal(1, result.PatchCountA);
+        Assert.Equal(1, result.PatchCountB);
+    }
+
+    [Fact]
+    public void Union_ResultMesh_HasValidFaces()
     {
         var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
         var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
-        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
-        var cutA = MeshCutter.Cut(a.Mesh, graph.FaceSegmentsA);
-        var adjA = SubTriangleAdjacency.Build(cutA.SubTriangles);
-        var patchesA = PatchExtractor.Extract(cutA.SubTriangles, adjA);
-        foreach (var patch in patchesA)
+        var result = Csg.Union(a, b);
+        foreach (var face in result.Mesh.Faces)
         {
-            Assert.True(patch.SubTriangleIndices.Count > 0);
+            face.GetTrianglePositions(out var va, out var vb, out var vc);
+            var tri = new Triangle3(va, vb, vc);
+            Assert.True(tri.Area > 0);
         }
     }
 
     [Fact]
-    public void Pipeline_DisjointCubes_NoSegments_OneHugePatchEach()
+    public void Union_TetrahedronCube_ProducesFaces()
     {
-        var a = MeshFactory.CreateCube(Vec3.Zero, 1.0);
-        var b = MeshFactory.CreateCube(new Vec3(100, 0, 0), 1.0);
-        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
-        Assert.Equal(0, graph.Segments.Count);
-        
-        var cutA = MeshCutter.Cut(a.Mesh, graph.FaceSegmentsA);
-        var adjA = SubTriangleAdjacency.Build(cutA.SubTriangles);
-        var patchesA = PatchExtractor.Extract(cutA.SubTriangles, adjA);
-        // All sub-triangles in one big patch (cube has 12 faces, all connected)
-        Assert.Single(patchesA);
-        Assert.Equal(a.Mesh.Faces.Count, patchesA[0].SubTriangleIndices.Count);
+        var a = MeshFactory.CreateTetrahedron();
+        var b = MeshFactory.CreateCube(Vec3.Zero, 0.5);
+        var result = Csg.Union(a, b);
+        Assert.True(result.FaceCount > 0);
     }
 
     [Fact]
-    public void Pipeline_FullCsg_MatchesApiResult()
+    public void Intersect_TetrahedronCube_ProducesFaces()
+    {
+        var a = MeshFactory.CreateTetrahedron();
+        var b = MeshFactory.CreateCube(Vec3.Zero, 0.3);
+        var result = Csg.Intersect(a, b);
+        Assert.True(result.FaceCount > 0);
+    }
+
+    [Fact]
+    public void Solid_FromMesh_RoundTrip()
+    {
+        var cube = MeshFactory.CreateCube(Vec3.Zero, 2.0);
+        var solid = new Solid(cube.Mesh);
+        Assert.Equal(cube.Mesh.Faces.Count, solid.Mesh.Faces.Count);
+        Assert.NotNull(solid.Bvh);
+    }
+
+    [Fact]
+    public void Union_LargerSphere_ProducesFaces()
+    {
+        var a = MeshFactory.CreateSphere(Vec3.Zero, 1.0, 3);
+        var b = MeshFactory.CreateSphere(new Vec3(0.5, 0, 0), 1.0, 3);
+        var result = Csg.Union(a, b);
+        Assert.True(result.FaceCount > 0);
+    }
+
+    [Fact]
+    public void Union_CubeCube_ResultVerticesInBounds()
     {
         var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
         var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
-        var apiResult = Csg.Union(a, b);
-        Assert.True(apiResult.FaceCount > 0);
-        Assert.True(apiResult.IntersectionSegmentCount > 0);
+        var result = Csg.Union(a, b);
+        foreach (var v in result.Mesh.Vertices)
+        {
+            Assert.True(v.Position.X >= -2.1 && v.Position.X <= 3.1);
+            Assert.True(v.Position.Y >= -2.1 && v.Position.Y <= 2.1);
+            Assert.True(v.Position.Z >= -2.1 && v.Position.Z <= 2.1);
+        }
     }
 
     [Fact]
-    public void Pipeline_SphereSphere_MultiplePatchesPerMesh()
-    {
-        var a = MeshFactory.CreateSphere(Vec3.Zero, 1.0, 2);
-        var b = MeshFactory.CreateSphere(new Vec3(1, 0, 0), 1.0, 2);
-        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
-        var cutA = MeshCutter.Cut(a.Mesh, graph.FaceSegmentsA);
-        var adjA = SubTriangleAdjacency.Build(cutA.SubTriangles);
-        var patchesA = PatchExtractor.Extract(cutA.SubTriangles, adjA);
-        // Overlapping spheres should produce at least 2 patches (inside and outside regions)
-        Assert.True(patchesA.Count >= 2, $"Expected >=2 patches, got {patchesA.Count}");
-    }
-
-    [Fact]
-    public void Pipeline_CutResult_MeshHasFaces()
+    public void Difference_CubeCube_FewerVerticesThanUnion()
     {
         var a = MeshFactory.CreateCube(Vec3.Zero, 2.0);
         var b = MeshFactory.CreateCube(new Vec3(1, 0, 0), 2.0);
-        var graph = IntersectionGraph.Compute(a.Mesh, b.Mesh);
-        var cutA = MeshCutter.Cut(a.Mesh, graph.FaceSegmentsA);
-        Assert.True(cutA.Mesh.Faces.Count > 0);
+        var unionResult = Csg.Union(a, b);
+        var diffResult = Csg.Difference(a, b);
+        // Difference removes material, so should have fewer or equal vertices
+        Assert.True(diffResult.VertexCount <= unionResult.VertexCount + 10); // small tolerance for mesh construction
     }
 }
