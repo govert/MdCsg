@@ -13,6 +13,7 @@ The core idea: instead of expensive exact arithmetic everywhere or fragile epsil
 - **Dual classifier**: ray-casting (fast) or generalized winding number (handles non-manifold input)
 - **Zero external dependencies**: pure .NET, no native code, AOT-compatible
 - **Multi-target**: .NET 10 and .NET Framework 4.8 from a single codebase
+- **Optional GPU acceleration**: Vulkan compute shaders for patch classification via Silk.NET (Windows, Linux x64, Raspberry Pi 4+)
 
 ## Quick Start
 
@@ -58,6 +59,42 @@ var options = new CsgOptions
 var result = Csg.Union(a, b, options);
 ```
 
+### GPU Acceleration (Optional)
+
+The optional `MdCsg.Gpu` package accelerates patch classification using Vulkan compute shaders. The core library remains zero-dependency — GPU support is opt-in via a strategy interface.
+
+```csharp
+using MdCsg.Api;
+using MdCsg.Gpu;
+
+// Returns null gracefully if no Vulkan device is available
+using var gpuClassifier = GpuAccelerator.TryCreate();
+
+var result = Csg.Union(solidA, solidB, new CsgOptions
+{
+    ClassificationStrategy = gpuClassifier  // null falls back to CPU automatically
+});
+
+// Or use CreateWithFallback() to always get a working strategy
+var strategy = GpuAccelerator.CreateWithFallback();
+```
+
+Three Vulkan compute shaders run the classification pipeline:
+1. **confident_point.comp** — max-margin centroid selection (256 threads/workgroup per patch)
+2. **raycast_classify.comp** — 3-ray majority vote with BVH traversal
+3. **winding_number.comp** — Van Oosterom-Strackee solid angle computation
+
+All shaders use float32 for broad GPU compatibility (including Raspberry Pi 4 VideoCore VI which lacks float64). The max-margin algorithm inherently tolerates this precision loss.
+
+| Platform | GPU | Vulkan Version |
+|----------|-----|----------------|
+| Windows x64 | NVIDIA/AMD/Intel | 1.0+ |
+| Linux x64 | NVIDIA/AMD/Intel | 1.0+ (Mesa or proprietary) |
+| Linux ARM64 (Pi 4+) | VideoCore VI | 1.3 via Mesa V3DV |
+| Any (no GPU) | --- | Automatic CPU fallback |
+
+See [docs/gpu-acceleration.md](docs/gpu-acceleration.md) for full GPU architecture details.
+
 ## Architecture
 
 The library is organized in layers, each building on the one below:
@@ -96,7 +133,8 @@ Requires .NET SDK 10.0 or later (builds both net10.0 and net48 targets).
 
 ```bash
 dotnet build
-dotnet test
+dotnet test                                    # Core library tests (8485+ tests)
+dotnet test tests/MdCsg.Gpu.Tests              # GPU tests (gracefully skipped if no Vulkan)
 ```
 
 ## Benchmarks
@@ -124,7 +162,12 @@ MdCsg/
 │   ├── Classification/           # Confident point, ray-cast & winding number classifiers
 │   ├── Operations/               # Patch assembly, mesh stitching
 │   └── Api/                      # Solid, Csg, CsgOptions, CsgResult
-├── tests/MdCsg.Tests/            # 134 tests (xUnit)
+├── src/MdCsg.Gpu/                # GPU acceleration (net10.0 only, Silk.NET Vulkan)
+│   ├── Shaders/                  # GLSL compute shaders
+│   ├── Interop/                  # GPU struct layouts (GpuVec3, GpuBvhNode)
+│   └── ...                       # VulkanContext, ComputePipeline, GpuPatchClassifier
+├── tests/MdCsg.Tests/            # 8485+ tests (xUnit, net10.0 + net48)
+├── tests/MdCsg.Gpu.Tests/        # 11 GPU tests (gracefully skipped without Vulkan)
 ├── benchmarks/MdCsg.Benchmarks/  # BenchmarkDotNet performance tests
 └── docs/                         # Documentation
 ```
