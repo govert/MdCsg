@@ -7,189 +7,197 @@ using MdCsg.Tests.TestHelpers;
 
 namespace MdCsg.Tests.Classification;
 
-/// <summary>Phase 6: ConfidentPoint — FindConfidentPoint margin, PointTriangleDistanceSq Voronoi regions</summary>
+/// <summary>Phase 6: ConfidentPoint - Max-margin centroid selection, PointTriangleDistanceSq Voronoi regions</summary>
 public class ConfidentPointPropertyTests
 {
     [Fact]
-    public void PointTriangleDistanceSq_PointOnVertex_Zero()
+    public void PointTriDistSq_VertexA_Zero()
     {
-        var a = new Vec3(0, 0, 0);
-        var b = new Vec3(1, 0, 0);
-        var c = new Vec3(0, 1, 0);
-        double dist = ConfidentPoint.PointTriangleDistanceSq(a, a, b, c);
-        Assert.True(dist < 1e-20);
+        double d = ConfidentPoint.PointTriangleDistanceSq(Vec3.Zero, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+        Assert.True(d < 1e-20);
     }
 
     [Fact]
-    public void PointTriangleDistanceSq_PointOnEdge_Zero()
+    public void PointTriDistSq_VertexB_Zero()
     {
-        var a = new Vec3(0, 0, 0);
-        var b = new Vec3(1, 0, 0);
-        var c = new Vec3(0, 1, 0);
-        var mid = (a + b) / 2.0;
-        double dist = ConfidentPoint.PointTriangleDistanceSq(mid, a, b, c);
-        Assert.True(dist < 1e-20);
+        double d = ConfidentPoint.PointTriangleDistanceSq(Vec3.UnitX, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+        Assert.True(d < 1e-20);
     }
 
     [Fact]
-    public void PointTriangleDistanceSq_PointOnInterior_Zero()
+    public void PointTriDistSq_VertexC_Zero()
     {
-        var a = new Vec3(0, 0, 0);
-        var b = new Vec3(1, 0, 0);
-        var c = new Vec3(0, 1, 0);
-        var centroid = (a + b + c) / 3.0;
-        double dist = ConfidentPoint.PointTriangleDistanceSq(centroid, a, b, c);
-        Assert.True(dist < 1e-20);
+        double d = ConfidentPoint.PointTriangleDistanceSq(Vec3.UnitY, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+        Assert.True(d < 1e-20);
     }
 
     [Fact]
-    public void PointTriangleDistanceSq_PointAbove_CorrectDistance()
+    public void PointTriDistSq_OnEdgeAB_Zero()
     {
-        var a = new Vec3(0, 0, 0);
-        var b = new Vec3(1, 0, 0);
-        var c = new Vec3(0, 1, 0);
-        var centroid = (a + b + c) / 3.0;
-        var above = new Vec3(centroid.X, centroid.Y, 1.0);
-        double dist = ConfidentPoint.PointTriangleDistanceSq(above, a, b, c);
-        Assert.True(System.Math.Abs(dist - 1.0) < 1e-10);
+        var mid = new Vec3(0.5, 0, 0);
+        double d = ConfidentPoint.PointTriangleDistanceSq(mid, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+        Assert.True(d < 1e-20);
     }
 
     [Fact]
-    public void PointTriangleDistanceSq_PointFarFromVertex_ClosestToVertex()
+    public void PointTriDistSq_OnEdgeAC_Zero()
     {
-        var a = new Vec3(0, 0, 0);
-        var b = new Vec3(1, 0, 0);
-        var c = new Vec3(0, 1, 0);
-        var p = new Vec3(-1, -1, 0);
-        double dist = ConfidentPoint.PointTriangleDistanceSq(p, a, b, c);
-        double expectedSq = Vec3.DistanceSquared(p, a);
-        Assert.True(System.Math.Abs(dist - expectedSq) < 1e-10);
+        var mid = new Vec3(0, 0.5, 0);
+        double d = ConfidentPoint.PointTriangleDistanceSq(mid, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+        Assert.True(d < 1e-20);
     }
 
     [Fact]
-    public void PointTriangleDistanceSq_PointFarFromVertexB_ClosestToB()
+    public void PointTriDistSq_OnEdgeBC_Zero()
     {
-        var a = new Vec3(0, 0, 0);
-        var b = new Vec3(1, 0, 0);
-        var c = new Vec3(0, 1, 0);
-        var p = new Vec3(2, -1, 0);
-        double dist = ConfidentPoint.PointTriangleDistanceSq(p, a, b, c);
-        double expectedSq = Vec3.DistanceSquared(p, b);
-        Assert.True(System.Math.Abs(dist - expectedSq) < 1e-10);
+        var mid = new Vec3(0.5, 0.5, 0);
+        double d = ConfidentPoint.PointTriangleDistanceSq(mid, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+        Assert.True(d < 1e-20);
     }
 
     [Fact]
-    public void PointTriangleDistanceSq_PointFarFromVertexC_ClosestToC()
+    public void PointTriDistSq_CentroidOnTriangle_Zero()
     {
-        var a = new Vec3(0, 0, 0);
-        var b = new Vec3(1, 0, 0);
-        var c = new Vec3(0, 1, 0);
-        var p = new Vec3(-1, 2, 0);
-        double dist = ConfidentPoint.PointTriangleDistanceSq(p, a, b, c);
-        double expectedSq = Vec3.DistanceSquared(p, c);
-        Assert.True(System.Math.Abs(dist - expectedSq) < 1e-10);
+        var centroid = new Vec3(1.0 / 3, 1.0 / 3, 0);
+        double d = ConfidentPoint.PointTriangleDistanceSq(centroid, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+        Assert.True(d < 1e-20);
     }
 
     [Fact]
-    public void PointTriangleDistanceSq_PointNearEdgeAB_ClosestOnEdge()
+    public void PointTriDistSq_AboveCenter_IsHeight()
     {
-        var a = new Vec3(0, 0, 0);
-        var b = new Vec3(2, 0, 0);
-        var c = new Vec3(0, 2, 0);
-        var p = new Vec3(1, -1, 0);
-        double dist = ConfidentPoint.PointTriangleDistanceSq(p, a, b, c);
-        Assert.True(System.Math.Abs(dist - 1.0) < 1e-10);
+        var point = new Vec3(1.0 / 3, 1.0 / 3, 1.0);
+        double d = ConfidentPoint.PointTriangleDistanceSq(point, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+        Assert.True(System.Math.Abs(d - 1.0) < 1e-10);
     }
 
     [Fact]
-    public void PointTriangleDistanceSq_PointNearEdgeBC_ClosestOnEdge()
+    public void PointTriDistSq_BelowCenter_IsHeight()
     {
-        var a = new Vec3(0, 0, 0);
-        var b = new Vec3(2, 0, 0);
-        var c = new Vec3(0, 2, 0);
-        var p = new Vec3(2, 2, 0);
-        double dist = ConfidentPoint.PointTriangleDistanceSq(p, a, b, c);
-        double expectedSq = Vec3.DistanceSquared(p, new Vec3(1, 1, 0));
-        Assert.True(System.Math.Abs(dist - expectedSq) < 1e-10);
+        var point = new Vec3(1.0 / 3, 1.0 / 3, -2.0);
+        double d = ConfidentPoint.PointTriangleDistanceSq(point, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+        Assert.True(System.Math.Abs(d - 4.0) < 1e-10);
     }
 
     [Fact]
-    public void PointTriangleDistanceSq_Symmetric()
+    public void PointTriDistSq_NearestVertexA_Region()
     {
-        var a = new Vec3(0, 0, 0);
-        var b = new Vec3(1, 0, 0);
-        var c = new Vec3(0, 1, 0);
-        var p = new Vec3(0.5, 0.5, 1);
-        double d1 = ConfidentPoint.PointTriangleDistanceSq(p, a, b, c);
-        double d2 = ConfidentPoint.PointTriangleDistanceSq(p, b, c, a);
-        double d3 = ConfidentPoint.PointTriangleDistanceSq(p, c, a, b);
+        var point = new Vec3(-1, -1, 0);
+        double d = ConfidentPoint.PointTriangleDistanceSq(point, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+        double expected = Vec3.DistanceSquared(point, Vec3.Zero);
+        Assert.True(System.Math.Abs(d - expected) < 1e-10);
+    }
+
+    [Fact]
+    public void PointTriDistSq_NearestVertexB_Region()
+    {
+        var point = new Vec3(2, -1, 0);
+        double d = ConfidentPoint.PointTriangleDistanceSq(point, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+        double expected = Vec3.DistanceSquared(point, Vec3.UnitX);
+        Assert.True(System.Math.Abs(d - expected) < 1e-10);
+    }
+
+    [Fact]
+    public void PointTriDistSq_NearestVertexC_Region()
+    {
+        var point = new Vec3(-1, 2, 0);
+        double d = ConfidentPoint.PointTriangleDistanceSq(point, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+        double expected = Vec3.DistanceSquared(point, Vec3.UnitY);
+        Assert.True(System.Math.Abs(d - expected) < 1e-10);
+    }
+
+    [Fact]
+    public void PointTriDistSq_NearestEdgeAB_Region()
+    {
+        var point = new Vec3(0.5, -1, 0);
+        double d = ConfidentPoint.PointTriangleDistanceSq(point, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+        Assert.True(System.Math.Abs(d - 1.0) < 1e-10);
+    }
+
+    [Fact]
+    public void PointTriDistSq_NearestEdgeBC_Region()
+    {
+        var point = new Vec3(1, 1, 0);
+        double d = ConfidentPoint.PointTriangleDistanceSq(point, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+        Assert.True(System.Math.Abs(d - 0.5) < 1e-10);
+    }
+
+    [Fact]
+    public void PointTriDistSq_IsNonNegative()
+    {
+        var rng = new Random(42);
+        for (int i = 0; i < 100; i++)
+        {
+            var p = new Vec3(rng.NextDouble() * 10 - 5, rng.NextDouble() * 10 - 5, rng.NextDouble() * 10 - 5);
+            double d = ConfidentPoint.PointTriangleDistanceSq(p, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+            Assert.True(d >= 0);
+        }
+    }
+
+    [Fact]
+    public void PointTriDistSq_SymmetricInZ()
+    {
+        var p1 = new Vec3(0.3, 0.3, 1.0);
+        var p2 = new Vec3(0.3, 0.3, -1.0);
+        double d1 = ConfidentPoint.PointTriangleDistanceSq(p1, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
+        double d2 = ConfidentPoint.PointTriangleDistanceSq(p2, Vec3.Zero, Vec3.UnitX, Vec3.UnitY);
         Assert.True(System.Math.Abs(d1 - d2) < 1e-10);
-        Assert.True(System.Math.Abs(d1 - d3) < 1e-10);
+    }
+
+    [Fact]
+    public void PointTriDistSq_LargeTriangle()
+    {
+        var a = new Vec3(0, 0, 0);
+        var b = new Vec3(1000, 0, 0);
+        var c = new Vec3(0, 1000, 0);
+        var p = new Vec3(500, 500, 3);
+        double d = ConfidentPoint.PointTriangleDistanceSq(p, a, b, c);
+        Assert.True(d >= 9.0 - 1e-5);
     }
 
     [Fact]
     public void FindConfidentPoint_SingleSubTriangle_ReturnsCentroid()
     {
-        var sphere = MeshFactory.CreateSphere(new Vec3(10, 0, 0), 1.0, 1);
-
-        var st = new FaceCutter.SubTriangle(
-            new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0), 0, false);
+        var otherCube = MeshFactory.CreateCube(new Vec3(100, 0, 0), 2.0);
+        var sub = new FaceCutter.SubTriangle(Vec3.Zero, Vec3.UnitX, Vec3.UnitY, 0, false, 0);
+        var subs = new[] { sub };
         var patch = new Patch(0);
         patch.SubTriangleIndices.Add(0);
 
-        var (point, margin) = ConfidentPoint.FindConfidentPoint(patch, new[] { st }, sphere.Bvh);
-        var expectedCentroid = (st.A + st.B + st.C) / 3.0;
-        Assert.True(Vec3.DistanceSquared(point, expectedCentroid) < 1e-20);
-        Assert.True(margin >= 0);
-    }
+        var (point, margin) = ConfidentPoint.FindConfidentPoint(patch, subs, otherCube.Bvh);
 
-    [Fact]
-    public void FindConfidentPoint_MultipleSubTriangles_PicksLargestMargin()
-    {
-        var sphere = MeshFactory.CreateSphere(new Vec3(10, 10, 10), 1.0, 1);
-
-        var near = new FaceCutter.SubTriangle(
-            new Vec3(9, 10, 10), new Vec3(9.1, 10, 10), new Vec3(9, 10.1, 10), 0, false);
-        var far = new FaceCutter.SubTriangle(
-            new Vec3(0, 0, 0), new Vec3(0.1, 0, 0), new Vec3(0, 0.1, 0), 1, false);
-
-        var patch = new Patch(0);
-        patch.SubTriangleIndices.Add(0);
-        patch.SubTriangleIndices.Add(1);
-
-        var (point, margin) = ConfidentPoint.FindConfidentPoint(patch, new[] { near, far }, sphere.Bvh);
-        var farCentroid = (far.A + far.B + far.C) / 3.0;
-        Assert.True(Vec3.DistanceSquared(point, farCentroid) < 1e-10);
-    }
-
-    [Fact]
-    public void FindConfidentPoint_Margin_IsPositive()
-    {
-        var sphere = MeshFactory.CreateSphere(new Vec3(5, 0, 0), 1.0, 1);
-
-        var st = new FaceCutter.SubTriangle(
-            new Vec3(-1, -1, -1), new Vec3(-0.9, -1, -1), new Vec3(-1, -0.9, -1), 0, false);
-        var patch = new Patch(0);
-        patch.SubTriangleIndices.Add(0);
-
-        var (_, margin) = ConfidentPoint.FindConfidentPoint(patch, new[] { st }, sphere.Bvh);
+        var expectedCentroid = new Vec3(1.0 / 3, 1.0 / 3, 0);
+        Assert.True(Vec3.Distance(point, expectedCentroid) < 1e-10);
         Assert.True(margin > 0);
     }
 
     [Fact]
-    public void PointTriangleDistanceSq_AlwaysNonNegative()
+    public void FindConfidentPoint_MultipleSubTriangles_PicksMaxMargin()
     {
-        var a = new Vec3(1, 2, 3);
-        var b = new Vec3(4, 5, 6);
-        var c = new Vec3(7, 2, 1);
-        var points = new[] {
-            Vec3.Zero, new Vec3(10, 10, 10), new Vec3(-5, -5, -5),
-            new Vec3(1, 2, 3), new Vec3(2.5, 3.5, 4.5)
-        };
-        foreach (var p in points)
-        {
-            double dist = ConfidentPoint.PointTriangleDistanceSq(p, a, b, c);
-            Assert.True(dist >= 0, $"Distance squared should be non-negative for point {p}");
-        }
+        var otherCube = MeshFactory.CreateCube(new Vec3(10, 0, 0), 2.0);
+        var sub0 = new FaceCutter.SubTriangle(new Vec3(9, 0, 0), new Vec3(10, 0, 0), new Vec3(9, 1, 0), 0, false, 0);
+        var sub1 = new FaceCutter.SubTriangle(new Vec3(-100, 0, 0), new Vec3(-99, 0, 0), new Vec3(-100, 1, 0), 1, false, 0);
+        var subs = new[] { sub0, sub1 };
+        var patch = new Patch(0);
+        patch.SubTriangleIndices.Add(0);
+        patch.SubTriangleIndices.Add(1);
+
+        var (point, margin) = ConfidentPoint.FindConfidentPoint(patch, subs, otherCube.Bvh);
+
+        var centroid1 = (new Vec3(-100, 0, 0) + new Vec3(-99, 0, 0) + new Vec3(-100, 1, 0)) / 3.0;
+        Assert.True(Vec3.Distance(point, centroid1) < 1e-10);
+    }
+
+    [Fact]
+    public void FindConfidentPoint_MarginIsPositive()
+    {
+        var otherCube = MeshFactory.CreateCube(new Vec3(10, 0, 0), 2.0);
+        var sub = new FaceCutter.SubTriangle(Vec3.Zero, Vec3.UnitX, Vec3.UnitY, 0, false, 0);
+        var subs = new[] { sub };
+        var patch = new Patch(0);
+        patch.SubTriangleIndices.Add(0);
+
+        var (_, margin) = ConfidentPoint.FindConfidentPoint(patch, subs, otherCube.Bvh);
+        Assert.True(margin > 0);
     }
 }

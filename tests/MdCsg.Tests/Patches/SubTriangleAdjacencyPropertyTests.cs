@@ -4,167 +4,181 @@ using MdCsg.Patches;
 
 namespace MdCsg.Tests.Patches;
 
-/// <summary>Phase 6: SubTriangleAdjacency — Build from sub-triangles, neighbor queries, intersection edge flags</summary>
+/// <summary>Phase 6: SubTriangleAdjacency - Edge-based adjacency, intersection edge detection, tolerance</summary>
 public class SubTriangleAdjacencyPropertyTests
 {
-    [Fact]
-    public void Build_TwoAdjacentTriangles_AreNeighbors()
-    {
-        var t0 = new FaceCutter.SubTriangle(
-            new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0), 0, false);
-        var t1 = new FaceCutter.SubTriangle(
-            new Vec3(1, 0, 0), new Vec3(1, 1, 0), new Vec3(0, 1, 0), 0, false);
-        var adj = SubTriangleAdjacency.Build(new[] { t0, t1 });
-
-        Assert.Equal(2, adj.Count);
-        var n0 = adj.GetNeighbors(0);
-        Assert.True(n0.Any(n => n.Neighbor == 1));
-        var n1 = adj.GetNeighbors(1);
-        Assert.True(n1.Any(n => n.Neighbor == 0));
-    }
+    private static FaceCutter.SubTriangle MakeSub(Vec3 a, Vec3 b, Vec3 c, int faceIdx = 0, bool hasIntEdge = false, byte flags = 0)
+        => new(a, b, c, faceIdx, hasIntEdge, flags);
 
     [Fact]
-    public void Build_TwoDisjointTriangles_NotNeighbors()
+    public void SingleTriangle_NoNeighbors()
     {
-        var t0 = new FaceCutter.SubTriangle(
-            new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0), 0, false);
-        var t1 = new FaceCutter.SubTriangle(
-            new Vec3(10, 10, 10), new Vec3(11, 10, 10), new Vec3(10, 11, 10), 1, false);
-        var adj = SubTriangleAdjacency.Build(new[] { t0, t1 });
-
-        Assert.Empty(adj.GetNeighbors(0));
-        Assert.Empty(adj.GetNeighbors(1));
-    }
-
-    [Fact]
-    public void Build_IntersectionEdge_FlaggedCorrectly()
-    {
-        var t0 = new FaceCutter.SubTriangle(
-            new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0), 0, true, 1);
-        var t1 = new FaceCutter.SubTriangle(
-            new Vec3(1, 0, 0), new Vec3(1, 1, 0), new Vec3(0, 0, 0), 0, true, 4);
-        var adj = SubTriangleAdjacency.Build(new[] { t0, t1 });
-
-        var n0 = adj.GetNeighbors(0);
-        var neighborEntry = n0.FirstOrDefault(n => n.Neighbor == 1);
-        Assert.True(neighborEntry.IsIntersectionEdge);
-    }
-
-    [Fact]
-    public void Build_NonIntersectionSharedEdge_NotFlagged()
-    {
-        var t0 = new FaceCutter.SubTriangle(
-            new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0), 0, false, 0);
-        var t1 = new FaceCutter.SubTriangle(
-            new Vec3(1, 0, 0), new Vec3(1, 1, 0), new Vec3(0, 1, 0), 0, false, 0);
-        var adj = SubTriangleAdjacency.Build(new[] { t0, t1 });
-
-        var n0 = adj.GetNeighbors(0);
-        var neighborEntry = n0.FirstOrDefault(n => n.Neighbor == 1);
-        Assert.False(neighborEntry.IsIntersectionEdge);
-    }
-
-    [Fact]
-    public void Build_SingleTriangle_NoNeighbors()
-    {
-        var t0 = new FaceCutter.SubTriangle(
-            new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0), 0, false);
-        var adj = SubTriangleAdjacency.Build(new[] { t0 });
-
+        var subs = new[] { MakeSub(Vec3.Zero, Vec3.UnitX, Vec3.UnitY) };
+        var adj = SubTriangleAdjacency.Build(subs);
         Assert.Equal(1, adj.Count);
         Assert.Empty(adj.GetNeighbors(0));
     }
 
     [Fact]
-    public void Build_Empty_ZeroCount()
+    public void TwoTriangles_SharedEdge_AreNeighbors()
+    {
+        var subs = new[]
+        {
+            MakeSub(Vec3.Zero, Vec3.UnitX, Vec3.UnitY),
+            MakeSub(Vec3.UnitX, Vec3.Zero, Vec3.UnitZ),
+        };
+        var adj = SubTriangleAdjacency.Build(subs);
+        Assert.Equal(2, adj.Count);
+        Assert.Contains(adj.GetNeighbors(0), n => n.Neighbor == 1);
+        Assert.Contains(adj.GetNeighbors(1), n => n.Neighbor == 0);
+    }
+
+    [Fact]
+    public void TwoTriangles_SharedEdge_NotIntersectionEdge()
+    {
+        var subs = new[]
+        {
+            MakeSub(Vec3.Zero, Vec3.UnitX, Vec3.UnitY),
+            MakeSub(Vec3.UnitX, Vec3.Zero, Vec3.UnitZ),
+        };
+        var adj = SubTriangleAdjacency.Build(subs);
+        var neighbors = adj.GetNeighbors(0);
+        Assert.Contains(neighbors, n => n.Neighbor == 1 && !n.IsIntersectionEdge);
+    }
+
+    [Fact]
+    public void TwoTriangles_SharedIntersectionEdge_MarkedAsIntersection()
+    {
+        var subs = new[]
+        {
+            MakeSub(Vec3.Zero, Vec3.UnitX, Vec3.UnitY, 0, true, 1),
+            MakeSub(Vec3.UnitX, Vec3.Zero, Vec3.UnitZ, 0, false, 0),
+        };
+        var adj = SubTriangleAdjacency.Build(subs);
+        var neighbors = adj.GetNeighbors(0);
+        Assert.Contains(neighbors, n => n.Neighbor == 1 && n.IsIntersectionEdge);
+    }
+
+    [Fact]
+    public void DisjointTriangles_NoNeighbors()
+    {
+        var subs = new[]
+        {
+            MakeSub(Vec3.Zero, Vec3.UnitX, Vec3.UnitY),
+            MakeSub(new Vec3(100, 0, 0), new Vec3(101, 0, 0), new Vec3(100, 1, 0)),
+        };
+        var adj = SubTriangleAdjacency.Build(subs);
+        Assert.Empty(adj.GetNeighbors(0));
+        Assert.Empty(adj.GetNeighbors(1));
+    }
+
+    [Fact]
+    public void ThreeTriangles_FanFromVertex_AllAdjacent()
+    {
+        var subs = new[]
+        {
+            MakeSub(Vec3.Zero, Vec3.UnitX, Vec3.UnitY),
+            MakeSub(Vec3.Zero, Vec3.UnitY, Vec3.UnitZ),
+            MakeSub(Vec3.Zero, Vec3.UnitZ, Vec3.UnitX),
+        };
+        var adj = SubTriangleAdjacency.Build(subs);
+        Assert.Equal(2, adj.GetNeighbors(0).Count);
+        Assert.Equal(2, adj.GetNeighbors(1).Count);
+        Assert.Equal(2, adj.GetNeighbors(2).Count);
+    }
+
+    [Fact]
+    public void ThreeTriangles_Strip_MiddleHasTwoNeighbors()
+    {
+        var subs = new[]
+        {
+            MakeSub(Vec3.Zero, Vec3.UnitX, Vec3.UnitY),
+            MakeSub(Vec3.UnitX, new Vec3(1, 1, 0), Vec3.UnitY),
+            MakeSub(new Vec3(1, 1, 0), new Vec3(0, 2, 0), Vec3.UnitY),
+        };
+        var adj = SubTriangleAdjacency.Build(subs);
+        Assert.Equal(2, adj.GetNeighbors(1).Count);
+        Assert.Contains(adj.GetNeighbors(1), n => n.Neighbor == 0);
+        Assert.Contains(adj.GetNeighbors(1), n => n.Neighbor == 2);
+    }
+
+    [Fact]
+    public void AdjacencyIsSymmetric()
+    {
+        var subs = new[]
+        {
+            MakeSub(Vec3.Zero, Vec3.UnitX, Vec3.UnitY),
+            MakeSub(Vec3.UnitX, Vec3.Zero, Vec3.UnitZ),
+            MakeSub(Vec3.Zero, Vec3.UnitY, Vec3.UnitZ),
+        };
+        var adj = SubTriangleAdjacency.Build(subs);
+        for (int i = 0; i < adj.Count; i++)
+        {
+            foreach (var (neighbor, _) in adj.GetNeighbors(i))
+            {
+                Assert.Contains(adj.GetNeighbors(neighbor), n => n.Neighbor == i);
+            }
+        }
+    }
+
+    [Fact]
+    public void EmptyInput_EmptyAdjacency()
     {
         var adj = SubTriangleAdjacency.Build(Array.Empty<FaceCutter.SubTriangle>());
         Assert.Equal(0, adj.Count);
     }
 
     [Fact]
-    public void Build_ThreeTriangleFan_CorrectNeighborCounts()
+    public void Count_MatchesInput()
     {
-        var t0 = new FaceCutter.SubTriangle(
-            new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0.5, 1, 0), 0, false);
-        var t1 = new FaceCutter.SubTriangle(
-            new Vec3(0, 0, 0), new Vec3(0.5, 1, 0), new Vec3(-0.5, 1, 0), 0, false);
-        var t2 = new FaceCutter.SubTriangle(
-            new Vec3(0, 0, 0), new Vec3(-0.5, 1, 0), new Vec3(-1, 0, 0), 0, false);
-        var adj = SubTriangleAdjacency.Build(new[] { t0, t1, t2 });
-
+        var subs = new[]
+        {
+            MakeSub(Vec3.Zero, Vec3.UnitX, Vec3.UnitY),
+            MakeSub(Vec3.UnitX, Vec3.Zero, Vec3.UnitZ),
+            MakeSub(new Vec3(5, 0, 0), new Vec3(6, 0, 0), new Vec3(5, 1, 0)),
+        };
+        var adj = SubTriangleAdjacency.Build(subs);
         Assert.Equal(3, adj.Count);
-        Assert.True(adj.GetNeighbors(0).Any(n => n.Neighbor == 1));
-        Assert.True(adj.GetNeighbors(1).Any(n => n.Neighbor == 2));
-        Assert.False(adj.GetNeighbors(0).Any(n => n.Neighbor == 2));
     }
 
     [Fact]
-    public void Build_Adjacency_IsSymmetric()
+    public void SharedVertex_NotEnoughForAdjacency()
     {
-        var t0 = new FaceCutter.SubTriangle(
-            new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0), 0, false);
-        var t1 = new FaceCutter.SubTriangle(
-            new Vec3(1, 0, 0), new Vec3(1, 1, 0), new Vec3(0, 1, 0), 0, false);
-        var t2 = new FaceCutter.SubTriangle(
-            new Vec3(0, 0, 0), new Vec3(0, 1, 0), new Vec3(-1, 0, 0), 0, false);
-        var adj = SubTriangleAdjacency.Build(new[] { t0, t1, t2 });
-
-        for (int i = 0; i < adj.Count; i++)
+        var subs = new[]
         {
-            foreach (var (neighbor, isIntEdge) in adj.GetNeighbors(i))
-            {
-                Assert.True(adj.GetNeighbors(neighbor).Any(n => n.Neighbor == i),
-                    $"Adjacency should be symmetric: {i} -> {neighbor} but not reverse");
-            }
-        }
+            MakeSub(Vec3.Zero, Vec3.UnitX, Vec3.UnitY),
+            MakeSub(Vec3.Zero, new Vec3(0, 0, 1), new Vec3(-1, 0, 0)),
+        };
+        var adj = SubTriangleAdjacency.Build(subs);
+        Assert.Empty(adj.GetNeighbors(0));
+        Assert.Empty(adj.GetNeighbors(1));
     }
 
     [Fact]
-    public void Build_WithCustomTolerance_MergesNearbyVertices()
+    public void IntersectionEdge_EitherSideSaysYes_IsTrue()
     {
-        var t0 = new FaceCutter.SubTriangle(
-            new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0), 0, false);
-        var t1 = new FaceCutter.SubTriangle(
-            new Vec3(1.0 + 1e-10, 0, 0), new Vec3(1, 1, 0), new Vec3(0 + 1e-10, 1, 0), 0, false);
-        var adj = SubTriangleAdjacency.Build(new[] { t0, t1 }, 1e-6);
-
-        Assert.True(adj.GetNeighbors(0).Any(n => n.Neighbor == 1));
-    }
-
-    [Fact]
-    public void Build_EitherSideFlags_BothSeeIntersection()
-    {
-        // t0's shared edge with t1 is B-C (edge index 1), so flag = 1<<1 = 2
-        var t0 = new FaceCutter.SubTriangle(
-            new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0), 0, true, 2);
-        var t1 = new FaceCutter.SubTriangle(
-            new Vec3(1, 0, 0), new Vec3(1, 1, 0), new Vec3(0, 1, 0), 0, false, 0);
-        var adj = SubTriangleAdjacency.Build(new[] { t0, t1 });
-
-        var n0 = adj.GetNeighbors(0).FirstOrDefault(n => n.Neighbor == 1);
-        var n1 = adj.GetNeighbors(1).FirstOrDefault(n => n.Neighbor == 0);
-        Assert.True(n0.IsIntersectionEdge);
-        Assert.True(n1.IsIntersectionEdge);
-    }
-
-    [Fact]
-    public void Build_FourTriangleQuad_HasCorrectTopology()
-    {
-        var t0 = new FaceCutter.SubTriangle(
-            new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0.5, 0.5, 0), 0, false);
-        var t1 = new FaceCutter.SubTriangle(
-            new Vec3(1, 0, 0), new Vec3(1, 1, 0), new Vec3(0.5, 0.5, 0), 0, false);
-        var t2 = new FaceCutter.SubTriangle(
-            new Vec3(1, 1, 0), new Vec3(0, 1, 0), new Vec3(0.5, 0.5, 0), 0, false);
-        var t3 = new FaceCutter.SubTriangle(
-            new Vec3(0, 1, 0), new Vec3(0, 0, 0), new Vec3(0.5, 0.5, 0), 0, false);
-        var adj = SubTriangleAdjacency.Build(new[] { t0, t1, t2, t3 });
-
-        Assert.Equal(4, adj.Count);
-        for (int i = 0; i < 4; i++)
+        var subs = new[]
         {
-            Assert.Equal(2, adj.GetNeighbors(i).Count);
-        }
+            MakeSub(Vec3.Zero, Vec3.UnitX, Vec3.UnitY, 0, false, 0),
+            MakeSub(Vec3.UnitX, Vec3.Zero, Vec3.UnitZ, 0, true, 1),
+        };
+        var adj = SubTriangleAdjacency.Build(subs);
+        var n0 = adj.GetNeighbors(0);
+        Assert.Contains(n0, n => n.IsIntersectionEdge);
+    }
+
+    [Fact]
+    public void CustomTolerance_MergesNearVertices()
+    {
+        var subs = new[]
+        {
+            MakeSub(Vec3.Zero, Vec3.UnitX, Vec3.UnitY),
+            MakeSub(new Vec3(1.0005, 0, 0), new Vec3(0.0005, 0, 0), Vec3.UnitZ),
+        };
+        var adjStrict = SubTriangleAdjacency.Build(subs, 1e-8);
+        Assert.Empty(adjStrict.GetNeighbors(0));
+
+        var adjLoose = SubTriangleAdjacency.Build(subs, 0.01);
+        Assert.NotEmpty(adjLoose.GetNeighbors(0));
     }
 }
