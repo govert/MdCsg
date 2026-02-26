@@ -1,3 +1,4 @@
+using System.Threading;
 using MdCsg.Bvh;
 using MdCsg.Cutting;
 using MdCsg.Patches;
@@ -45,41 +46,88 @@ public static class PatchClassifier
     }
 
     /// <summary>
-    /// Classifies all patches.
+    /// Classifies all patches, optionally in parallel.
     /// </summary>
     /// <param name="patches">Patches to classify.</param>
     /// <param name="subTriangles">All sub-triangles.</param>
     /// <param name="otherBvh">BVH of the other solid.</param>
     /// <param name="useWindingNumber">If true, use winding number instead of ray casting.</param>
+    /// <param name="parallel">If true, classify patches in parallel.</param>
     /// <returns>Number of degenerate patches that could not be confidently classified.</returns>
     public static int ClassifyAll(
         IReadOnlyList<Patch> patches,
         IReadOnlyList<FaceCutter.SubTriangle> subTriangles,
         BvhTree otherBvh,
-        bool useWindingNumber = false)
+        bool useWindingNumber = false,
+        bool parallel = false)
+    {
+        if (parallel && patches.Count > 1)
+            return ClassifyAllParallel(patches, subTriangles, otherBvh, useWindingNumber);
+
+        return ClassifyAllSequential(patches, subTriangles, otherBvh, useWindingNumber);
+    }
+
+    private static int ClassifyAllSequential(
+        IReadOnlyList<Patch> patches,
+        IReadOnlyList<FaceCutter.SubTriangle> subTriangles,
+        BvhTree otherBvh,
+        bool useWindingNumber)
     {
         int degenerateCount = 0;
 
         foreach (var patch in patches)
         {
-            var (confidentPoint, margin) = ConfidentPoint.FindConfidentPoint(patch, subTriangles, otherBvh);
-            patch.ConfidentPoint = confidentPoint;
-            patch.HasConfidentPoint = margin > DegenerateMarginThreshold;
-
+            ClassifyPatch(patch, subTriangles, otherBvh, useWindingNumber);
             if (!patch.HasConfidentPoint)
-            {
                 degenerateCount++;
-                // Still classify, but flag as potentially unreliable
-            }
-
-            var classification = useWindingNumber
-                ? WindingNumberClassifier.Classify(confidentPoint, otherBvh)
-                : RayCastClassifier.Classify(confidentPoint, otherBvh);
-
-            patch.IsInside = classification == SolidClassification.Inside;
         }
 
         return degenerateCount;
+    }
+
+    private static int ClassifyAllParallel(
+        IReadOnlyList<Patch> patches,
+        IReadOnlyList<FaceCutter.SubTriangle> subTriangles,
+        BvhTree otherBvh,
+        bool useWindingNumber)
+    {
+        int degenerateCount = 0;
+
+        System.Threading.Tasks.Parallel.For(0, patches.Count, () => 0, (i, _, localDeg) =>
+        {
+            var patch = patches[i];
+            ClassifyPatch(patch, subTriangles, otherBvh, useWindingNumber);
+            if (!patch.HasConfidentPoint)
+                localDeg++;
+            return localDeg;
+        }, localDeg => Interlocked.Add(ref degenerateCount, localDeg));
+
+        return degenerateCount;
+    }
+
+    private static void ClassifyPatch(
+        Patch patch,
+        IReadOnlyList<FaceCutter.SubTriangle> subTriangles,
+        BvhTree otherBvh,
+        bool useWindingNumber)
+    {
+        var (confidentPoint, margin) = ConfidentPoint.FindConfidentPoint(patch, subTriangles, otherBvh);
+        patch.ConfidentPoint = confidentPoint;
+        patch.HasConfidentPoint = margin > DegenerateMarginThreshold;
+
+        if (!patch.HasConfidentPoint)
+        {
+            // Use exact Rational ray casting for degenerate patches
+            var exactClassification = ExactRayCastClassifier.Classify(confidentPoint, otherBvh);
+            patch.IsInside = exactClassification == SolidClassification.Inside;
+            return;
+        }
+
+        var classification = useWindingNumber
+            ? WindingNumberClassifier.Classify(confidentPoint, otherBvh)
+            : RayCastClassifier.Classify(confidentPoint, otherBvh);
+
+        patch.IsInside = classification == SolidClassification.Inside;
     }
 }
 
@@ -88,6 +136,17 @@ public static class PatchClassifier
 /// </summary>
 public class CpuPatchClassificationStrategy : IPatchClassificationStrategy
 {
+    private readonly bool _parallel;
+
+    /// <summary>
+    /// Creates a CPU patch classification strategy.
+    /// </summary>
+    /// <param name="parallel">If true, classify patches in parallel.</param>
+    public CpuPatchClassificationStrategy(bool parallel = false)
+    {
+        _parallel = parallel;
+    }
+
     /// <inheritdoc />
     public int ClassifyAll(
         IReadOnlyList<Patch> patches,
@@ -95,6 +154,6 @@ public class CpuPatchClassificationStrategy : IPatchClassificationStrategy
         BvhTree otherBvh,
         bool useWindingNumber)
     {
-        return PatchClassifier.ClassifyAll(patches, subTriangles, otherBvh, useWindingNumber);
+        return PatchClassifier.ClassifyAll(patches, subTriangles, otherBvh, useWindingNumber, _parallel);
     }
 }

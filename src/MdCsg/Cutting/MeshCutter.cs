@@ -21,27 +21,26 @@ public static class MeshCutter
     /// </summary>
     /// <param name="mesh">The source mesh.</param>
     /// <param name="faceSegments">Map from face index to intersection segments that cross it.</param>
+    /// <param name="parallel">If true, cut faces in parallel.</param>
     /// <returns>The cut mesh with sub-triangle information.</returns>
-    public static CutResult Cut(HalfEdgeMesh mesh, IReadOnlyDictionary<int, List<IntersectionSegment>> faceSegments)
+    public static CutResult Cut(
+        HalfEdgeMesh mesh,
+        IReadOnlyDictionary<int, List<IntersectionSegment>> faceSegments,
+        bool parallel = false)
     {
+        int faceCount = mesh.Faces.Count;
+
+        List<FaceCutter.SubTriangle>[] perFaceResults;
+
+        if (parallel && faceCount > 1)
+            perFaceResults = CutFacesParallel(mesh, faceSegments, faceCount);
+        else
+            perFaceResults = CutFacesSequential(mesh, faceSegments, faceCount);
+
+        // Concatenate in order
         var allSubTriangles = new List<FaceCutter.SubTriangle>();
-
-        for (int faceIdx = 0; faceIdx < mesh.Faces.Count; faceIdx++)
-        {
-            var face = mesh.Faces[faceIdx];
-            face.GetTrianglePositions(out var va, out var vb, out var vc);
-            var tri = new Triangle3(va, vb, vc);
-
-            if (faceSegments.TryGetValue(faceIdx, out var segments) && segments.Count > 0)
-            {
-                var subTris = FaceCutter.CutFace(tri, faceIdx, segments);
-                allSubTriangles.AddRange(subTris);
-            }
-            else
-            {
-                allSubTriangles.Add(new FaceCutter.SubTriangle(tri.A, tri.B, tri.C, faceIdx, false));
-            }
-        }
+        for (int i = 0; i < faceCount; i++)
+            allSubTriangles.AddRange(perFaceResults[i]);
 
         // Build new mesh from sub-triangles
         var triangles = new Triangle3[allSubTriangles.Count];
@@ -61,5 +60,52 @@ public static class MeshCutter
         }
 
         return new CutResult(newMesh, allSubTriangles);
+    }
+
+    private static List<FaceCutter.SubTriangle>[] CutFacesSequential(
+        HalfEdgeMesh mesh,
+        IReadOnlyDictionary<int, List<IntersectionSegment>> faceSegments,
+        int faceCount)
+    {
+        var results = new List<FaceCutter.SubTriangle>[faceCount];
+
+        for (int faceIdx = 0; faceIdx < faceCount; faceIdx++)
+        {
+            results[faceIdx] = CutSingleFace(mesh, faceSegments, faceIdx);
+        }
+
+        return results;
+    }
+
+    private static List<FaceCutter.SubTriangle>[] CutFacesParallel(
+        HalfEdgeMesh mesh,
+        IReadOnlyDictionary<int, List<IntersectionSegment>> faceSegments,
+        int faceCount)
+    {
+        var results = new List<FaceCutter.SubTriangle>[faceCount];
+
+        System.Threading.Tasks.Parallel.For(0, faceCount, faceIdx =>
+        {
+            results[faceIdx] = CutSingleFace(mesh, faceSegments, faceIdx);
+        });
+
+        return results;
+    }
+
+    private static List<FaceCutter.SubTriangle> CutSingleFace(
+        HalfEdgeMesh mesh,
+        IReadOnlyDictionary<int, List<IntersectionSegment>> faceSegments,
+        int faceIdx)
+    {
+        var face = mesh.Faces[faceIdx];
+        face.GetTrianglePositions(out var va, out var vb, out var vc);
+        var tri = new Triangle3(va, vb, vc);
+
+        if (faceSegments.TryGetValue(faceIdx, out var segments) && segments.Count > 0)
+        {
+            return FaceCutter.CutFace(tri, faceIdx, segments);
+        }
+
+        return [new FaceCutter.SubTriangle(tri.A, tri.B, tri.C, faceIdx, false)];
     }
 }

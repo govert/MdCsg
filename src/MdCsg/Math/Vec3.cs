@@ -72,6 +72,27 @@ public readonly record struct Vec3(double X, double Y, double Z)
     public static Vec3 Max(Vec3 a, Vec3 b) =>
         new(System.Math.Max(a.X, b.X), System.Math.Max(a.Y, b.Y), System.Math.Max(a.Z, b.Z));
 
+    /// <summary>Returns the linear interpolation between two vectors: a + t*(b-a).</summary>
+    /// <param name="a">Start vector (returned when t=0).</param>
+    /// <param name="b">End vector (returned when t=1).</param>
+    /// <param name="t">Interpolation parameter (not clamped).</param>
+    /// <returns>The interpolated vector.</returns>
+    public static Vec3 Lerp(Vec3 a, Vec3 b, double t) =>
+        new(a.X + t * (b.X - a.X), a.Y + t * (b.Y - a.Y), a.Z + t * (b.Z - a.Z));
+
+    /// <summary>
+    /// Returns the angle in radians between two vectors using atan2(|cross|, dot)
+    /// for numerical stability near 0 and pi.
+    /// </summary>
+    /// <param name="a">First vector (need not be unit length).</param>
+    /// <param name="b">Second vector (need not be unit length).</param>
+    /// <returns>The angle in radians in [0, pi].</returns>
+    public static double AngleBetween(Vec3 a, Vec3 b)
+    {
+        var cross = Cross(a, b);
+        return System.Math.Atan2(cross.Length, Dot(a, b));
+    }
+
     /// <summary>Returns the distance between two points.</summary>
     public static double Distance(Vec3 a, Vec3 b) => (a - b).Length;
 

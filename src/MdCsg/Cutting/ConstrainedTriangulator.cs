@@ -4,13 +4,15 @@ using MdCsg.Predicates;
 namespace MdCsg.Cutting;
 
 /// <summary>
-/// Constrained triangulation for re-triangulating a face after it has been cut
-/// by intersection segments. Uses robust predicates.
+/// Constrained Delaunay triangulation for re-triangulating a face after it has been cut
+/// by intersection segments. Uses robust predicates and Lawson edge flipping to maximize
+/// minimum triangle angles.
 ///
 /// Algorithm:
 /// 1. Start with the original triangle (vertices 0,1,2)
 /// 2. Insert each additional vertex by splitting the containing triangle
-/// 3. Enforce constraint edges by removing crossing edges
+/// 3. Enforce constraint edges by removing crossing edges and re-triangulating cavities
+/// 4. Apply Lawson edge flipping on non-constraint edges to achieve Delaunay quality
 /// </summary>
 public static class ConstrainedTriangulator
 {
@@ -42,22 +44,20 @@ public static class ConstrainedTriangulator
         if (constraints.Count == 0)
             return EarClipTriangulate(pts);
 
-        // Incremental constrained triangulation
-        return ConstrainedTriangulate(pts, constraints);
+        // Constrained Delaunay triangulation
+        return ConstrainedDelaunay(pts, constraints);
     }
 
     // =========================================================================
-    // Incremental constrained triangulation
+    // Constrained Delaunay triangulation
     // =========================================================================
 
-    private static List<(int A, int B, int C)> ConstrainedTriangulate(
+    private static List<(int A, int B, int C)> ConstrainedDelaunay(
         Vec2[] pts, IReadOnlyList<(int Start, int End)> constraints)
     {
         int n = pts.Length;
 
-        // Start with initial triangle (0,1,2).
-        // The algorithm requires CCW winding in 2D. If the projection reversed
-        // winding, swap to get CCW and track the flip so we can undo it at the end.
+        // Start with initial triangle (0,1,2) in CCW order
         bool flipped = false;
         var tris = new List<(int A, int B, int C)>();
         if (Orient2D.Evaluate(pts[0], pts[1], pts[2]) == PredicateSign.Positive)
@@ -68,19 +68,26 @@ public static class ConstrainedTriangulator
             flipped = true;
         }
 
-        // Insert each additional vertex
+        // Phase 1: Insert each additional vertex
         for (int v = 3; v < n; v++)
             InsertVertex(tris, pts, v);
 
-        // Enforce constraint edges
+        // Phase 2: Enforce constraint edges
         foreach (var (s, e) in constraints)
             EnforceConstraint(tris, pts, s, e);
 
-        // Remove degenerate triangles (zero area)
+        // Phase 3: Lawson flips to achieve Delaunay quality on non-constraint edges
+        var constraintSet = new HashSet<long>();
+        foreach (var (cs, ce) in constraints)
+            constraintSet.Add(EdgeKey(cs, ce));
+
+        LawsonFlipPass(tris, pts, constraintSet);
+
+        // Remove degenerate triangles
         tris.RemoveAll(t =>
             Orient2D.Evaluate(pts[t.A], pts[t.B], pts[t.C]) != PredicateSign.Positive);
 
-        // Restore original winding order if we flipped to get CCW
+        // Restore original winding order if we flipped
         if (flipped)
         {
             for (int i = 0; i < tris.Count; i++)
@@ -90,10 +97,92 @@ public static class ConstrainedTriangulator
         return tris;
     }
 
+    // =========================================================================
+    // Lawson edge flipping (post-processing)
+    // =========================================================================
+
     /// <summary>
-    /// Inserts vertex v into the triangulation by finding the triangle that contains it
-    /// and splitting that triangle into 2 or 3 sub-triangles.
+    /// Iteratively flips non-Delaunay, non-constraint edges to improve triangle quality.
     /// </summary>
+    private static void LawsonFlipPass(List<(int A, int B, int C)> tris, Vec2[] pts, HashSet<long> constraintSet)
+    {
+        bool changed = true;
+        int maxPasses = tris.Count * 3 + 10;
+
+        while (changed && maxPasses-- > 0)
+        {
+            changed = false;
+
+            for (int i = 0; i < tris.Count; i++)
+            {
+                var (a1, b1, c1) = tris[i];
+
+                // Check each of the 3 edges
+                if (TryFlipSharedEdge(tris, pts, constraintSet, i, a1, b1, c1))
+                { changed = true; break; }
+                if (TryFlipSharedEdge(tris, pts, constraintSet, i, b1, c1, a1))
+                { changed = true; break; }
+                if (TryFlipSharedEdge(tris, pts, constraintSet, i, c1, a1, b1))
+                { changed = true; break; }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks if edge (e0,e1) shared between triangle i and some other triangle j
+    /// should be flipped to satisfy the Delaunay criterion.
+    /// The vertex 'opp' is opposite the edge in triangle i.
+    /// </summary>
+    private static bool TryFlipSharedEdge(
+        List<(int A, int B, int C)> tris, Vec2[] pts,
+        HashSet<long> constraintSet,
+        int i, int e0, int e1, int opp)
+    {
+        // Skip constraint edges
+        if (constraintSet.Contains(EdgeKey(e0, e1)))
+            return false;
+
+        // Find the neighbor triangle sharing edge (e0, e1)
+        for (int j = 0; j < tris.Count; j++)
+        {
+            if (j == i) continue;
+            var (a2, b2, c2) = tris[j];
+
+            int other = FindOppositeVertex(a2, b2, c2, e0, e1);
+            if (other < 0) continue;
+
+            // We have quad: opp-e0-other-e1
+            // Check InCircle: is 'other' inside circumcircle of (opp, e0, e1)?
+            var orient = Orient2D.Evaluate(pts[opp], pts[e0], pts[e1]);
+            bool inCirc;
+            if (orient == PredicateSign.Positive)
+                inCirc = InCircle.Evaluate(pts[opp], pts[e0], pts[e1], pts[other]) == PredicateSign.Positive;
+            else if (orient == PredicateSign.Negative)
+                inCirc = InCircle.Evaluate(pts[opp], pts[e1], pts[e0], pts[other]) == PredicateSign.Positive;
+            else
+                return false; // degenerate
+
+            if (!inCirc) return false;
+
+            // Check that the quadrilateral is convex (flip is valid)
+            var o1 = Orient2D.Evaluate(pts[opp], pts[e0], pts[other]);
+            var o2 = Orient2D.Evaluate(pts[opp], pts[other], pts[e1]);
+            if (o1 != PredicateSign.Positive || o2 != PredicateSign.Positive)
+                return false;
+
+            // Perform the flip: replace edge (e0,e1) with (opp,other)
+            tris[i] = (opp, e0, other);
+            tris[j] = (opp, other, e1);
+            return true;
+        }
+
+        return false;
+    }
+
+    // =========================================================================
+    // Vertex insertion (from original algorithm, proven correct)
+    // =========================================================================
+
     private static void InsertVertex(List<(int A, int B, int C)> tris, Vec2[] pts, int v)
     {
         var p = pts[v];
@@ -107,26 +196,24 @@ public static class ConstrainedTriangulator
             var s2 = Orient2D.Evaluate(pts[b], pts[c], p);
             var s3 = Orient2D.Evaluate(pts[c], pts[a], p);
 
-            // Check if p is on an edge (one sign is zero) or strictly inside (all positive)
             bool inside = s1 != PredicateSign.Negative && s2 != PredicateSign.Negative && s3 != PredicateSign.Negative;
-
             if (!inside) continue;
 
-            // Check if on an edge
+            // On edge A-B
             if (s1 == PredicateSign.Zero)
             {
-                // On edge A-B: split into 2 triangles
                 tris.RemoveAt(t);
-                // Find and also split the neighbor triangle sharing edge A-B
                 SplitEdge(tris, pts, a, b, c, v);
                 return;
             }
+            // On edge B-C
             if (s2 == PredicateSign.Zero)
             {
                 tris.RemoveAt(t);
                 SplitEdge(tris, pts, b, c, a, v);
                 return;
             }
+            // On edge C-A
             if (s3 == PredicateSign.Zero)
             {
                 tris.RemoveAt(t);
@@ -134,7 +221,7 @@ public static class ConstrainedTriangulator
                 return;
             }
 
-            // Strictly inside: split into 3 triangles
+            // Strictly inside: split into 3
             tris.RemoveAt(t);
             tris.Add((a, b, v));
             tris.Add((b, c, v));
@@ -142,18 +229,16 @@ public static class ConstrainedTriangulator
             return;
         }
 
-        // Point not found inside any triangle — it may be on the boundary due to
-        // floating point issues. Find the closest edge and split there.
+        // Fallback: find closest edge
         InsertOnClosestEdge(tris, pts, v);
     }
 
     private static void SplitEdge(List<(int A, int B, int C)> tris, Vec2[] pts, int e0, int e1, int opp, int v)
     {
-        // The triangle (e0, e1, opp) was already removed. Split it into 2.
         tris.Add((e0, v, opp));
         tris.Add((v, e1, opp));
 
-        // Find neighbor sharing edge e0-e1 and split it too
+        // Find and split neighbor sharing edge e0-e1
         for (int t = 0; t < tris.Count; t++)
         {
             var (a, b, c) = tris[t];
@@ -222,17 +307,15 @@ public static class ConstrainedTriangulator
         return dx * dx + dy * dy;
     }
 
-    /// <summary>
-    /// Enforces a constraint edge (s,e) by removing all triangulation edges that cross it.
-    /// Uses the cavity re-triangulation approach.
-    /// </summary>
+    // =========================================================================
+    // Constraint enforcement (from original algorithm, proven correct)
+    // =========================================================================
+
     private static void EnforceConstraint(List<(int A, int B, int C)> tris, Vec2[] pts, int s, int e)
     {
-        // Check if the constraint edge already exists in the triangulation
         if (EdgeExists(tris, s, e))
             return;
 
-        // Collect all triangles whose interiors are crossed by the segment s-e
         var crossingIndices = new List<int>();
         for (int t = 0; t < tris.Count; t++)
         {
@@ -243,7 +326,6 @@ public static class ConstrainedTriangulator
 
         if (crossingIndices.Count == 0) return;
 
-        // Collect all vertices of the crossing triangles
         var cavity = new HashSet<int>();
         foreach (int t in crossingIndices)
         {
@@ -253,13 +335,10 @@ public static class ConstrainedTriangulator
             cavity.Add(c);
         }
 
-        // Remove crossing triangles (in reverse order to preserve indices)
         crossingIndices.Sort();
         for (int i = crossingIndices.Count - 1; i >= 0; i--)
             tris.RemoveAt(crossingIndices[i]);
 
-        // Re-triangulate each side of the constraint edge separately
-        // Split cavity vertices into "above" and "below" the constraint line
         var above = new List<int>();
         var below = new List<int>();
 
@@ -271,29 +350,19 @@ public static class ConstrainedTriangulator
                 above.Add(v);
             else if (sign == PredicateSign.Negative)
                 below.Add(v);
-            // Zero = collinear with constraint, skip (handled by constraint edge itself)
         }
 
-        // Triangulate each half-cavity as a fan-like polygon
         TriangulateCavitySide(tris, pts, s, e, above);
         TriangulateCavitySide(tris, pts, e, s, below);
     }
 
-    /// <summary>
-    /// Triangulates one side of a cavity. The constraint edge goes from s to e,
-    /// and 'side' contains all cavity vertices on one side, sorted by angle from s.
-    /// </summary>
     private static void TriangulateCavitySide(
         List<(int A, int B, int C)> tris, Vec2[] pts,
         int s, int e, List<int> side)
     {
         if (side.Count == 0)
-        {
-            // No vertices on this side — the constraint edge is a triangle edge already
             return;
-        }
 
-        // Sort vertices along the constraint edge direction (by projection onto s→e)
         var dir = new Vec2(pts[e].X - pts[s].X, pts[e].Y - pts[s].Y);
         side.Sort((a, b) =>
         {
@@ -302,7 +371,6 @@ public static class ConstrainedTriangulator
             return ta.CompareTo(tb);
         });
 
-        // Use ear-clipping on the polygon: s, side[0], side[1], ..., side[n-1], e
         var poly = new List<int> { s };
         poly.AddRange(side);
         poly.Add(e);
@@ -331,7 +399,6 @@ public static class ConstrainedTriangulator
             }
             if (!earFound)
             {
-                // Degenerate: fan from first vertex
                 for (int i = 1; i < poly.Count - 1; i++)
                     tris.Add((poly[0], poly[i], poly[i + 1]));
                 return;
@@ -373,31 +440,16 @@ public static class ConstrainedTriangulator
                (c == s && a == e) || (a == s && c == e);
     }
 
-    /// <summary>
-    /// Tests if the interior of triangle (a,b,c) is crossed by segment (s,e).
-    /// A triangle is "crossed" if the segment passes through its interior
-    /// (not just touching a vertex or edge).
-    /// </summary>
     private static bool TriangleCrossedBySegment(Vec2[] pts, int a, int b, int c, int s, int e)
     {
-        // If the segment shares a vertex with the triangle, it doesn't "cross" it
         if (a == s || a == e || b == s || b == e || c == s || c == e) return false;
-
-        // If the triangle already has this edge, it's not crossed
         if (HasEdge(a, b, c, s, e)) return false;
 
-        // Check if segment s-e intersects any of the triangle's three edges
-        // AND the intersection point is in the interior of both segments
-        bool crossesAB = SegmentsCross(pts, s, e, a, b);
-        bool crossesBC = SegmentsCross(pts, s, e, b, c);
-        bool crossesCA = SegmentsCross(pts, s, e, c, a);
-
-        return crossesAB || crossesBC || crossesCA;
+        return SegmentsCross(pts, s, e, a, b) ||
+               SegmentsCross(pts, s, e, b, c) ||
+               SegmentsCross(pts, s, e, c, a);
     }
 
-    /// <summary>
-    /// Tests if two segments strictly cross (interiors intersect).
-    /// </summary>
     private static bool SegmentsCross(Vec2[] pts, int a, int b, int c, int d)
     {
         var s1 = Orient2D.Evaluate(pts[a], pts[b], pts[c]);
@@ -405,7 +457,6 @@ public static class ConstrainedTriangulator
         var s3 = Orient2D.Evaluate(pts[c], pts[d], pts[a]);
         var s4 = Orient2D.Evaluate(pts[c], pts[d], pts[b]);
 
-        // Segments cross if endpoints of each segment are on opposite sides of the other
         if (s1 != s2 && s1 != PredicateSign.Zero && s2 != PredicateSign.Zero &&
             s3 != s4 && s3 != PredicateSign.Zero && s4 != PredicateSign.Zero)
             return true;
@@ -477,6 +528,10 @@ public static class ConstrainedTriangulator
         return true;
     }
 
+    // =========================================================================
+    // Shared utilities
+    // =========================================================================
+
     private static bool PointInTriangle2D(Vec2 p, Vec2 a, Vec2 b, Vec2 c)
     {
         var s1 = Orient2D.Evaluate(a, b, p);
@@ -488,6 +543,9 @@ public static class ConstrainedTriangulator
 
         return !(hasNeg && hasPos);
     }
+
+    private static long EdgeKey(int a, int b) =>
+        a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
 
     /// <summary>
     /// Returns the axis index (0=X, 1=Y, 2=Z) with the largest absolute normal component.

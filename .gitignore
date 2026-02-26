@@ -27,3 +27,6 @@ x86/
 build/
 TestResults/
 BenchmarkDotNet.Artifacts/
+
+## Private
+.private/

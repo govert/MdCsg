@@ -24,6 +24,20 @@ public static class MathUtil
     }
 
     /// <summary>
+    /// Clamps a value to the range [min, max].
+    /// </summary>
+    /// <param name="value">The value to clamp.</param>
+    /// <param name="min">The minimum bound.</param>
+    /// <param name="max">The maximum bound.</param>
+    /// <returns>The clamped value.</returns>
+    public static double Clamp(double value, double min, double max)
+    {
+        if (value < min) return min;
+        if (value > max) return max;
+        return value;
+    }
+
+    /// <summary>
     /// Fused multiply-add: returns a*b + c with a single rounding.
     /// </summary>
     public static double Fma(double a, double b, double c)

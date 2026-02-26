@@ -62,7 +62,8 @@ public static class PatchAssembler
         {
             if (patch.CoplanarNormalsAgree.HasValue && !patch.HasConfidentPoint)
             {
-                // Coplanar patches from B are always discarded (A takes priority)
+                // Coplanar patches from B: A takes priority for the shared surface.
+                // B's coplanar patches are discarded to avoid doubled geometry.
                 continue;
             }
 

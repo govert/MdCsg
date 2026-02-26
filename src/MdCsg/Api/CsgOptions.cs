@@ -31,4 +31,10 @@ public class CsgOptions
     /// Vertex welding tolerance for the output mesh.
     /// </summary>
     public double WeldTolerance { get; set; } = 1e-8;
+
+    /// <summary>
+    /// Whether to use parallel execution for independent pipeline stages.
+    /// Defaults to true. Disable for debugging or single-threaded environments.
+    /// </summary>
+    public bool Parallel { get; set; } = true;
 }

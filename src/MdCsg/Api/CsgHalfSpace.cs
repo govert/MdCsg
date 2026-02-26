@@ -32,7 +32,7 @@ public static class CsgHalfSpace
             segmentCount += kvp.Value.Count;
 
         // Step 2: Cut the mesh along intersection curves
-        var cut = MeshCutter.Cut(mesh.Mesh, faceSegments);
+        var cut = MeshCutter.Cut(mesh.Mesh, faceSegments, options.Parallel);
 
         // Step 3: Build adjacency and extract patches
         var adj = SubTriangleAdjacency.Build(cut.SubTriangles);
