@@ -20,6 +20,7 @@ public static class ArrangementBuilder
         var bvhA = BvhTree.Build(meshA);
         var bvhB = BvhTree.Build(meshB);
         var overlappingPairs = BvhTraversal.FindOverlappingPairs(bvhA, bvhB);
+        overlappingPairs.Sort(static (x, y) => CompareFacePair(x, y));
 
         var segments = new List<IntersectionSegment>(overlappingPairs.Count);
         var uniqueSegmentKeys = new HashSet<(long, long, long, long, long, long, int, int)>();
@@ -90,12 +91,27 @@ public static class ArrangementBuilder
         int coplanarFaceCountA,
         int coplanarFaceCountB)
     {
+        var normalizedSegments = new List<(IntersectionSegment Segment, (long, long, long, long, long, long, int, int) Key)>(segments.Count);
+        var uniqueSegmentKeys = new HashSet<(long, long, long, long, long, long, int, int)>();
+        foreach (var seg in segments)
+        {
+            if (!TryNormalizeSegment(seg, seg.FaceIndexA, seg.FaceIndexB, gridSize, out var normalized, out var key))
+                continue;
+
+            if (!uniqueSegmentKeys.Add(key))
+                continue;
+
+            normalizedSegments.Add((normalized, key));
+        }
+
+        normalizedSegments.Sort(static (x, y) => CompareSegmentKey(x.Key, y.Key));
+
         var vertices = new List<ArrangementVertex>();
-        var edges = new List<ArrangementEdge>(segments.Count);
+        var edges = new List<ArrangementEdge>(normalizedSegments.Count);
         var vertexByKey = new Dictionary<(long X, long Y, long Z), int>();
         var incidentMutable = new Dictionary<int, List<int>>();
 
-        foreach (var seg in segments)
+        foreach (var (seg, _) in normalizedSegments)
         {
             int startId = GetOrAddVertex(seg.Start, gridSize, vertices, vertexByKey);
             int endId = GetOrAddVertex(seg.End, gridSize, vertices, vertexByKey);
@@ -115,9 +131,15 @@ public static class ArrangementBuilder
                 AddIncidentEdge(incidentMutable, endId, edgeId);
         }
 
-        var incident = incidentMutable.ToDictionary(
-            kvp => kvp.Key,
-            kvp => (IReadOnlyList<int>)kvp.Value);
+        var incident = incidentMutable
+            .OrderBy(kvp => kvp.Key)
+            .ToDictionary(
+                kvp => kvp.Key,
+                kvp =>
+                {
+                    kvp.Value.Sort();
+                    return (IReadOnlyList<int>)kvp.Value;
+                });
 
         return new ArrangementGraph(
             vertices,
@@ -168,33 +190,13 @@ public static class ArrangementBuilder
         List<IntersectionSegment> segments,
         HashSet<(long, long, long, long, long, long, int, int)> uniqueSegmentKeys)
     {
-        var snapped = new IntersectionSegment(
-            SnapRounding.Snap(seg.Start, gridSize),
-            SnapRounding.Snap(seg.End, gridSize),
-            faceA,
-            faceB);
-
-        if (snapped.IsDegenerate)
+        if (!TryNormalizeSegment(seg, faceA, faceB, gridSize, out var normalized, out var key))
             return;
-
-        var startKey = MakeGridKey(snapped.Start, gridSize);
-        var endKey = MakeGridKey(snapped.End, gridSize);
-
-        // Canonicalize endpoint order so AB == BA.
-        if (Compare(startKey, endKey) > 0)
-        {
-            (startKey, endKey) = (endKey, startKey);
-        }
-
-        var key = (
-            startKey.X, startKey.Y, startKey.Z,
-            endKey.X, endKey.Y, endKey.Z,
-            faceA, faceB);
 
         if (!uniqueSegmentKeys.Add(key))
             return;
 
-        segments.Add(snapped);
+        segments.Add(normalized);
     }
 
     private static int Compare((long X, long Y, long Z) a, (long X, long Y, long Z) b)
@@ -211,6 +213,68 @@ public static class ArrangementBuilder
         var face = mesh.Faces[faceIndex];
         face.GetTrianglePositions(out var a, out var b, out var c);
         return new Triangle3(a, b, c);
+    }
+
+    private static bool TryNormalizeSegment(
+        IntersectionSegment seg,
+        int faceA,
+        int faceB,
+        double gridSize,
+        out IntersectionSegment normalized,
+        out (long, long, long, long, long, long, int, int) key)
+    {
+        var start = SnapRounding.Snap(seg.Start, gridSize);
+        var end = SnapRounding.Snap(seg.End, gridSize);
+        var startKey = MakeGridKey(start, gridSize);
+        var endKey = MakeGridKey(end, gridSize);
+
+        if (Compare(startKey, endKey) > 0)
+        {
+            (startKey, endKey) = (endKey, startKey);
+            (start, end) = (end, start);
+        }
+
+        if (startKey == endKey)
+        {
+            normalized = default;
+            key = default;
+            return false;
+        }
+
+        normalized = new IntersectionSegment(start, end, faceA, faceB);
+        key = (
+            startKey.X, startKey.Y, startKey.Z,
+            endKey.X, endKey.Y, endKey.Z,
+            faceA, faceB);
+        return true;
+    }
+
+    private static int CompareFacePair((int FaceA, int FaceB) a, (int FaceA, int FaceB) b)
+    {
+        int cmpA = a.FaceA.CompareTo(b.FaceA);
+        if (cmpA != 0) return cmpA;
+        return a.FaceB.CompareTo(b.FaceB);
+    }
+
+    private static int CompareSegmentKey(
+        (long SX, long SY, long SZ, long EX, long EY, long EZ, int FaceA, int FaceB) a,
+        (long SX, long SY, long SZ, long EX, long EY, long EZ, int FaceA, int FaceB) b)
+    {
+        int cmpSX = a.SX.CompareTo(b.SX);
+        if (cmpSX != 0) return cmpSX;
+        int cmpSY = a.SY.CompareTo(b.SY);
+        if (cmpSY != 0) return cmpSY;
+        int cmpSZ = a.SZ.CompareTo(b.SZ);
+        if (cmpSZ != 0) return cmpSZ;
+        int cmpEX = a.EX.CompareTo(b.EX);
+        if (cmpEX != 0) return cmpEX;
+        int cmpEY = a.EY.CompareTo(b.EY);
+        if (cmpEY != 0) return cmpEY;
+        int cmpEZ = a.EZ.CompareTo(b.EZ);
+        if (cmpEZ != 0) return cmpEZ;
+        int cmpFaceA = a.FaceA.CompareTo(b.FaceA);
+        if (cmpFaceA != 0) return cmpFaceA;
+        return a.FaceB.CompareTo(b.FaceB);
     }
 
     private static void AddIncidentEdge(Dictionary<int, List<int>> incident, int vertexId, int edgeId)

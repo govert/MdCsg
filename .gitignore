@@ -32,6 +32,7 @@ BenchmarkDotNet.Artifacts/
 scene*.png
 screenshots/*.bmp
 dotnet_test*.log
+build_output.log
 
 ## Private
 .private/

@@ -1,7 +1,6 @@
 using MdCsg.Api;
 using MdCsg.Math;
 using MdCsg.Mesh;
-using MdCsg.Robust;
 
 namespace MdCsg.Robust.Conformance;
 
@@ -25,6 +24,29 @@ public class RobustConformanceBacklogTests
         Assert.Contains(result.Issues, i => i.Code == RobustIssueCode.InputIntersectionContainsCoplanarPairs);
         Assert.True(result.Diagnostics.ArrangementCoplanarFaceCountA > 0);
         Assert.True(result.Diagnostics.ArrangementCoplanarFaceCountB > 0);
+    }
+
+    [Fact]
+    public void ThinSlab_HalfSpaceChain_StrictMode_StaysClosed()
+    {
+        var cube = Primitives.Cube(Vec3.Zero, 2.0);
+        var top = HalfSpace.FromPointAndNormal(new Vec3(0, 0, 0.01), Vec3.UnitZ);
+        var bottom = HalfSpace.FromPointAndNormal(new Vec3(0, 0, -0.01), -Vec3.UnitZ);
+
+        var r1 = new Solid(Csg.Intersect(cube, top).Mesh);
+        var r2 = Csg.Intersect(r1, bottom);
+        var robust = RobustCsg.Union(new Solid(r2.Mesh), r1, new RobustOperationOptions
+        {
+            Mode = RobustMode.Strict,
+            AnalyzeInputIntersection = true,
+            TreatOpenArrangementAsError = true,
+            FailOnValidationError = true
+        });
+
+        Assert.True(robust.Succeeded);
+        Assert.NotNull(robust.Result);
+        Assert.Equal(0, MeshValidator.CountBoundaryEdges(robust.Result!.Mesh));
+        Assert.DoesNotContain(robust.Issues, i => i.Severity == RobustIssueSeverity.Error);
     }
 
     [Fact(Skip = "Target behavior for the new robust kernel; boundary-only contacts must avoid spurious fragments.")]

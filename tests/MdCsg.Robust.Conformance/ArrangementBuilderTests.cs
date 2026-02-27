@@ -1,6 +1,7 @@
 using MdCsg.Api;
 using MdCsg.Math;
 using MdCsg.Robust.Kernel.Arrangement;
+using System.Text;
 
 namespace MdCsg.Robust.Conformance;
 
@@ -57,5 +58,83 @@ public class ArrangementBuilderTests
 
         Assert.True(arrangement.CoplanarFaceCountA > 0);
         Assert.True(arrangement.CoplanarFaceCountB > 0);
+    }
+
+    [Fact]
+    public void RepeatedBuilds_AreDeterministic()
+    {
+        var a = Primitives.Cube(Vec3.Zero, 2.0);
+        var b = Primitives.Sphere(new Vec3(0.35, 0.2, -0.1), 1.15, 3);
+
+        var baseline = ArrangementBuilder.Build(a.Mesh, b.Mesh);
+        var baselineFingerprint = Fingerprint(baseline);
+
+        for (int i = 0; i < 5; i++)
+        {
+            var next = ArrangementBuilder.Build(a.Mesh, b.Mesh);
+            Assert.Equal(baselineFingerprint, Fingerprint(next));
+        }
+    }
+
+    [Fact]
+    public void ParallelFlag_DoesNotChangeArrangement()
+    {
+        var a = Primitives.Cube(Vec3.Zero, 2.0);
+        var b = Primitives.Sphere(new Vec3(0.35, 0.2, -0.1), 1.15, 3);
+
+        var sequential = ArrangementBuilder.Build(a.Mesh, b.Mesh, parallel: false);
+        var parallel = ArrangementBuilder.Build(a.Mesh, b.Mesh, parallel: true);
+
+        Assert.Equal(Fingerprint(sequential), Fingerprint(parallel));
+    }
+
+    private static string Fingerprint(ArrangementGraph graph)
+    {
+        var sb = new StringBuilder();
+        sb.Append("V[");
+        foreach (var v in graph.Vertices)
+        {
+            sb.Append(v.Id);
+            sb.Append(':');
+            sb.Append(v.Position.X.ToString("R"));
+            sb.Append(',');
+            sb.Append(v.Position.Y.ToString("R"));
+            sb.Append(',');
+            sb.Append(v.Position.Z.ToString("R"));
+            sb.Append(';');
+        }
+
+        sb.Append("]E[");
+        foreach (var e in graph.Edges)
+        {
+            sb.Append(e.Id);
+            sb.Append(':');
+            sb.Append(e.StartVertexId);
+            sb.Append('>');
+            sb.Append(e.EndVertexId);
+            sb.Append(':');
+            sb.Append(e.FaceIndexA);
+            sb.Append('/');
+            sb.Append(e.FaceIndexB);
+            sb.Append(':');
+            sb.Append(e.IsDegenerate ? '1' : '0');
+            sb.Append(';');
+        }
+
+        sb.Append("]I[");
+        foreach (var kvp in graph.IncidentEdgesByVertex.OrderBy(k => k.Key))
+        {
+            sb.Append(kvp.Key);
+            sb.Append(':');
+            foreach (int edgeId in kvp.Value.OrderBy(x => x))
+            {
+                sb.Append(edgeId);
+                sb.Append(',');
+            }
+            sb.Append(';');
+        }
+
+        sb.Append(']');
+        return sb.ToString();
     }
 }

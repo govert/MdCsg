@@ -1,6 +1,6 @@
 # Robust Patch-Confident CSG Plan
 
-Status: Draft v0.1
+Status: Draft v0.2
 
 This plan operationalizes [ROBUSTNESS_SPEC.md](ROBUSTNESS_SPEC.md) into deliverable milestones.
 
@@ -12,9 +12,11 @@ This plan operationalizes [ROBUSTNESS_SPEC.md](ROBUSTNESS_SPEC.md) into delivera
   - transitional `LegacyBridgedRobustCsgEngine` with strict validation diagnostics,
   - certified predicate layer (`Kernel/Predicates`) and predicate-tier telemetry counters,
   - native arrangement scaffold (`Kernel/Arrangement`) using BVH overlap traversal + tri-tri processing, with coplanar-pair diagnostics and endpoint/component analysis.
+  - deterministic arrangement ordering and normalization (sorted overlap traversal, canonicalized snapped segments, stable incident map ordering).
 - Added `tests/MdCsg.Robust.Conformance` project with:
   - passing smoke tests for robust API wiring,
-  - skipped backlog tests encoding adversarial target cases (coplanar, kissing, thin-slab).
+  - active strict conformance guardrails for coplanar shared-face and thin-slab chains,
+  - remaining skipped backlog test for tangent/kissing boundary-contact behavior.
 - Added both projects to `MdCsg.slnx`.
 
 ## 1. Strategy
@@ -71,7 +73,7 @@ Exit criteria:
 
 - Predicate stress suite green with deterministic outcomes.
 
-## M2 - Robust Arrangement Core
+## M2 - Robust Arrangement Core (In Progress)
 
 Deliverables:
 
@@ -81,6 +83,12 @@ Deliverables:
 Exit criteria:
 
 - Arrangement invariants pass on adversarial coplanar/tangent corpus.
+
+Current status:
+
+- Native arrangement construction now avoids legacy `IntersectionGraph.Compute` in the mesh-mesh path.
+- Deterministic ordering and dedup normalization are enforced before graph construction.
+- Conformance tests include repeated-run determinism and stable `parallel` flag behavior checks.
 
 ## M3 - Robust Triangulation and Patch Extraction
 
@@ -140,13 +148,10 @@ Parallel streams:
 
 ## 5. Immediate Next Tasks
 
-1. Create `tests/MdCsg.Robust.Conformance` with first failing spec tests:
-   - coplanar cube face-sharing cases,
-   - tangent/kissing cases,
-   - thin-slab intersections.
-2. Define `RobustOperationResult` diagnostics payload schema.
-3. Implement predicate wrapper API and switch one vertical slice (intersection classification) to certified decisions.
-4. Add deterministic replay harness (fixed seed + serialized case inputs).
+1. Add deterministic replay harness (fixed seed + serialized case inputs) for arrangement-stage failures.
+2. Expand coplanar tie-break policy from guardrail detection into explicit reconstruction semantics.
+3. Start `Kernel/Triangulation` replacement path with robust constrained triangulation prototype.
+4. Convert the tangent/kissing backlog into an active conformance test once semantics are locked.
 
 ## 6. Risks and Mitigations
 
