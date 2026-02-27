@@ -315,12 +315,19 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             InsertVertexIntoTriangulation(tris, vertices2D, v);
         }
 
+        int constraintWorkBudget = System.Math.Max(50_000, constraints.Count * 200);
         foreach (var (start, end) in constraints)
         {
             if (start < 0 || end < 0 || start >= vertices2D.Length || end >= vertices2D.Length || start == end)
                 return false;
 
-            EnforceConstraintInTriangulation(tris, vertices2D, start, end);
+            EnforceConstraintInTriangulation(
+                tris,
+                vertices2D,
+                start,
+                end,
+                recursionDepth: 0,
+                ref constraintWorkBudget);
         }
 
         for (int i = tris.Count - 1; i >= 0; i--)
@@ -1053,8 +1060,29 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         List<(int A, int B, int C)> tris,
         Vec2[] pts,
         int start,
-        int end)
+        int end,
+        int recursionDepth,
+        ref int workBudget)
     {
+        if (workBudget <= 0)
+            return;
+
+        if (recursionDepth > 64)
+            return;
+
+        int triangleBudget = System.Math.Min(8192, System.Math.Max(1024, pts.Length * 16));
+        if (tris.Count > triangleBudget)
+            return;
+
+        int callCost = 16 + tris.Count;
+        if (callCost > workBudget)
+        {
+            workBudget = 0;
+            return;
+        }
+
+        workBudget -= callCost;
+
         if (TriangulationEdgeExists(tris, start, end))
             return;
 
@@ -1068,7 +1096,13 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
 
         if (crossingIndices.Count == 0)
         {
-            SplitAndEnforceConstraintAtCollinearVertices(tris, pts, start, end);
+            SplitAndEnforceConstraintAtCollinearVertices(
+                tris,
+                pts,
+                start,
+                end,
+                recursionDepth,
+                ref workBudget);
             return;
         }
 
@@ -1159,8 +1193,16 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         List<(int A, int B, int C)> tris,
         Vec2[] pts,
         int start,
-        int end)
+        int end,
+        int recursionDepth,
+        ref int workBudget)
     {
+        if (workBudget <= 0)
+            return;
+
+        if (recursionDepth > 64)
+            return;
+
         double dx = pts[end].X - pts[start].X;
         double dy = pts[end].Y - pts[start].Y;
         double lenSq = dx * dx + dy * dy;
@@ -1193,15 +1235,17 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             return;
 
         collinear.Sort((a, b) => a.T.CompareTo(b.T));
+        if (collinear.Count > 256)
+            return;
 
         int prev = start;
         foreach (var (v, _) in collinear)
         {
-            EnforceConstraintInTriangulation(tris, pts, prev, v);
+            EnforceConstraintInTriangulation(tris, pts, prev, v, recursionDepth + 1, ref workBudget);
             prev = v;
         }
 
-        EnforceConstraintInTriangulation(tris, pts, prev, end);
+        EnforceConstraintInTriangulation(tris, pts, prev, end, recursionDepth + 1, ref workBudget);
     }
 
     private static void TriangulateConstraintCavitySide(
