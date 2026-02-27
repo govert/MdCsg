@@ -49,7 +49,13 @@ public static class CsgImplicit
             segmentCount += kvp.Value.Count;
 
         // Step 2: Cut the mesh along intersection curves
-        var cut = MeshCutter.Cut(mesh.Mesh, faceSegments, options.Parallel, options.GridSize, useEdgeSplitConstraints: true);
+        var cut = MeshCutter.Cut(
+            mesh.Mesh,
+            faceSegments,
+            options.Parallel,
+            options.GridSize,
+            useEdgeSplitConstraints: true,
+            triangulationKernel: options.TriangulationKernel);
 
         // Step 3: Build adjacency and extract patches.
         // Intersecting cases are more robust with intra-face extraction when

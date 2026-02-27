@@ -1,4 +1,5 @@
 using MdCsg.Classification;
+using MdCsg.Cutting;
 
 namespace MdCsg.Api;
 
@@ -37,4 +38,10 @@ public class CsgOptions
     /// Defaults to true. Disable for debugging or single-threaded environments.
     /// </summary>
     public bool Parallel { get; set; } = true;
+
+    /// <summary>
+    /// Optional constrained triangulation kernel used by face cutting.
+    /// When null, the default triangulator is used.
+    /// </summary>
+    public ConstrainedTriangulationKernel? TriangulationKernel { get; set; }
 }

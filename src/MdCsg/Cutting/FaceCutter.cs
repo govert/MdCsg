@@ -32,7 +32,7 @@ public static class FaceCutter
     /// <returns>Sub-triangles after cutting.</returns>
     public static List<SubTriangle> CutFace(Triangle3 triangle, int faceIndex, IReadOnlyList<IntersectionSegment> segments)
     {
-        return CutFace(triangle, faceIndex, segments, null);
+        return CutFace(triangle, faceIndex, segments, null, null);
     }
 
     /// <summary>
@@ -47,6 +47,26 @@ public static class FaceCutter
     /// <returns>Sub-triangles after cutting.</returns>
     public static List<SubTriangle> CutFace(Triangle3 triangle, int faceIndex,
         IReadOnlyList<IntersectionSegment> segments, List<Vec3>[]? edgeSplitPoints)
+    {
+        return CutFace(triangle, faceIndex, segments, edgeSplitPoints, null);
+    }
+
+    /// <summary>
+    /// Cuts a triangle along the given intersection segments with optional edge split constraints and
+    /// an optional triangulation kernel override.
+    /// </summary>
+    /// <param name="triangle">The original triangle.</param>
+    /// <param name="faceIndex">The original face index.</param>
+    /// <param name="segments">Intersection segments that cross this triangle.</param>
+    /// <param name="edgeSplitPoints">Optional split points per edge (index 0=A-B, 1=B-C, 2=C-A).</param>
+    /// <param name="triangulationKernel">Optional constrained triangulation kernel override.</param>
+    /// <returns>Sub-triangles after cutting.</returns>
+    public static List<SubTriangle> CutFace(
+        Triangle3 triangle,
+        int faceIndex,
+        IReadOnlyList<IntersectionSegment> segments,
+        List<Vec3>[]? edgeSplitPoints,
+        ConstrainedTriangulationKernel? triangulationKernel)
     {
         if (!IsFinite(triangle.A) || !IsFinite(triangle.B) || !IsFinite(triangle.C))
             return [];
@@ -169,7 +189,8 @@ public static class FaceCutter
 
         // Triangulate with constraints
         var faceNormal = triangle.Normal;
-        var triIndices = ConstrainedTriangulator.Triangulate(vertices, constraintPairs, faceNormal);
+        var kernel = triangulationKernel ?? DefaultTriangulationKernel;
+        var triIndices = kernel(vertices, constraintPairs, faceNormal);
 
         var result = new List<SubTriangle>();
         var intersectionConstraints = new List<(Vec3 Start, Vec3 End)>();
@@ -202,6 +223,12 @@ public static class FaceCutter
 
         return result;
     }
+
+    private static IReadOnlyList<(int A, int B, int C)> DefaultTriangulationKernel(
+        IReadOnlyList<Vec3> vertices3D,
+        IReadOnlyList<(int Start, int End)> constraints,
+        Vec3 faceNormal)
+        => ConstrainedTriangulator.Triangulate(vertices3D, constraints, faceNormal);
 
     private static int AddOrFindVertex(List<Vec3> vertices, Vec3 point, double tolerance = 1e-8)
     {

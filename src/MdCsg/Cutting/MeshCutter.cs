@@ -28,13 +28,15 @@ public static class MeshCutter
     /// <param name="useEdgeSplitConstraints">
     /// If true, propagate split points across shared original edges to improve conformality.
     /// </param>
+    /// <param name="triangulationKernel">Optional constrained triangulation kernel override used per face.</param>
     /// <returns>The cut mesh with sub-triangle information.</returns>
     public static CutResult Cut(
         HalfEdgeMesh mesh,
         IReadOnlyDictionary<int, List<IntersectionSegment>> faceSegments,
         bool parallel = false,
         double gridSize = MathUtil.DefaultGridSize,
-        bool useEdgeSplitConstraints = false)
+        bool useEdgeSplitConstraints = false,
+        ConstrainedTriangulationKernel? triangulationKernel = null)
     {
         int faceCount = mesh.Faces.Count;
 
@@ -51,9 +53,9 @@ public static class MeshCutter
         List<FaceCutter.SubTriangle>[] perFaceResults;
 
         if (parallel && faceCount > 1)
-            perFaceResults = CutFacesParallel(mesh, faceSegments, edgeSplitMap, faceCount, gridSize);
+            perFaceResults = CutFacesParallel(mesh, faceSegments, edgeSplitMap, faceCount, gridSize, triangulationKernel);
         else
-            perFaceResults = CutFacesSequential(mesh, faceSegments, edgeSplitMap, faceCount, gridSize);
+            perFaceResults = CutFacesSequential(mesh, faceSegments, edgeSplitMap, faceCount, gridSize, triangulationKernel);
 
         // Note: EnsureConformality is intentionally disabled in the default cutting path
         // because it can over-split faces and introduce degenerates when split points are noisy.
@@ -524,13 +526,14 @@ public static class MeshCutter
         IReadOnlyDictionary<int, List<IntersectionSegment>> faceSegments,
         Dictionary<long, List<Vec3>> edgeSplitMap,
         int faceCount,
-        double gridSize)
+        double gridSize,
+        ConstrainedTriangulationKernel? triangulationKernel)
     {
         var results = new List<FaceCutter.SubTriangle>[faceCount];
 
         for (int faceIdx = 0; faceIdx < faceCount; faceIdx++)
         {
-            results[faceIdx] = CutSingleFace(mesh, faceSegments, edgeSplitMap, faceIdx);
+            results[faceIdx] = CutSingleFace(mesh, faceSegments, edgeSplitMap, faceIdx, triangulationKernel);
         }
 
         return results;
@@ -541,13 +544,14 @@ public static class MeshCutter
         IReadOnlyDictionary<int, List<IntersectionSegment>> faceSegments,
         Dictionary<long, List<Vec3>> edgeSplitMap,
         int faceCount,
-        double gridSize)
+        double gridSize,
+        ConstrainedTriangulationKernel? triangulationKernel)
     {
         var results = new List<FaceCutter.SubTriangle>[faceCount];
 
         System.Threading.Tasks.Parallel.For(0, faceCount, faceIdx =>
         {
-            results[faceIdx] = CutSingleFace(mesh, faceSegments, edgeSplitMap, faceIdx);
+            results[faceIdx] = CutSingleFace(mesh, faceSegments, edgeSplitMap, faceIdx, triangulationKernel);
         });
 
         return results;
@@ -557,7 +561,8 @@ public static class MeshCutter
         HalfEdgeMesh mesh,
         IReadOnlyDictionary<int, List<IntersectionSegment>> faceSegments,
         Dictionary<long, List<Vec3>> edgeSplitMap,
-        int faceIdx)
+        int faceIdx,
+        ConstrainedTriangulationKernel? triangulationKernel)
     {
         var face = mesh.Faces[faceIdx];
         face.GetTrianglePositions(out var va, out var vb, out var vc);
@@ -567,10 +572,10 @@ public static class MeshCutter
         var edgeSplits = GetFaceEdgeSplits(mesh, faceIdx, edgeSplitMap);
 
         if (hasSegments)
-            return FaceCutter.CutFace(tri, faceIdx, segments!, edgeSplits);
+            return FaceCutter.CutFace(tri, faceIdx, segments!, edgeSplits, triangulationKernel);
 
         if (edgeSplits != null)
-            return FaceCutter.CutFace(tri, faceIdx, System.Array.Empty<IntersectionSegment>(), edgeSplits);
+            return FaceCutter.CutFace(tri, faceIdx, System.Array.Empty<IntersectionSegment>(), edgeSplits, triangulationKernel);
 
         return [new FaceCutter.SubTriangle(tri.A, tri.B, tri.C, faceIdx, false)];
     }

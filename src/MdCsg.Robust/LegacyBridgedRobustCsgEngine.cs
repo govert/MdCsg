@@ -1,8 +1,11 @@
 using System.Diagnostics;
 using MdCsg.Api;
+using MdCsg.Cutting;
+using MdCsg.Math;
 using MdCsg.Mesh;
 using MdCsg.Robust.Kernel.Arrangement;
 using MdCsg.Robust.Kernel.Predicates;
+using MdCsg.Robust.Kernel.Triangulation;
 using MdCsg.Robust.Validation;
 
 namespace MdCsg.Robust;
@@ -25,6 +28,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         var predicateTelemetry = new PredicateTelemetryCounter();
         ArrangementGraph? arrangement = null;
         ArrangementAnalysis arrangementAnalysis = default;
+        int triangulationInvocationCount = 0;
+        int triangulationNativeCount = 0;
+        int triangulationLegacyFallbackCount = 0;
+        int triangulationDroppedDegenerateCount = 0;
         var totalSw = Stopwatch.StartNew();
 
         if (opts.ValidateInput)
@@ -83,15 +90,65 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             return new RobustCsgResult(
                 result: null,
                 issues,
-                BuildDiagnostics(totalSw.Elapsed, TimeSpan.Zero, predicateTelemetry, arrangement, arrangementAnalysis));
+                BuildDiagnostics(
+                    totalSw.Elapsed,
+                    TimeSpan.Zero,
+                    predicateTelemetry,
+                    arrangement,
+                    arrangementAnalysis,
+                    triangulationInvocationCount,
+                    triangulationNativeCount,
+                    triangulationLegacyFallbackCount,
+                    triangulationDroppedDegenerateCount));
         }
+
+        var robustTriangulator = new RobustConstrainedTriangulator();
+        ConstrainedTriangulationKernel? triangulationKernel = null;
+        if (opts.UseRobustTriangulationKernel)
+        {
+            triangulationKernel = (vertices3D, constraints, faceNormal) =>
+            {
+                System.Threading.Interlocked.Increment(ref triangulationInvocationCount);
+
+                var triResult = robustTriangulator.Triangulate(
+                    vertices3D,
+                    constraints,
+                    faceNormal,
+                    new RobustTriangulationOptions
+                    {
+                        DeterministicOrdering = opts.Deterministic,
+                        DropDegenerateTriangles = true,
+                        DegenerateAreaTolerance = MathUtil.Epsilon
+                    });
+
+                if (triResult.UsedLegacyKernel)
+                    System.Threading.Interlocked.Increment(ref triangulationLegacyFallbackCount);
+                else
+                    System.Threading.Interlocked.Increment(ref triangulationNativeCount);
+
+                if (triResult.DroppedDegenerateTriangleCount > 0)
+                {
+                    System.Threading.Interlocked.Add(
+                        ref triangulationDroppedDegenerateCount,
+                        triResult.DroppedDegenerateTriangleCount);
+                }
+
+                return triResult.Triangles;
+            };
+        }
+
+        var csgOptions = new CsgOptions
+        {
+            Parallel = !opts.Deterministic,
+            TriangulationKernel = triangulationKernel
+        };
 
         var opSw = Stopwatch.StartNew();
         var result = operation switch
         {
-            RobustCsgOperation.Union => Csg.Union(a, b),
-            RobustCsgOperation.Intersection => Csg.Intersect(a, b),
-            RobustCsgOperation.Difference => Csg.Difference(a, b),
+            RobustCsgOperation.Union => Csg.Union(a, b, csgOptions),
+            RobustCsgOperation.Intersection => Csg.Intersect(a, b, csgOptions),
+            RobustCsgOperation.Difference => Csg.Difference(a, b, csgOptions),
             _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null)
         };
         opSw.Stop();
@@ -109,7 +166,16 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         return new RobustCsgResult(
             result: finalResult,
             issues,
-            BuildDiagnostics(totalSw.Elapsed, opSw.Elapsed, predicateTelemetry, arrangement, arrangementAnalysis));
+            BuildDiagnostics(
+                totalSw.Elapsed,
+                opSw.Elapsed,
+                predicateTelemetry,
+                arrangement,
+                arrangementAnalysis,
+                triangulationInvocationCount,
+                triangulationNativeCount,
+                triangulationLegacyFallbackCount,
+                triangulationDroppedDegenerateCount));
     }
 
     private static void ValidateInput(
@@ -226,7 +292,11 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         TimeSpan operationElapsed,
         PredicateTelemetryCounter predicateTelemetry,
         ArrangementGraph? arrangement,
-        ArrangementAnalysis arrangementAnalysis)
+        ArrangementAnalysis arrangementAnalysis,
+        int triangulationInvocationCount,
+        int triangulationNativeCount,
+        int triangulationLegacyFallbackCount,
+        int triangulationDroppedDegenerateCount)
     {
         return new RobustDiagnostics
         {
@@ -244,6 +314,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             PredicateDoubleCount = predicateTelemetry.DoubleCount,
             PredicateExpansionCount = predicateTelemetry.ExpansionCount,
             PredicateExactCount = predicateTelemetry.ExactCount,
+            TriangulationInvocationCount = triangulationInvocationCount,
+            TriangulationNativeCount = triangulationNativeCount,
+            TriangulationLegacyFallbackCount = triangulationLegacyFallbackCount,
+            TriangulationDroppedDegenerateCount = triangulationDroppedDegenerateCount,
             ClassificationFallbackCount = 0
         };
     }

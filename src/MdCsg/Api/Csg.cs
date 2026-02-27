@@ -113,8 +113,20 @@ public static class Csg
         var intersections = IntersectionGraph.Compute(a.Mesh, b.Mesh, options.GridSize, options.Parallel);
 
         // Step 2: Cut both meshes along intersection curves
-        var cutA = MeshCutter.Cut(a.Mesh, intersections.FaceSegmentsA, options.Parallel, options.GridSize, useEdgeSplitConstraints: true);
-        var cutB = MeshCutter.Cut(b.Mesh, intersections.FaceSegmentsB, options.Parallel, options.GridSize, useEdgeSplitConstraints: true);
+        var cutA = MeshCutter.Cut(
+            a.Mesh,
+            intersections.FaceSegmentsA,
+            options.Parallel,
+            options.GridSize,
+            useEdgeSplitConstraints: true,
+            triangulationKernel: options.TriangulationKernel);
+        var cutB = MeshCutter.Cut(
+            b.Mesh,
+            intersections.FaceSegmentsB,
+            options.Parallel,
+            options.GridSize,
+            useEdgeSplitConstraints: true,
+            triangulationKernel: options.TriangulationKernel);
 
         // Step 3: Build adjacency and extract patches.
         // For intersecting meshes, intra-face extraction is more robust when

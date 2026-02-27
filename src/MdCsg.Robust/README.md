@@ -24,6 +24,8 @@ Initial scaffold now exists:
 - `IRobustCsgEngine`
 - `RobustCsg` API wrapper
 - `LegacyBridgedRobustCsgEngine` (transitional bridge + validation diagnostics)
+  - can route face-cut triangulation through `Kernel/Triangulation/RobustConstrainedTriangulator` via `CsgOptions.TriangulationKernel`
+  - emits triangulation telemetry (invocation/native/fallback/dropped-degenerate counts)
 - `Kernel/Predicates/CertifiedPredicates` with precision-tier telemetry
 - `Kernel/Arrangement/ArrangementBuilder` native BVH+tri-tri arrangement builder
   - deterministic overlap traversal and canonical snapped-segment ordering
@@ -35,3 +37,4 @@ Initial scaffold now exists:
 - `RobustOperationOptions.TreatCoplanarIntersectionAsError` guardrail toggle for strict conformance runs
 - `RobustOperationOptions.TreatOpposingCoplanarPairsAsError` guardrail toggle for strict conformance runs
 - `RobustOperationOptions.TreatOpenArrangementAsError` guardrail toggle for strict conformance runs
+- `RobustOperationOptions.UseRobustTriangulationKernel` toggle for bridge-phase kernel routing

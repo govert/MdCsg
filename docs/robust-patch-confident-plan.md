@@ -93,6 +93,7 @@ Current status:
 - M3 internals replacement started in `Kernel/Triangulation/RobustConstrainedTriangulator`:
   - unconstrained polygons now use a native robust ear-clipping path based on certified `Orient2D` predicates,
   - constrained input now first tries a native constrained-ear path for non-crossing diagonal constraints and falls back to legacy triangulation for unsupported/inconsistent constrained cases.
+- Legacy-bridge execution now routes face-cut triangulation through the robust kernel hook (`CsgOptions.TriangulationKernel`) with diagnostics for native vs fallback usage.
 - Deterministic replay harness is available for arrangement-stage cases (`Diagnostics/Replay` with capture/serialize/replay + conformance tests).
 
 ## M3 - Robust Triangulation and Patch Extraction
@@ -154,7 +155,7 @@ Parallel streams:
 ## 5. Immediate Next Tasks
 
 1. Expand coplanar tie-break policy from guardrail detection into explicit reconstruction semantics.
-2. Start replacing constrained triangulation internals under `Kernel/Triangulation` (remove legacy delegation stepwise).
+2. Continue replacing constrained triangulation internals under `Kernel/Triangulation` (expand native coverage and retire legacy fallback cases).
 3. Convert the tangent/kissing backlog into an active conformance test once semantics are locked.
 4. Add replay corpus files for known showcase artifact cases and run them in CI conformance.
 

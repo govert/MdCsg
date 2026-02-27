@@ -30,5 +30,13 @@ public sealed class RobustDiagnostics
 
     public int PredicateExactCount { get; init; }
 
+    public int TriangulationInvocationCount { get; init; }
+
+    public int TriangulationNativeCount { get; init; }
+
+    public int TriangulationLegacyFallbackCount { get; init; }
+
+    public int TriangulationDroppedDegenerateCount { get; init; }
+
     public int ClassificationFallbackCount { get; init; }
 }

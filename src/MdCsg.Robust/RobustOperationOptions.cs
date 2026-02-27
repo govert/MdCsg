@@ -20,5 +20,7 @@ public sealed class RobustOperationOptions
 
     public bool TreatOpenArrangementAsError { get; init; } = false;
 
+    public bool UseRobustTriangulationKernel { get; init; } = true;
+
     public bool FailOnValidationError { get; init; } = true;
 }

@@ -1,6 +1,5 @@
 using MdCsg.Api;
 using MdCsg.Math;
-using MdCsg.Robust;
 
 namespace MdCsg.Robust.Conformance;
 
@@ -44,6 +43,47 @@ public class RobustCsgSmokeTests
         Assert.NotNull(r2.Result);
         Assert.Equal(r1.Result!.FaceCount, r2.Result!.FaceCount);
         Assert.Equal(r1.Result.VertexCount, r2.Result.VertexCount);
+    }
+
+    [Fact]
+    public void Union_ReportsTriangulationTelemetry_WhenRobustKernelEnabled()
+    {
+        var a = Primitives.Cube(Vec3.Zero, 2.0);
+        var b = Primitives.Cube(new Vec3(0.75, 0, 0), 2.0);
+        var opts = new RobustOperationOptions
+        {
+            Mode = RobustMode.Strict,
+            Deterministic = true,
+            UseRobustTriangulationKernel = true
+        };
+
+        var result = RobustCsg.Union(a, b, opts);
+
+        Assert.True(result.Succeeded);
+        Assert.True(result.Diagnostics.TriangulationInvocationCount > 0);
+        Assert.Equal(
+            result.Diagnostics.TriangulationInvocationCount,
+            result.Diagnostics.TriangulationNativeCount + result.Diagnostics.TriangulationLegacyFallbackCount);
+    }
+
+    [Fact]
+    public void Union_WithRobustKernelDisabled_HasNoTriangulationTelemetry()
+    {
+        var a = Primitives.Cube(Vec3.Zero, 2.0);
+        var b = Primitives.Cube(new Vec3(0.75, 0, 0), 2.0);
+        var opts = new RobustOperationOptions
+        {
+            Mode = RobustMode.Strict,
+            Deterministic = true,
+            UseRobustTriangulationKernel = false
+        };
+
+        var result = RobustCsg.Union(a, b, opts);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(0, result.Diagnostics.TriangulationInvocationCount);
+        Assert.Equal(0, result.Diagnostics.TriangulationNativeCount);
+        Assert.Equal(0, result.Diagnostics.TriangulationLegacyFallbackCount);
     }
 
     [Fact]
