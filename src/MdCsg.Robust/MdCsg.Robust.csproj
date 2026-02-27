@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>MdCsg.Robust</RootNamespace>
+    <AssemblyName>MdCsg.Robust</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MdCsg\MdCsg.csproj" />
+  </ItemGroup>
+
+</Project>

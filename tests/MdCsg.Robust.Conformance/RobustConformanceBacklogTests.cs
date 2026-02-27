@@ -1,0 +1,50 @@
+using MdCsg.Api;
+using MdCsg.Math;
+using MdCsg.Mesh;
+using MdCsg.Robust;
+
+namespace MdCsg.Robust.Conformance;
+
+public class RobustConformanceBacklogTests
+{
+    [Fact(Skip = "Target behavior for the new robust kernel; legacy bridge shows artifacts in this class of case.")]
+    public void CoplanarSharedFace_Union_IsClosedAndManifold()
+    {
+        var a = Primitives.Cube(Vec3.Zero, 2.0);
+        var b = Primitives.Cube(new Vec3(2, 0, 0), 2.0); // shared face at x=1
+        var result = RobustCsg.Union(a, b, new RobustOperationOptions { Mode = RobustMode.Strict });
+
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.Result);
+        Assert.Equal(0, MeshValidator.CountBoundaryEdges(result.Result!.Mesh));
+        Assert.True(MeshValidator.IsEdgeManifold(result.Result.Mesh));
+    }
+
+    [Fact(Skip = "Target behavior for the new robust kernel; boundary-only contacts must avoid spurious fragments.")]
+    public void KissingContact_Intersection_ProducesNoSpuriousVolume()
+    {
+        var a = Primitives.Sphere(Vec3.Zero, 1.0, 3);
+        var b = Primitives.Sphere(new Vec3(2.0, 0, 0), 1.0, 3); // tangent at one point
+        var result = RobustCsg.Intersect(a, b, new RobustOperationOptions { Mode = RobustMode.Strict });
+
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.Result);
+        Assert.True(new Solid(result.Result!.Mesh).Volume() < 1e-6);
+    }
+
+    [Fact(Skip = "Target behavior for the new robust kernel; thin slabs currently trigger severe artifacts.")]
+    public void ThinSlab_HalfSpaceChain_RemainsClosed()
+    {
+        var cube = Primitives.Cube(Vec3.Zero, 2.0);
+        var top = HalfSpace.FromPointAndNormal(new Vec3(0, 0, 0.01), Vec3.UnitZ);
+        var bottom = HalfSpace.FromPointAndNormal(new Vec3(0, 0, -0.01), -Vec3.UnitZ);
+
+        var r1 = new Solid(Csg.Intersect(cube, top).Mesh);
+        var r2 = Csg.Intersect(r1, bottom);
+        var robust = RobustCsg.Union(new Solid(r2.Mesh), r1, new RobustOperationOptions { Mode = RobustMode.Strict });
+
+        Assert.True(robust.Succeeded);
+        Assert.NotNull(robust.Result);
+        Assert.Equal(0, MeshValidator.CountBoundaryEdges(robust.Result!.Mesh));
+    }
+}

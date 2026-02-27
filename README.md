@@ -135,6 +135,7 @@ Requires .NET SDK 10.0 or later (builds both net10.0 and net48 targets).
 dotnet build
 dotnet test                                    # Core library tests (~14k per target)
 dotnet test tests/MdCsg.Gpu.Tests              # GPU tests (15 tests, gracefully skipped if no Vulkan)
+dotnet test tests/MdCsg.Robust.Conformance     # Robustness conformance scaffold
 dotnet run -c Release --project src/MdCsg.Showcase/MdCsg.Showcase.csproj
 ```
 
@@ -146,6 +147,7 @@ dotnet run -c Release -f net48 --project benchmarks/MdCsg.Benchmarks/MdCsg.Bench
 ```
 
 See [docs/net48-port.md](docs/net48-port.md) for the full .NET Framework 4.8 port details and performance comparison.
+For robustness-first redesign work, see [docs/ROBUSTNESS_SPEC.md](docs/ROBUSTNESS_SPEC.md) and [docs/robust-patch-confident-plan.md](docs/robust-patch-confident-plan.md).
 
 ## Project Structure
 
@@ -167,9 +169,11 @@ MdCsg/
 │   ├── Shaders/                  # GLSL compute shaders
 │   ├── Interop/                  # GPU struct layouts (GpuVec3, GpuBvhNode)
 │   └── ...                       # VulkanContext, ComputePipeline, GpuPatchClassifier
+├── src/MdCsg.Robust/             # Planned robustness-first CSG kernel scaffold
 ├── src/MdCsg.Showcase/           # Windows D3D11 showcase application
 ├── tests/MdCsg.Tests/            # ~14k tests (xUnit, net10.0 + net48)
 ├── tests/MdCsg.Gpu.Tests/        # 15 GPU tests (gracefully skipped without Vulkan)
+├── tests/MdCsg.Robust.Conformance/ # Spec-first robust conformance tests
 ├── benchmarks/MdCsg.Benchmarks/  # BenchmarkDotNet performance tests
 ├── tools/                        # Diagnostic console tools (MeshDiag, DiagRun)
 ├── screenshots/                  # Showcase screenshots (PNG)

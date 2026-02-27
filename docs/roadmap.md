@@ -1,5 +1,10 @@
 # MdCsg Roadmap
 
+This roadmap is now complemented by:
+
+- [ROBUSTNESS_SPEC.md](ROBUSTNESS_SPEC.md) for correctness guarantees and acceptance gates.
+- [robust-patch-confident-plan.md](robust-patch-confident-plan.md) for implementation sequencing.
+
 ## Guiding Principle
 
 **Robustness is the highest priority.** A correct answer slowly beats a wrong answer quickly. Every feature should maintain or improve the library's reliability on real-world input. When there is a tension between performance and correctness, correctness wins.
