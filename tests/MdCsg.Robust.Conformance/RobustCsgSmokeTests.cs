@@ -61,7 +61,9 @@ public class RobustCsgSmokeTests
 
         Assert.True(result.Succeeded);
         Assert.True(result.Diagnostics.TriangulationInvocationCount > 0);
-        Assert.Equal(0, result.Diagnostics.TriangulationLegacyFallbackCount);
+        Assert.True(
+            result.Diagnostics.TriangulationLegacyFallbackCount == 0,
+            BuildFallbackMessage(result.Diagnostics));
         Assert.Equal(
             result.Diagnostics.TriangulationInvocationCount,
             result.Diagnostics.TriangulationNativeCount + result.Diagnostics.TriangulationLegacyFallbackCount);
@@ -121,5 +123,17 @@ public class RobustCsgSmokeTests
         Assert.False(result.Succeeded);
         Assert.Null(result.Result);
         Assert.Contains(result.Issues, i => i.Code == RobustIssueCode.InputMeshNotClosed);
+    }
+
+    private static string BuildFallbackMessage(RobustDiagnostics diagnostics)
+    {
+        var top = diagnostics.TriangulationFallbackSignatures.Count == 0
+            ? "<none>"
+            : string.Join(" | ", diagnostics.TriangulationFallbackSignatures);
+        return $"LegacyFallback={diagnostics.TriangulationLegacyFallbackCount}, "
+            + $"InvalidOrCrossing={diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount}, "
+            + $"Partition={diagnostics.TriangulationFallbackPartitionFailureCount}, "
+            + $"ConstrainedEar={diagnostics.TriangulationFallbackConstrainedEarFailureCount}, "
+            + $"Signatures={top}";
     }
 }

@@ -15,8 +15,8 @@ This plan operationalizes [ROBUSTNESS_SPEC.md](ROBUSTNESS_SPEC.md) into delivera
   - deterministic arrangement ordering and normalization (sorted overlap traversal, canonicalized snapped segments, stable incident map ordering).
 - Added `tests/MdCsg.Robust.Conformance` project with:
   - passing smoke tests for robust API wiring,
-  - active strict conformance guardrails for coplanar shared-face and thin-slab chains,
-  - remaining skipped backlog test for tangent/kissing boundary-contact behavior.
+  - active strict conformance guardrails for coplanar shared-face, thin-slab chains, tangent/kissing contact, and stable-overlap zero-fallback behavior,
+  - showcase-parity conformance coverage for `CsgOperations` and `ChainedCsg` scene pipelines.
 - Added both projects to `MdCsg.slnx`.
 
 ## 1. Strategy
@@ -96,6 +96,8 @@ Current status:
 - Legacy-bridge execution now routes face-cut triangulation through the robust kernel hook (`CsgOptions.TriangulationKernel`) with diagnostics for native vs fallback usage.
 - Stable overlap zero-fallback target is now active and passing in conformance; remaining fallback burn-down is tracked via reason buckets and signature samples.
 - Fallback diagnostics now include reason buckets and compact signature samples to drive targeted burn-down of remaining legacy fallback cases.
+- Legacy-bridge output now applies deterministic post-op degenerate-face pruning and topology repair before strict output validation.
+- Native constrained triangulation now prefers a selective face-point-set path for dense/face-cutter style inputs while routing low-complexity polygonal constraints through partition/ear paths to preserve constrained-edge invariants.
 - Deterministic replay harness is available for arrangement-stage cases (`Diagnostics/Replay` with capture/serialize/replay + conformance tests).
 
 ## M3 - Robust Triangulation and Patch Extraction
@@ -158,8 +160,8 @@ Parallel streams:
 
 1. Expand coplanar tie-break policy from guardrail detection into explicit reconstruction semantics.
 2. Continue replacing constrained triangulation internals under `Kernel/Triangulation` (expand native coverage and retire legacy fallback cases).
-3. Convert the tangent/kissing backlog into an active conformance test once semantics are locked.
-4. Add replay corpus files for known showcase artifact cases and run them in CI conformance.
+3. Burn down the remaining `ChainedCsg` step fallback signatures (currently concentrated in a small partition-fallback class) to restore zero-fallback parity for that path.
+4. Add replay corpus files for the remaining showcase artifact/fallback signatures and run them in CI conformance.
 
 ## 6. Risks and Mitigations
 

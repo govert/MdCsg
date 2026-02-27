@@ -145,7 +145,8 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         out List<(int A, int B, int C)> triangles,
         out RobustTriangulationFallbackReason failureReason)
     {
-        if (TryTriangulateFacePointSet(vertices2D, constraints, out triangles))
+        if (ShouldPreferFacePointSet(vertices2D, constraints)
+            && TryTriangulateFacePointSet(vertices2D, constraints, out triangles))
         {
             failureReason = RobustTriangulationFallbackReason.None;
             return true;
@@ -178,6 +179,22 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         return false;
     }
 
+    private static bool ShouldPreferFacePointSet(
+        Vec2[] vertices2D,
+        IReadOnlyList<(int Start, int End)> constraints)
+    {
+        // Heuristic gate:
+        // - dense/large constrained inputs are usually face-cutter style point sets,
+        // - low-complexity polygonal inputs are better handled by partition/ear paths.
+        if (vertices2D.Length > 10)
+            return true;
+
+        if (constraints.Count > vertices2D.Length - 2)
+            return true;
+
+        return AllPointsInsideSeedTriangle(vertices2D);
+    }
+
     private static bool TryTriangulateFacePointSet(
         Vec2[] vertices2D,
         IReadOnlyList<(int Start, int End)> constraints,
@@ -187,21 +204,26 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         if (vertices2D.Length < 3)
             return false;
 
-        if (!AllPointsInsideSeedTriangle(vertices2D))
-            return false;
+        if (!TrySelectSeedTriangle(vertices2D, out int s0, out int s1, out int s2))
+            return true;
 
         bool flipped = false;
         var tris = new List<(int A, int B, int C)>();
-        if (Orient2D.Evaluate(vertices2D[0], vertices2D[1], vertices2D[2]) == PredicateSign.Positive)
-            tris.Add((0, 1, 2));
+        if (Orient2D.Evaluate(vertices2D[s0], vertices2D[s1], vertices2D[s2]) == PredicateSign.Positive)
+            tris.Add((s0, s1, s2));
         else
         {
-            tris.Add((0, 2, 1));
+            tris.Add((s0, s2, s1));
             flipped = true;
         }
 
-        for (int v = 3; v < vertices2D.Length; v++)
+        for (int v = 0; v < vertices2D.Length; v++)
+        {
+            if (v == s0 || v == s1 || v == s2)
+                continue;
+
             InsertVertexIntoTriangulation(tris, vertices2D, v);
+        }
 
         foreach (var (start, end) in constraints)
         {
@@ -211,7 +233,19 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             EnforceConstraintInTriangulation(tris, vertices2D, start, end);
         }
 
-        tris.RemoveAll(t => Orient2D.Evaluate(vertices2D[t.A], vertices2D[t.B], vertices2D[t.C]) != PredicateSign.Positive);
+        for (int i = tris.Count - 1; i >= 0; i--)
+        {
+            var tri = tris[i];
+            var sign = Orient2D.Evaluate(vertices2D[tri.A], vertices2D[tri.B], vertices2D[tri.C]);
+            if (sign == PredicateSign.Zero)
+            {
+                tris.RemoveAt(i);
+                continue;
+            }
+
+            if (sign == PredicateSign.Negative)
+                tris[i] = (tri.A, tri.C, tri.B);
+        }
 
         if (flipped)
         {
@@ -221,6 +255,47 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
 
         triangles = tris;
         return true;
+    }
+
+    private static bool TrySelectSeedTriangle(
+        Vec2[] vertices2D,
+        out int s0,
+        out int s1,
+        out int s2)
+    {
+        s0 = -1;
+        s1 = -1;
+        s2 = -1;
+
+        double bestArea2 = 0.0;
+        int count = vertices2D.Length;
+        for (int i = 0; i < count - 2; i++)
+        {
+            var pi = vertices2D[i];
+            for (int j = i + 1; j < count - 1; j++)
+            {
+                var pj = vertices2D[j];
+                for (int k = j + 1; k < count; k++)
+                {
+                    var pk = vertices2D[k];
+                    if (Orient2D.Evaluate(pi, pj, pk) == PredicateSign.Zero)
+                        continue;
+
+                    double area2 = System.Math.Abs(
+                        (pj.X - pi.X) * (pk.Y - pi.Y)
+                        - (pj.Y - pi.Y) * (pk.X - pi.X));
+                    if (area2 <= bestArea2)
+                        continue;
+
+                    bestArea2 = area2;
+                    s0 = i;
+                    s1 = j;
+                    s2 = k;
+                }
+            }
+        }
+
+        return s0 >= 0;
     }
 
     private static bool AllPointsInsideSeedTriangle(Vec2[] vertices2D)
@@ -317,9 +392,9 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
                     out var second,
                     out bool alreadyBoundary))
                 {
-                    triangles = [];
-                    failureKind = PartitionFailureKind.ConstraintSplitFailure;
-                    return false;
+                    // Endpoints can appear in multiple sub-polygons after earlier
+                    // splits; a failed split in one candidate does not imply global failure.
+                    continue;
                 }
 
                 if (!alreadyBoundary)

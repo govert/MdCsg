@@ -4,6 +4,8 @@ using MdCsg.Api;
 using MdCsg.Cutting;
 using MdCsg.Math;
 using MdCsg.Mesh;
+using MdCsg.Operations;
+using MdCsg.Predicates;
 using MdCsg.Robust.Kernel.Arrangement;
 using MdCsg.Robust.Kernel.Predicates;
 using MdCsg.Robust.Kernel.Triangulation;
@@ -184,6 +186,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         };
         opSw.Stop();
 
+        result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
+        RepairOutputTopology(result.Mesh, csgOptions.WeldTolerance);
+        result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
+
         if (opts.ValidateOutput)
         {
             ValidateOutput(result.Mesh, opts.Mode, issues, predicateTelemetry);
@@ -293,6 +299,94 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 RobustIssueCode.OutputMeshHasDegenerateFaces,
                 $"Output mesh has degenerate faces ({degenerateFaces}).");
         }
+    }
+
+    private static CsgResult PruneDegenerateOutputFaces(
+        CsgResult result,
+        double weldTolerance,
+        PredicateTelemetryCounter predicateTelemetry)
+    {
+        if (result.Mesh.Faces.Count == 0)
+            return result;
+
+        var kept = new List<Triangle3>(result.Mesh.Faces.Count);
+        bool removedAny = false;
+
+        foreach (var face in result.Mesh.Faces)
+        {
+            face.GetTrianglePositions(out var a, out var b, out var c);
+            var areaSign = EvaluateProjectedAreaSign(a, b, c);
+            predicateTelemetry.Add(areaSign.Tier);
+            if (areaSign.Sign == PredicateSign.Zero)
+            {
+                removedAny = true;
+                continue;
+            }
+
+            kept.Add(new Triangle3(a, b, c));
+        }
+
+        if (!removedAny)
+            return result;
+
+        var rebuilt = new MeshBuilder(weldTolerance).Build(kept);
+        rebuilt.IsComplemented = result.Mesh.IsComplemented;
+
+        return new CsgResult
+        {
+            Mesh = rebuilt,
+            PatchCountA = result.PatchCountA,
+            PatchCountB = result.PatchCountB,
+            DegenerateCount = result.DegenerateCount,
+            IntersectionSegmentCount = result.IntersectionSegmentCount
+        };
+    }
+
+    private static CertifiedPredicateResult EvaluateProjectedAreaSign(Vec3 a, Vec3 b, Vec3 c)
+    {
+        Vec3 n = Vec3.Cross(b - a, c - a);
+        double ax = System.Math.Abs(n.X);
+        double ay = System.Math.Abs(n.Y);
+        double az = System.Math.Abs(n.Z);
+
+        Vec2 pa;
+        Vec2 pb;
+        Vec2 pc;
+
+        if (ax >= ay && ax >= az)
+        {
+            pa = new Vec2(a.Y, a.Z);
+            pb = new Vec2(b.Y, b.Z);
+            pc = new Vec2(c.Y, c.Z);
+        }
+        else if (ay >= az)
+        {
+            pa = new Vec2(a.X, a.Z);
+            pb = new Vec2(b.X, b.Z);
+            pc = new Vec2(c.X, c.Z);
+        }
+        else
+        {
+            pa = new Vec2(a.X, a.Y);
+            pb = new Vec2(b.X, b.Y);
+            pc = new Vec2(c.X, c.Y);
+        }
+
+        return CertifiedPredicates.Orient2D(pa, pb, pc);
+    }
+
+    private static void RepairOutputTopology(HalfEdgeMesh mesh, double weldTolerance)
+    {
+        int boundary = MeshValidator.CountBoundaryEdges(mesh);
+        bool manifold = MeshValidator.IsEdgeManifold(mesh);
+        if (boundary == 0 && manifold)
+            return;
+
+        double repairTolerance = System.Math.Max(weldTolerance * 4.0, 1e-6);
+        MeshStitcher.RepairBoundary(mesh, repairTolerance);
+
+        if (MeshValidator.CountBoundaryEdges(mesh) > 0)
+            MeshStitcher.CloseBoundaryLoops(mesh);
     }
 
     private static bool HasFiniteVertices(HalfEdgeMesh mesh)
