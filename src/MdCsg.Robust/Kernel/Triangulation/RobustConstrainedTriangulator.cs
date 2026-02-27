@@ -33,18 +33,19 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             return new RobustTriangulationResult([], 0, UsedLegacyKernel: false);
 
         var vertices2D = ProjectToFacePlane(vertices3D, faceNormal);
+        var normalizedConstraints = NormalizeConstraints(vertices2D, constraints);
 
         bool useLegacyKernel = false;
         var fallbackReason = RobustTriangulationFallbackReason.None;
         string? fallbackSignature = null;
         List<(int A, int B, int C)> rawTriangles;
-        if (constraints.Count == 0)
+        if (normalizedConstraints.Count == 0)
         {
             rawTriangles = EarClipTriangulate(vertices2D);
         }
         else if (TryTriangulateConstrained(
             vertices2D,
-            constraints,
+            normalizedConstraints,
             out var constrainedTriangles,
             out var nativeFailureReason))
         {
@@ -52,10 +53,10 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         }
         else
         {
-            rawTriangles = ConstrainedTriangulator.Triangulate(vertices3D, constraints, faceNormal);
+            rawTriangles = ConstrainedTriangulator.Triangulate(vertices3D, normalizedConstraints, faceNormal);
             useLegacyKernel = true;
             fallbackReason = nativeFailureReason;
-            fallbackSignature = BuildConstraintSignature(vertices2D, constraints);
+            fallbackSignature = BuildConstraintSignature(vertices2D, normalizedConstraints);
         }
 
         var normalizedTriangles = new List<(int A, int B, int C)>(rawTriangles.Count);
@@ -144,6 +145,12 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         out List<(int A, int B, int C)> triangles,
         out RobustTriangulationFallbackReason failureReason)
     {
+        if (TryTriangulateFacePointSet(vertices2D, constraints, out triangles))
+        {
+            failureReason = RobustTriangulationFallbackReason.None;
+            return true;
+        }
+
         if (TryTriangulateConstrainedByPartition(
             vertices2D,
             constraints,
@@ -169,6 +176,86 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         };
 
         return false;
+    }
+
+    private static bool TryTriangulateFacePointSet(
+        Vec2[] vertices2D,
+        IReadOnlyList<(int Start, int End)> constraints,
+        out List<(int A, int B, int C)> triangles)
+    {
+        triangles = [];
+        if (vertices2D.Length < 3)
+            return false;
+
+        if (!AllPointsInsideSeedTriangle(vertices2D))
+            return false;
+
+        bool flipped = false;
+        var tris = new List<(int A, int B, int C)>();
+        if (Orient2D.Evaluate(vertices2D[0], vertices2D[1], vertices2D[2]) == PredicateSign.Positive)
+            tris.Add((0, 1, 2));
+        else
+        {
+            tris.Add((0, 2, 1));
+            flipped = true;
+        }
+
+        for (int v = 3; v < vertices2D.Length; v++)
+            InsertVertexIntoTriangulation(tris, vertices2D, v);
+
+        foreach (var (start, end) in constraints)
+        {
+            if (start < 0 || end < 0 || start >= vertices2D.Length || end >= vertices2D.Length || start == end)
+                return false;
+
+            EnforceConstraintInTriangulation(tris, vertices2D, start, end);
+        }
+
+        tris.RemoveAll(t => Orient2D.Evaluate(vertices2D[t.A], vertices2D[t.B], vertices2D[t.C]) != PredicateSign.Positive);
+
+        if (flipped)
+        {
+            for (int i = 0; i < tris.Count; i++)
+                tris[i] = (tris[i].A, tris[i].C, tris[i].B);
+        }
+
+        triangles = tris;
+        return true;
+    }
+
+    private static bool AllPointsInsideSeedTriangle(Vec2[] vertices2D)
+    {
+        if (vertices2D.Length <= 3)
+            return true;
+
+        var a = vertices2D[0];
+        var b = vertices2D[1];
+        var c = vertices2D[2];
+
+        var seedOrient = Orient2D.Evaluate(a, b, c);
+        if (seedOrient == PredicateSign.Zero)
+            return false;
+
+        for (int i = 3; i < vertices2D.Length; i++)
+        {
+            var p = vertices2D[i];
+            var s1 = Orient2D.Evaluate(a, b, p);
+            var s2 = Orient2D.Evaluate(b, c, p);
+            var s3 = Orient2D.Evaluate(c, a, p);
+
+            if (seedOrient == PredicateSign.Positive)
+            {
+                if (s1 == PredicateSign.Negative || s2 == PredicateSign.Negative || s3 == PredicateSign.Negative)
+                    return false;
+            }
+            else
+            {
+                if (s1 == PredicateSign.Positive || s2 == PredicateSign.Positive || s3 == PredicateSign.Positive)
+                    return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool TryTriangulateConstrainedByPartition(
@@ -605,6 +692,380 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             || (tri.C == start && tri.A == end) || (tri.A == start && tri.C == end);
     }
 
+    private static void InsertVertexIntoTriangulation(List<(int A, int B, int C)> tris, Vec2[] pts, int vertexIndex)
+    {
+        var p = pts[vertexIndex];
+
+        for (int t = 0; t < tris.Count; t++)
+        {
+            var (a, b, c) = tris[t];
+
+            var s1 = Orient2D.Evaluate(pts[a], pts[b], p);
+            var s2 = Orient2D.Evaluate(pts[b], pts[c], p);
+            var s3 = Orient2D.Evaluate(pts[c], pts[a], p);
+
+            bool inside = s1 != PredicateSign.Negative && s2 != PredicateSign.Negative && s3 != PredicateSign.Negative;
+            if (!inside)
+                continue;
+
+            if (s1 == PredicateSign.Zero)
+            {
+                tris.RemoveAt(t);
+                SplitTriangulationEdge(tris, a, b, c, vertexIndex);
+                return;
+            }
+
+            if (s2 == PredicateSign.Zero)
+            {
+                tris.RemoveAt(t);
+                SplitTriangulationEdge(tris, b, c, a, vertexIndex);
+                return;
+            }
+
+            if (s3 == PredicateSign.Zero)
+            {
+                tris.RemoveAt(t);
+                SplitTriangulationEdge(tris, c, a, b, vertexIndex);
+                return;
+            }
+
+            tris.RemoveAt(t);
+            tris.Add((a, b, vertexIndex));
+            tris.Add((b, c, vertexIndex));
+            tris.Add((c, a, vertexIndex));
+            return;
+        }
+
+        InsertOnClosestTriangulationEdge(tris, pts, vertexIndex);
+    }
+
+    private static void SplitTriangulationEdge(
+        List<(int A, int B, int C)> tris,
+        int edgeStart,
+        int edgeEnd,
+        int opposite,
+        int splitVertex)
+    {
+        tris.Add((edgeStart, splitVertex, opposite));
+        tris.Add((splitVertex, edgeEnd, opposite));
+
+        for (int t = 0; t < tris.Count; t++)
+        {
+            var (a, b, c) = tris[t];
+            int other = FindTriangulationOppositeVertex(a, b, c, edgeStart, edgeEnd);
+            if (other < 0)
+                continue;
+
+            tris.RemoveAt(t);
+            tris.Add((edgeStart, splitVertex, other));
+            tris.Add((splitVertex, edgeEnd, other));
+            return;
+        }
+    }
+
+    private static int FindTriangulationOppositeVertex(int a, int b, int c, int edgeStart, int edgeEnd)
+    {
+        if ((a == edgeStart && b == edgeEnd) || (a == edgeEnd && b == edgeStart)) return c;
+        if ((b == edgeStart && c == edgeEnd) || (b == edgeEnd && c == edgeStart)) return a;
+        if ((c == edgeStart && a == edgeEnd) || (c == edgeEnd && a == edgeStart)) return b;
+        return -1;
+    }
+
+    private static void InsertOnClosestTriangulationEdge(
+        List<(int A, int B, int C)> tris,
+        Vec2[] pts,
+        int vertexIndex)
+    {
+        var p = pts[vertexIndex];
+        double bestDist = double.MaxValue;
+        int bestTri = -1;
+        int bestEdgeStart = -1;
+        int bestEdgeEnd = -1;
+        int bestOpposite = -1;
+
+        for (int t = 0; t < tris.Count; t++)
+        {
+            var (a, b, c) = tris[t];
+            CheckTriangulationEdge(pts, a, b, c, p, t, ref bestDist, ref bestTri, ref bestEdgeStart, ref bestEdgeEnd, ref bestOpposite);
+            CheckTriangulationEdge(pts, b, c, a, p, t, ref bestDist, ref bestTri, ref bestEdgeStart, ref bestEdgeEnd, ref bestOpposite);
+            CheckTriangulationEdge(pts, c, a, b, p, t, ref bestDist, ref bestTri, ref bestEdgeStart, ref bestEdgeEnd, ref bestOpposite);
+        }
+
+        if (bestTri < 0)
+            return;
+
+        tris.RemoveAt(bestTri);
+        SplitTriangulationEdge(tris, bestEdgeStart, bestEdgeEnd, bestOpposite, vertexIndex);
+    }
+
+    private static void CheckTriangulationEdge(
+        Vec2[] pts,
+        int edgeStart,
+        int edgeEnd,
+        int opposite,
+        Vec2 p,
+        int triIndex,
+        ref double bestDist,
+        ref int bestTri,
+        ref int bestEdgeStart,
+        ref int bestEdgeEnd,
+        ref int bestOpposite)
+    {
+        double d = PointEdgeDistanceSquared(p, pts[edgeStart], pts[edgeEnd]);
+        if (d < bestDist)
+        {
+            bestDist = d;
+            bestTri = triIndex;
+            bestEdgeStart = edgeStart;
+            bestEdgeEnd = edgeEnd;
+            bestOpposite = opposite;
+        }
+    }
+
+    private static double PointEdgeDistanceSquared(Vec2 p, Vec2 a, Vec2 b)
+    {
+        var ab = new Vec2(b.X - a.X, b.Y - a.Y);
+        var ap = new Vec2(p.X - a.X, p.Y - a.Y);
+        double t = (ap.X * ab.X + ap.Y * ab.Y) / (ab.X * ab.X + ab.Y * ab.Y + 1e-30);
+        t = System.Math.Max(0, System.Math.Min(1, t));
+        double dx = p.X - (a.X + t * ab.X);
+        double dy = p.Y - (a.Y + t * ab.Y);
+        return dx * dx + dy * dy;
+    }
+
+    private static void EnforceConstraintInTriangulation(
+        List<(int A, int B, int C)> tris,
+        Vec2[] pts,
+        int start,
+        int end)
+    {
+        if (TriangulationEdgeExists(tris, start, end))
+            return;
+
+        var crossingIndices = new List<int>();
+        for (int t = 0; t < tris.Count; t++)
+        {
+            var (a, b, c) = tris[t];
+            if (TriangulationTriangleCrossedBySegment(pts, a, b, c, start, end))
+                crossingIndices.Add(t);
+        }
+
+        if (crossingIndices.Count == 0)
+        {
+            SplitAndEnforceConstraintAtCollinearVertices(tris, pts, start, end);
+            return;
+        }
+
+        var cavityVertices = new HashSet<int>();
+        foreach (int t in crossingIndices)
+        {
+            var (a, b, c) = tris[t];
+            cavityVertices.Add(a);
+            cavityVertices.Add(b);
+            cavityVertices.Add(c);
+        }
+
+        crossingIndices.Sort();
+        for (int i = crossingIndices.Count - 1; i >= 0; i--)
+            tris.RemoveAt(crossingIndices[i]);
+
+        var above = new List<int>();
+        var below = new List<int>();
+
+        foreach (int v in cavityVertices)
+        {
+            if (v == start || v == end)
+                continue;
+
+            var sign = Orient2D.Evaluate(pts[start], pts[end], pts[v]);
+            if (sign == PredicateSign.Positive)
+                above.Add(v);
+            else if (sign == PredicateSign.Negative)
+                below.Add(v);
+        }
+
+        TriangulateConstraintCavitySide(tris, pts, start, end, above);
+        TriangulateConstraintCavitySide(tris, pts, end, start, below);
+    }
+
+    private static bool TriangulationEdgeExists(List<(int A, int B, int C)> tris, int start, int end)
+    {
+        foreach (var (a, b, c) in tris)
+        {
+            if (HasTriangulationEdge(a, b, c, start, end))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasTriangulationEdge(int a, int b, int c, int start, int end)
+    {
+        return (a == start && b == end) || (b == start && a == end)
+            || (b == start && c == end) || (c == start && b == end)
+            || (c == start && a == end) || (a == start && c == end);
+    }
+
+    private static bool TriangulationTriangleCrossedBySegment(
+        Vec2[] pts,
+        int a,
+        int b,
+        int c,
+        int start,
+        int end)
+    {
+        if (a == start || a == end || b == start || b == end || c == start || c == end)
+            return false;
+
+        if (HasTriangulationEdge(a, b, c, start, end))
+            return false;
+
+        return TriangulationSegmentsCross(pts, start, end, a, b)
+            || TriangulationSegmentsCross(pts, start, end, b, c)
+            || TriangulationSegmentsCross(pts, start, end, c, a);
+    }
+
+    private static bool TriangulationSegmentsCross(Vec2[] pts, int a, int b, int c, int d)
+    {
+        var s1 = Orient2D.Evaluate(pts[a], pts[b], pts[c]);
+        var s2 = Orient2D.Evaluate(pts[a], pts[b], pts[d]);
+        var s3 = Orient2D.Evaluate(pts[c], pts[d], pts[a]);
+        var s4 = Orient2D.Evaluate(pts[c], pts[d], pts[b]);
+
+        if (s1 != s2 && s1 != PredicateSign.Zero && s2 != PredicateSign.Zero
+            && s3 != s4 && s3 != PredicateSign.Zero && s4 != PredicateSign.Zero)
+            return true;
+
+        return false;
+    }
+
+    private static void SplitAndEnforceConstraintAtCollinearVertices(
+        List<(int A, int B, int C)> tris,
+        Vec2[] pts,
+        int start,
+        int end)
+    {
+        double dx = pts[end].X - pts[start].X;
+        double dy = pts[end].Y - pts[start].Y;
+        double lenSq = dx * dx + dy * dy;
+        if (lenSq < 1e-30)
+            return;
+
+        var collinear = new List<(int Vertex, double T)>();
+        int vertexCount = 0;
+        foreach (var (a, b, c) in tris)
+        {
+            if (a + 1 > vertexCount) vertexCount = a + 1;
+            if (b + 1 > vertexCount) vertexCount = b + 1;
+            if (c + 1 > vertexCount) vertexCount = c + 1;
+        }
+
+        for (int v = 0; v < vertexCount; v++)
+        {
+            if (v == start || v == end)
+                continue;
+
+            if (Orient2D.Evaluate(pts[start], pts[end], pts[v]) != PredicateSign.Zero)
+                continue;
+
+            double t = (pts[v].X - pts[start].X) * dx + (pts[v].Y - pts[start].Y) * dy;
+            if (t > 0 && t < lenSq)
+                collinear.Add((v, t));
+        }
+
+        if (collinear.Count == 0)
+            return;
+
+        collinear.Sort((a, b) => a.T.CompareTo(b.T));
+
+        int prev = start;
+        foreach (var (v, _) in collinear)
+        {
+            EnforceConstraintInTriangulation(tris, pts, prev, v);
+            prev = v;
+        }
+
+        EnforceConstraintInTriangulation(tris, pts, prev, end);
+    }
+
+    private static void TriangulateConstraintCavitySide(
+        List<(int A, int B, int C)> tris,
+        Vec2[] pts,
+        int start,
+        int end,
+        List<int> side)
+    {
+        if (side.Count == 0)
+            return;
+
+        var dir = new Vec2(pts[end].X - pts[start].X, pts[end].Y - pts[start].Y);
+        side.Sort((a, b) =>
+        {
+            double ta = (pts[a].X - pts[start].X) * dir.X + (pts[a].Y - pts[start].Y) * dir.Y;
+            double tb = (pts[b].X - pts[start].X) * dir.X + (pts[b].Y - pts[start].Y) * dir.Y;
+            return ta.CompareTo(tb);
+        });
+
+        var poly = new List<int> { start };
+        poly.AddRange(side);
+        poly.Add(end);
+
+        EarClipConstraintPolygon(tris, pts, poly);
+    }
+
+    private static void EarClipConstraintPolygon(
+        List<(int A, int B, int C)> tris,
+        Vec2[] pts,
+        List<int> poly)
+    {
+        while (poly.Count > 3)
+        {
+            bool earFound = false;
+            for (int i = 0; i < poly.Count; i++)
+            {
+                int prev = poly[(i - 1 + poly.Count) % poly.Count];
+                int curr = poly[i];
+                int next = poly[(i + 1) % poly.Count];
+
+                if (!IsEarInConstraintPolygon(pts, poly, prev, curr, next))
+                    continue;
+
+                tris.Add((prev, curr, next));
+                poly.RemoveAt(i);
+                earFound = true;
+                break;
+            }
+
+            if (earFound)
+                continue;
+
+            for (int i = 1; i < poly.Count - 1; i++)
+                tris.Add((poly[0], poly[i], poly[i + 1]));
+            return;
+        }
+
+        if (poly.Count == 3)
+            tris.Add((poly[0], poly[1], poly[2]));
+    }
+
+    private static bool IsEarInConstraintPolygon(Vec2[] pts, List<int> poly, int prev, int curr, int next)
+    {
+        if (Orient2D.Evaluate(pts[prev], pts[curr], pts[next]) != PredicateSign.Positive)
+            return false;
+
+        for (int i = 0; i < poly.Count; i++)
+        {
+            int idx = poly[i];
+            if (idx == prev || idx == curr || idx == next)
+                continue;
+
+            if (PointInTriangleInclusive(pts[idx], pts[prev], pts[curr], pts[next]))
+                return false;
+        }
+
+        return true;
+    }
+
     private static string BuildConstraintSignature(
         Vec2[] vertices2D,
         IReadOnlyList<(int Start, int End)> constraints)
@@ -667,7 +1128,108 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
                 maxDegree = d;
         }
 
-        return $"v={vertexCount};m={constraints.Count};u={unique.Count};inv={invalid};deg={degenerate};dup={duplicates};cross={crossing};maxDeg={maxDegree}";
+        var edgeList = new List<long>(unique);
+        edgeList.Sort();
+        string edgePattern = string.Join(",", edgeList.Select(static e =>
+        {
+            int a = (int)(e >> 32);
+            int b = (int)(uint)e;
+            return $"{a}-{b}";
+        }));
+
+        return $"v={vertexCount};m={constraints.Count};u={unique.Count};inv={invalid};deg={degenerate};dup={duplicates};cross={crossing};maxDeg={maxDegree};edges={edgePattern}";
+    }
+
+    private static IReadOnlyList<(int Start, int End)> NormalizeConstraints(
+        Vec2[] vertices2D,
+        IReadOnlyList<(int Start, int End)> constraints)
+    {
+        int count = vertices2D.Length;
+        if (constraints.Count == 0 || count < 3)
+            return constraints;
+
+        var dedupedEdges = new List<(int Start, int End)>(constraints.Count);
+        var edgeSet = new HashSet<long>();
+
+        foreach (var (start, end) in constraints)
+        {
+            if (start < 0 || end < 0 || start >= count || end >= count || start == end)
+                continue;
+
+            long key = EdgeKey(start, end);
+            if (!edgeSet.Add(key))
+                continue;
+
+            dedupedEdges.Add((start, end));
+        }
+
+        if (dedupedEdges.Count == 0)
+            return Array.Empty<(int Start, int End)>();
+
+        var normalized = new List<(int Start, int End)>(dedupedEdges.Count * 2);
+        var normalizedSet = new HashSet<long>();
+
+        foreach (var (start, end) in dedupedEdges)
+        {
+            var a = vertices2D[start];
+            var b = vertices2D[end];
+            var direction = new Vec2(b.X - a.X, b.Y - a.Y);
+            double lengthSq = direction.LengthSquared;
+            if (lengthSq <= 1e-30)
+                continue;
+
+            var splits = new List<(int Vertex, double T)>();
+            for (int vertex = 0; vertex < count; vertex++)
+            {
+                if (vertex == start || vertex == end)
+                    continue;
+
+                var p = vertices2D[vertex];
+                if (Orient2D.Evaluate(a, b, p) != PredicateSign.Zero)
+                    continue;
+
+                double t = ((p.X - a.X) * direction.X + (p.Y - a.Y) * direction.Y) / lengthSq;
+                if (t <= 1e-12 || t >= 1.0 - 1e-12)
+                    continue;
+
+                splits.Add((vertex, t));
+            }
+
+            if (splits.Count == 0)
+            {
+                AddEdgeIfNew(start, end, normalizedSet, normalized);
+                continue;
+            }
+
+            splits.Sort(static (x, y) => x.T.CompareTo(y.T));
+
+            int prev = start;
+            foreach (var split in splits)
+            {
+                AddEdgeIfNew(prev, split.Vertex, normalizedSet, normalized);
+                prev = split.Vertex;
+            }
+
+            AddEdgeIfNew(prev, end, normalizedSet, normalized);
+        }
+
+        return normalized;
+    }
+
+    private static void AddEdgeIfNew(
+        int start,
+        int end,
+        HashSet<long> edgeSet,
+        List<(int Start, int End)> output)
+    {
+        if (start == end)
+            return;
+
+        long key = EdgeKey(start, end);
+        if (!edgeSet.Add(key))
+            return;
+
+        output.Add((start, end));
     }
 
     private static bool HasBlockingConstraint(

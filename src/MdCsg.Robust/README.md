@@ -31,7 +31,7 @@ Initial scaffold now exists:
   - deterministic overlap traversal and canonical snapped-segment ordering
   - coplanar pair orientation counters (agreeing vs opposing normals)
 - `Kernel/Arrangement/ArrangementAnalyzer` endpoint/component topology signals
-- `Kernel/Triangulation/RobustConstrainedTriangulator` with native robust unconstrained triangulation plus native constrained handling for non-crossing constraints (constraint partitioning + constrained-ear fallback), deterministic output normalization, and legacy fallback for unsupported constrained inputs
+- `Kernel/Triangulation/RobustConstrainedTriangulator` with native robust unconstrained triangulation plus staged native constrained handling (face-point-set incremental solver, non-crossing constraint partitioning, constrained-ear path), deterministic output normalization, and legacy fallback for unsupported constrained inputs
 - `Diagnostics/Replay` arrangement replay capture/serialize/replay harness
 - `Validation/DegenerateFaceInspector` using certified predicate checks
 - `RobustOperationOptions.TreatCoplanarIntersectionAsError` guardrail toggle for strict conformance runs

@@ -61,6 +61,7 @@ public class RobustCsgSmokeTests
 
         Assert.True(result.Succeeded);
         Assert.True(result.Diagnostics.TriangulationInvocationCount > 0);
+        Assert.Equal(0, result.Diagnostics.TriangulationLegacyFallbackCount);
         Assert.Equal(
             result.Diagnostics.TriangulationInvocationCount,
             result.Diagnostics.TriangulationNativeCount + result.Diagnostics.TriangulationLegacyFallbackCount);
