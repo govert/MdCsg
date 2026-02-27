@@ -51,7 +51,7 @@ public class RobustTriangulationBridgeTests
     }
 
     [Fact]
-    public void ConstrainedInput_StillUsesLegacyPath()
+    public void ConstrainedSimpleDiagonal_UsesNativePath_AndPreservesConstraint()
     {
         var triangulator = new RobustConstrainedTriangulator();
         var verts = new[]
@@ -59,13 +59,35 @@ public class RobustTriangulationBridgeTests
             new Vec3(0, 0, 0),
             new Vec3(2, 0, 0),
             new Vec3(2, 2, 0),
-            new Vec3(1, 3, 0),
+            new Vec3(0, 2, 0)
+        };
+        var constraints = new (int Start, int End)[]
+        {
+            (0, 2)
+        };
+
+        var result = triangulator.Triangulate(verts, constraints, Vec3.UnitZ);
+
+        Assert.False(result.UsedLegacyKernel);
+        Assert.Equal(2, result.Triangles.Count);
+        Assert.Contains(result.Triangles, t => HasEdge(t, 0, 2));
+    }
+
+    [Fact]
+    public void CrossingConstraints_FallBackToLegacyPath()
+    {
+        var triangulator = new RobustConstrainedTriangulator();
+        var verts = new[]
+        {
+            new Vec3(0, 0, 0),
+            new Vec3(2, 0, 0),
+            new Vec3(2, 2, 0),
             new Vec3(0, 2, 0)
         };
         var constraints = new (int Start, int End)[]
         {
             (0, 2),
-            (2, 4)
+            (1, 3)
         };
 
         var result = triangulator.Triangulate(verts, constraints, Vec3.UnitZ);
@@ -93,13 +115,13 @@ public class RobustTriangulationBridgeTests
         };
 
         var baseline = triangulator.Triangulate(verts, constraints, Vec3.UnitZ);
-        Assert.True(baseline.UsedLegacyKernel);
+        Assert.False(baseline.UsedLegacyKernel);
         var baselineFingerprint = Fingerprint(baseline.Triangles);
 
         for (int i = 0; i < 5; i++)
         {
             var next = triangulator.Triangulate(verts, constraints, Vec3.UnitZ);
-            Assert.True(next.UsedLegacyKernel);
+            Assert.False(next.UsedLegacyKernel);
             Assert.Equal(baselineFingerprint, Fingerprint(next.Triangles));
         }
     }
@@ -132,4 +154,9 @@ public class RobustTriangulationBridgeTests
 
     private static string Fingerprint(IReadOnlyList<(int A, int B, int C)> triangles)
         => string.Join("|", triangles.Select(t => $"{t.A},{t.B},{t.C}"));
+
+    private static bool HasEdge((int A, int B, int C) tri, int start, int end)
+        => (tri.A == start && tri.B == end) || (tri.B == start && tri.A == end)
+            || (tri.B == start && tri.C == end) || (tri.C == start && tri.B == end)
+            || (tri.C == start && tri.A == end) || (tri.A == start && tri.C == end);
 }

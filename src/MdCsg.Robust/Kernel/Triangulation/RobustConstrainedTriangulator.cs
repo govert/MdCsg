@@ -7,7 +7,8 @@ namespace MdCsg.Robust.Kernel.Triangulation;
 /// <summary>
 /// Transitional robust triangulator:
 /// - unconstrained polygons use a native robust ear-clipping path,
-/// - constrained polygons still delegate to the legacy constrained triangulator.
+/// - constrained polygons first try a native constrained-ear path and fall back
+///   to the legacy constrained triangulator when unsupported.
 ///
 /// Output is normalized for deterministic/validated downstream consumption.
 /// </summary>
@@ -23,10 +24,24 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         if (vertices3D.Count < 3)
             return new RobustTriangulationResult([], 0, UsedLegacyKernel: false);
 
-        bool useLegacyKernel = constraints.Count > 0;
-        List<(int A, int B, int C)> rawTriangles = useLegacyKernel
-            ? ConstrainedTriangulator.Triangulate(vertices3D, constraints, faceNormal)
-            : TriangulateUnconstrained(vertices3D, faceNormal);
+        var vertices2D = ProjectToFacePlane(vertices3D, faceNormal);
+
+        bool useLegacyKernel = false;
+        List<(int A, int B, int C)> rawTriangles;
+        if (constraints.Count == 0)
+        {
+            rawTriangles = EarClipTriangulate(vertices2D);
+        }
+        else if (TryTriangulateConstrained(vertices2D, constraints, out var constrainedTriangles))
+        {
+            rawTriangles = constrainedTriangles;
+        }
+        else
+        {
+            rawTriangles = ConstrainedTriangulator.Triangulate(vertices3D, constraints, faceNormal);
+            useLegacyKernel = true;
+        }
+
         var normalizedTriangles = new List<(int A, int B, int C)>(rawTriangles.Count);
         int droppedDegenerate = 0;
         double tol = System.Math.Max(0, opts.DegenerateAreaTolerance);
@@ -103,15 +118,83 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         return a.C.CompareTo(b.C);
     }
 
-    private static List<(int A, int B, int C)> TriangulateUnconstrained(
-        IReadOnlyList<Vec3> vertices3D,
-        Vec3 faceNormal)
+    private static bool TryTriangulateConstrained(
+        Vec2[] vertices2D,
+        IReadOnlyList<(int Start, int End)> constraints,
+        out List<(int A, int B, int C)> triangles)
     {
-        if (vertices3D.Count == 3)
-            return [(0, 1, 2)];
+        int count = vertices2D.Length;
+        triangles = new List<(int A, int B, int C)>(System.Math.Max(0, count - 2));
 
-        var vertices2D = ProjectToFacePlane(vertices3D, faceNormal);
-        return EarClipTriangulate(vertices2D);
+        var polygon = new List<int>(count);
+        for (int i = 0; i < count; i++)
+            polygon.Add(i);
+
+        EnsureCounterClockwise(vertices2D, polygon);
+
+        if (!TryBuildRequiredConstraintState(
+            vertices2D,
+            polygon,
+            constraints,
+            out var requiredConstraints,
+            out var requiredByVertex))
+        {
+            triangles = [];
+            return false;
+        }
+
+        int guard = count * count + constraints.Count * count + 16;
+        while (polygon.Count > 3 && guard-- > 0)
+        {
+            bool earFound = false;
+            for (int i = 0; i < polygon.Count; i++)
+            {
+                int prev = polygon[(i - 1 + polygon.Count) % polygon.Count];
+                int curr = polygon[i];
+                int next = polygon[(i + 1) % polygon.Count];
+
+                if (HasBlockingConstraint(curr, prev, next, requiredByVertex))
+                    continue;
+
+                if (!IsEar(vertices2D, polygon, prev, curr, next))
+                    continue;
+
+                if (!DiagonalRespectsRequiredConstraints(prev, next, vertices2D, requiredConstraints))
+                    continue;
+
+                triangles.Add((prev, curr, next));
+                SatisfyConstraintEdge(prev, curr, requiredConstraints, requiredByVertex);
+                SatisfyConstraintEdge(curr, next, requiredConstraints, requiredByVertex);
+                SatisfyConstraintEdge(next, prev, requiredConstraints, requiredByVertex);
+
+                polygon.RemoveAt(i);
+                earFound = true;
+                break;
+            }
+
+            if (earFound)
+                continue;
+
+            triangles = [];
+            return false;
+        }
+
+        if (polygon.Count != 3)
+        {
+            triangles = [];
+            return false;
+        }
+
+        triangles.Add((polygon[0], polygon[1], polygon[2]));
+        SatisfyConstraintEdge(polygon[0], polygon[1], requiredConstraints, requiredByVertex);
+        SatisfyConstraintEdge(polygon[1], polygon[2], requiredConstraints, requiredByVertex);
+        SatisfyConstraintEdge(polygon[2], polygon[0], requiredConstraints, requiredByVertex);
+
+        if (requiredConstraints.Count == 0)
+            return true;
+
+        triangles = [];
+        return false;
     }
 
     private static List<(int A, int B, int C)> EarClipTriangulate(Vec2[] vertices2D)
@@ -157,6 +240,165 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             triangles.Add((polygon[0], polygon[1], polygon[2]));
 
         return triangles;
+    }
+
+    private static bool TryBuildRequiredConstraintState(
+        Vec2[] vertices2D,
+        List<int> polygon,
+        IReadOnlyList<(int Start, int End)> constraints,
+        out HashSet<long> requiredConstraints,
+        out Dictionary<int, HashSet<int>> requiredByVertex)
+    {
+        requiredConstraints = [];
+        requiredByVertex = [];
+        int count = vertices2D.Length;
+        var boundaryEdges = BuildBoundaryEdges(polygon);
+
+        foreach (var (start, end) in constraints)
+        {
+            if (start < 0 || end < 0 || start >= count || end >= count || start == end)
+                return false;
+
+            long key = EdgeKey(start, end);
+            if (boundaryEdges.Contains(key))
+                continue;
+
+            if (!requiredConstraints.Add(key))
+                continue;
+
+            AddRequiredNeighbor(requiredByVertex, start, end);
+            AddRequiredNeighbor(requiredByVertex, end, start);
+        }
+
+        if (requiredConstraints.Count <= 1)
+            return true;
+
+        var requiredEdgeArray = new List<long>(requiredConstraints);
+        for (int i = 0; i < requiredEdgeArray.Count; i++)
+        {
+            var (a0, a1) = DecodeEdgeKey(requiredEdgeArray[i]);
+            for (int j = i + 1; j < requiredEdgeArray.Count; j++)
+            {
+                var (b0, b1) = DecodeEdgeKey(requiredEdgeArray[j]);
+                if (a0 == b0 || a0 == b1 || a1 == b0 || a1 == b1)
+                    continue;
+
+                if (SegmentsProperlyIntersect(vertices2D[a0], vertices2D[a1], vertices2D[b0], vertices2D[b1]))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static HashSet<long> BuildBoundaryEdges(List<int> polygon)
+    {
+        var boundaryEdges = new HashSet<long>(polygon.Count);
+        for (int i = 0; i < polygon.Count; i++)
+        {
+            int a = polygon[i];
+            int b = polygon[(i + 1) % polygon.Count];
+            boundaryEdges.Add(EdgeKey(a, b));
+        }
+
+        return boundaryEdges;
+    }
+
+    private static bool HasBlockingConstraint(
+        int vertex,
+        int prev,
+        int next,
+        IReadOnlyDictionary<int, HashSet<int>> requiredByVertex)
+    {
+        if (!requiredByVertex.TryGetValue(vertex, out var requiredNeighbors))
+            return false;
+
+        foreach (int neighbor in requiredNeighbors)
+        {
+            if (neighbor != prev && neighbor != next)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool DiagonalRespectsRequiredConstraints(
+        int a,
+        int b,
+        Vec2[] vertices2D,
+        HashSet<long> requiredConstraints)
+    {
+        if (requiredConstraints.Count == 0)
+            return true;
+
+        if (requiredConstraints.Contains(EdgeKey(a, b)))
+            return true;
+
+        foreach (long key in requiredConstraints)
+        {
+            var (c, d) = DecodeEdgeKey(key);
+            if (a == c || a == d || b == c || b == d)
+                continue;
+
+            if (SegmentsProperlyIntersect(vertices2D[a], vertices2D[b], vertices2D[c], vertices2D[d]))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool SegmentsProperlyIntersect(Vec2 a, Vec2 b, Vec2 c, Vec2 d)
+    {
+        var s1 = Orient2D.Evaluate(a, b, c);
+        var s2 = Orient2D.Evaluate(a, b, d);
+        var s3 = Orient2D.Evaluate(c, d, a);
+        var s4 = Orient2D.Evaluate(c, d, b);
+
+        if (s1 == PredicateSign.Zero || s2 == PredicateSign.Zero || s3 == PredicateSign.Zero || s4 == PredicateSign.Zero)
+            return false;
+
+        return s1 != s2 && s3 != s4;
+    }
+
+    private static void SatisfyConstraintEdge(
+        int a,
+        int b,
+        HashSet<long> requiredConstraints,
+        Dictionary<int, HashSet<int>> requiredByVertex)
+    {
+        long key = EdgeKey(a, b);
+        if (!requiredConstraints.Remove(key))
+            return;
+
+        RemoveRequiredNeighbor(requiredByVertex, a, b);
+        RemoveRequiredNeighbor(requiredByVertex, b, a);
+    }
+
+    private static void AddRequiredNeighbor(
+        Dictionary<int, HashSet<int>> requiredByVertex,
+        int vertex,
+        int neighbor)
+    {
+        if (!requiredByVertex.TryGetValue(vertex, out var neighbors))
+        {
+            neighbors = [];
+            requiredByVertex[vertex] = neighbors;
+        }
+
+        neighbors.Add(neighbor);
+    }
+
+    private static void RemoveRequiredNeighbor(
+        Dictionary<int, HashSet<int>> requiredByVertex,
+        int vertex,
+        int neighbor)
+    {
+        if (!requiredByVertex.TryGetValue(vertex, out var neighbors))
+            return;
+
+        neighbors.Remove(neighbor);
+        if (neighbors.Count == 0)
+            requiredByVertex.Remove(vertex);
     }
 
     private static bool IsEar(Vec2[] vertices, List<int> polygon, int prev, int curr, int next)
@@ -289,4 +531,10 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         1 => new Vec2(p.X, p.Z),
         _ => new Vec2(p.X, p.Y),
     };
+
+    private static long EdgeKey(int a, int b)
+        => a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
+
+    private static (int A, int B) DecodeEdgeKey(long key)
+        => ((int)(key >> 32), (int)(uint)key);
 }
