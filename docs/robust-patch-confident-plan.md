@@ -90,7 +90,9 @@ Current status:
 - Deterministic ordering and dedup normalization are enforced before graph construction.
 - Coplanar orientation telemetry is tracked (agreeing vs opposing coplanar face-pair normals).
 - Conformance tests include repeated-run determinism and stable `parallel` flag behavior checks.
-- M3 groundwork started with `Kernel/Triangulation/RobustConstrainedTriangulator` bridge API and conformance checks.
+- M3 internals replacement started in `Kernel/Triangulation/RobustConstrainedTriangulator`:
+  - unconstrained polygons now use a native robust ear-clipping path based on certified `Orient2D` predicates,
+  - constrained-edge input still falls back to legacy triangulation while robust constrained internals are developed.
 - Deterministic replay harness is available for arrangement-stage cases (`Diagnostics/Replay` with capture/serialize/replay + conformance tests).
 
 ## M3 - Robust Triangulation and Patch Extraction

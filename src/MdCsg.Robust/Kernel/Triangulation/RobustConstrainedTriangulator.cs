@@ -1,11 +1,15 @@
 using MdCsg.Cutting;
 using MdCsg.Math;
+using MdCsg.Predicates;
 
 namespace MdCsg.Robust.Kernel.Triangulation;
 
 /// <summary>
-/// Transitional robust triangulator: delegates to the current constrained
-/// triangulator and normalizes output for deterministic/validated consumption.
+/// Transitional robust triangulator:
+/// - unconstrained polygons use a native robust ear-clipping path,
+/// - constrained polygons still delegate to the legacy constrained triangulator.
+///
+/// Output is normalized for deterministic/validated downstream consumption.
 /// </summary>
 public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulator
 {
@@ -17,9 +21,12 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
     {
         var opts = options ?? RobustTriangulationOptions.Default;
         if (vertices3D.Count < 3)
-            return new RobustTriangulationResult([], 0, UsedLegacyKernel: true);
+            return new RobustTriangulationResult([], 0, UsedLegacyKernel: false);
 
-        var rawTriangles = ConstrainedTriangulator.Triangulate(vertices3D, constraints, faceNormal);
+        bool useLegacyKernel = constraints.Count > 0;
+        List<(int A, int B, int C)> rawTriangles = useLegacyKernel
+            ? ConstrainedTriangulator.Triangulate(vertices3D, constraints, faceNormal)
+            : TriangulateUnconstrained(vertices3D, faceNormal);
         var normalizedTriangles = new List<(int A, int B, int C)>(rawTriangles.Count);
         int droppedDegenerate = 0;
         double tol = System.Math.Max(0, opts.DegenerateAreaTolerance);
@@ -68,7 +75,7 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         return new RobustTriangulationResult(
             normalizedTriangles,
             droppedDegenerate,
-            UsedLegacyKernel: true);
+            UsedLegacyKernel: useLegacyKernel);
     }
 
     private static bool HasValidIndices((int A, int B, int C) tri, int vertexCount)
@@ -95,4 +102,191 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         if (cmpB != 0) return cmpB;
         return a.C.CompareTo(b.C);
     }
+
+    private static List<(int A, int B, int C)> TriangulateUnconstrained(
+        IReadOnlyList<Vec3> vertices3D,
+        Vec3 faceNormal)
+    {
+        if (vertices3D.Count == 3)
+            return [(0, 1, 2)];
+
+        var vertices2D = ProjectToFacePlane(vertices3D, faceNormal);
+        return EarClipTriangulate(vertices2D);
+    }
+
+    private static List<(int A, int B, int C)> EarClipTriangulate(Vec2[] vertices2D)
+    {
+        int count = vertices2D.Length;
+        var triangles = new List<(int A, int B, int C)>(System.Math.Max(0, count - 2));
+        var polygon = new List<int>(count);
+        for (int i = 0; i < count; i++)
+            polygon.Add(i);
+
+        EnsureCounterClockwise(vertices2D, polygon);
+
+        int guard = count * count + 8;
+        while (polygon.Count > 3 && guard-- > 0)
+        {
+            bool earFound = false;
+            for (int i = 0; i < polygon.Count; i++)
+            {
+                int prev = polygon[(i - 1 + polygon.Count) % polygon.Count];
+                int curr = polygon[i];
+                int next = polygon[(i + 1) % polygon.Count];
+
+                if (!IsEar(vertices2D, polygon, prev, curr, next))
+                    continue;
+
+                triangles.Add((prev, curr, next));
+                polygon.RemoveAt(i);
+                earFound = true;
+                break;
+            }
+
+            if (earFound)
+                continue;
+
+            // Deterministic fallback for degenerate/non-simple loops:
+            // fan triangulation over current order and let normalization drop invalids.
+            for (int i = 1; i < polygon.Count - 1; i++)
+                triangles.Add((polygon[0], polygon[i], polygon[i + 1]));
+            return triangles;
+        }
+
+        if (polygon.Count == 3)
+            triangles.Add((polygon[0], polygon[1], polygon[2]));
+
+        return triangles;
+    }
+
+    private static bool IsEar(Vec2[] vertices, List<int> polygon, int prev, int curr, int next)
+    {
+        if (Orient2D.Evaluate(vertices[prev], vertices[curr], vertices[next]) != PredicateSign.Positive)
+            return false;
+
+        for (int i = 0; i < polygon.Count; i++)
+        {
+            int idx = polygon[i];
+            if (idx == prev || idx == curr || idx == next)
+                continue;
+
+            if (PointInTriangleInclusive(vertices[idx], vertices[prev], vertices[curr], vertices[next]))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool PointInTriangleInclusive(Vec2 p, Vec2 a, Vec2 b, Vec2 c)
+    {
+        var s1 = Orient2D.Evaluate(a, b, p);
+        var s2 = Orient2D.Evaluate(b, c, p);
+        var s3 = Orient2D.Evaluate(c, a, p);
+
+        bool hasNegative = s1 == PredicateSign.Negative || s2 == PredicateSign.Negative || s3 == PredicateSign.Negative;
+        if (hasNegative)
+            return false;
+
+        bool hasPositive = s1 == PredicateSign.Positive || s2 == PredicateSign.Positive || s3 == PredicateSign.Positive;
+        return hasPositive || (s1 == PredicateSign.Zero && s2 == PredicateSign.Zero && s3 == PredicateSign.Zero);
+    }
+
+    private static void EnsureCounterClockwise(Vec2[] vertices2D, List<int> polygon)
+    {
+        double signedArea2 = 0;
+        for (int i = 0; i < polygon.Count; i++)
+        {
+            var a = vertices2D[polygon[i]];
+            var b = vertices2D[polygon[(i + 1) % polygon.Count]];
+            signedArea2 += a.X * b.Y - b.X * a.Y;
+        }
+
+        if (signedArea2 < 0)
+        {
+            polygon.Reverse();
+            return;
+        }
+
+        if (signedArea2 > 0)
+            return;
+
+        // Degenerate area estimate; ask robust predicate for first non-collinear turn.
+        for (int i = 0; i < polygon.Count; i++)
+        {
+            int prev = polygon[(i - 1 + polygon.Count) % polygon.Count];
+            int curr = polygon[i];
+            int next = polygon[(i + 1) % polygon.Count];
+            var sign = Orient2D.Evaluate(vertices2D[prev], vertices2D[curr], vertices2D[next]);
+            if (sign == PredicateSign.Negative)
+            {
+                polygon.Reverse();
+                return;
+            }
+
+            if (sign == PredicateSign.Positive)
+                return;
+        }
+    }
+
+    private static Vec2[] ProjectToFacePlane(IReadOnlyList<Vec3> vertices3D, Vec3 faceNormal)
+    {
+        var origin = vertices3D[0];
+        var edgeAB = vertices3D[1] - origin;
+        var edgeAC = vertices3D[2] - origin;
+
+        Vec3 normal = faceNormal;
+        if (normal.LengthSquared <= 1e-30)
+            normal = Vec3.Cross(edgeAB, edgeAC);
+
+        var u = NormalizeOrFallback(edgeAB, edgeAC, new Vec3(1, 0, 0));
+        var v = Vec3.Cross(normal, u);
+
+        if (v.LengthSquared <= 1e-30)
+        {
+            int dropAxis = GetDominantAxis(normal);
+            var dropped = new Vec2[vertices3D.Count];
+            for (int i = 0; i < vertices3D.Count; i++)
+                dropped[i] = ProjectTo2D(vertices3D[i], dropAxis);
+            return dropped;
+        }
+
+        v = v.Normalized;
+
+        var result = new Vec2[vertices3D.Count];
+        for (int i = 0; i < vertices3D.Count; i++)
+        {
+            var d = vertices3D[i] - origin;
+            result[i] = new Vec2(Vec3.Dot(d, u), Vec3.Dot(d, v));
+        }
+
+        return result;
+    }
+
+    private static Vec3 NormalizeOrFallback(Vec3 primary, Vec3 secondary, Vec3 fallback)
+    {
+        if (primary.LengthSquared > 1e-30)
+            return primary.Normalized;
+
+        if (secondary.LengthSquared > 1e-30)
+            return secondary.Normalized;
+
+        return fallback;
+    }
+
+    private static int GetDominantAxis(Vec3 normal)
+    {
+        double ax = System.Math.Abs(normal.X);
+        double ay = System.Math.Abs(normal.Y);
+        double az = System.Math.Abs(normal.Z);
+        if (ax >= ay && ax >= az) return 0;
+        if (ay >= az) return 1;
+        return 2;
+    }
+
+    private static Vec2 ProjectTo2D(Vec3 p, int dropAxis) => dropAxis switch
+    {
+        0 => new Vec2(p.Y, p.Z),
+        1 => new Vec2(p.X, p.Z),
+        _ => new Vec2(p.X, p.Y),
+    };
 }
