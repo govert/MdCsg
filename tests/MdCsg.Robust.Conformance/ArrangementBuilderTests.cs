@@ -46,4 +46,16 @@ public class ArrangementBuilderTests
             }
         }
     }
+
+    [Fact]
+    public void CoplanarSharedFace_RecordsCoplanarFaceCounts()
+    {
+        var a = Primitives.Cube(Vec3.Zero, 2.0);
+        var b = Primitives.Cube(new Vec3(2, 0, 0), 2.0);
+
+        var arrangement = ArrangementBuilder.Build(a.Mesh, b.Mesh);
+
+        Assert.True(arrangement.CoplanarFaceCountA > 0);
+        Assert.True(arrangement.CoplanarFaceCountB > 0);
+    }
 }

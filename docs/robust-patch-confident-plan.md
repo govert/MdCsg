@@ -11,7 +11,7 @@ This plan operationalizes [ROBUSTNESS_SPEC.md](ROBUSTNESS_SPEC.md) into delivera
   - `IRobustCsgEngine`,
   - transitional `LegacyBridgedRobustCsgEngine` with strict validation diagnostics,
   - certified predicate layer (`Kernel/Predicates`) and predicate-tier telemetry counters,
-  - arrangement adapter scaffold (`Kernel/Arrangement`) with coplanar-pair diagnostics and endpoint/component analysis.
+  - native arrangement scaffold (`Kernel/Arrangement`) using BVH overlap traversal + tri-tri processing, with coplanar-pair diagnostics and endpoint/component analysis.
 - Added `tests/MdCsg.Robust.Conformance` project with:
   - passing smoke tests for robust API wiring,
   - skipped backlog tests encoding adversarial target cases (coplanar, kissing, thin-slab).

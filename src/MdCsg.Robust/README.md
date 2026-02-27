@@ -25,7 +25,7 @@ Initial scaffold now exists:
 - `RobustCsg` API wrapper
 - `LegacyBridgedRobustCsgEngine` (transitional bridge + validation diagnostics)
 - `Kernel/Predicates/CertifiedPredicates` with precision-tier telemetry
-- `Kernel/Arrangement/ArrangementBuilder` adapter for intersection arrangement diagnostics
+- `Kernel/Arrangement/ArrangementBuilder` native BVH+tri-tri arrangement builder
 - `Kernel/Arrangement/ArrangementAnalyzer` endpoint/component topology signals
 - `Validation/DegenerateFaceInspector` using certified predicate checks
 - `RobustOperationOptions.TreatCoplanarIntersectionAsError` guardrail toggle for strict conformance runs
