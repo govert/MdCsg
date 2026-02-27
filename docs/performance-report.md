@@ -2,9 +2,11 @@
 
 Scaling tests and edge case analysis for MdCsg, run on AMD Ryzen 7 4800H (8C/16T), Windows 11, .NET SDK 10.0.200-preview.
 
+> Note: this is a historical performance snapshot from an earlier robustness campaign, retained for trend analysis. For current correctness status, use `dotnet test`.
+
 ## Edge Case Results
 
-14 tests exercising adversarial geometry. 10 pass, 4 fail.
+Historical run: 14 tests exercising adversarial geometry. 10 pass, 4 fail.
 
 | Test | Result | Notes |
 |---|---|---|
@@ -35,7 +37,7 @@ Scaling tests and edge case analysis for MdCsg, run on AMD Ryzen 7 4800H (8C/16T
 
 ### Known Limitations
 
-These failures reveal the current limitations of the implementation:
+These failures revealed limitations in that run:
 
 1. **Ear-clipping triangulator** produces low-quality sub-triangles near intersection curves, especially for axis-aligned or near-coplanar geometry. A full constrained Delaunay triangulation would produce better sub-triangles with more favorable aspect ratios.
 
@@ -43,7 +45,7 @@ These failures reveal the current limitations of the implementation:
 
 3. **No handling of coplanar face pairs** — when two triangles from different meshes are nearly coplanar, the intersection detection may produce degenerate or missing segments.
 
-These are algorithmic limitations, not bugs in the port. Both .NET 10 and .NET Framework 4.8 produce identical results (same 10/14 pass rate, identical volumes).
+These results were algorithmic limitations observed in that snapshot, not porting bugs. Both .NET 10 and .NET Framework 4.8 produced identical outcomes in that run (same 10/14 pass rate, identical volumes).
 
 ## Scaling Results
 
@@ -163,7 +165,7 @@ The 1-minute mark is crossed between N=4 (13s) and N=5 (69s) — a 4x4x4 grid of
 | Sphere-sphere union (5,120 tris) | 659 ms | 848 ms | 1.3x |
 | Sphere-sphere union (20,480 tris) | 3,402 ms | 6,824 ms | 2.0x |
 | Sphere-sphere union (81,920 tris) | 27,303 ms | 59,545 ms | 2.2x |
-| Edge case pass rate | 10/14 | 10/14 | identical |
+| Edge case pass rate (historical snapshot) | 10/14 | 10/14 | identical |
 
 The .NET 4.8 runtime is 1.3–2.2x slower, with the gap widening as mesh size increases (due to JIT quality differences in loop optimization and bounds-check elimination). Both runtimes produce identical geometric results.
 

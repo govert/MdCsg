@@ -149,7 +149,7 @@ Benchmarks run on AMD Ryzen 7 4800H, Windows 11, .NET SDK 10.0.200-preview.
 
 **Memory**: Allocations are 2–8% higher on .NET 4.8. The difference comes from larger object headers (16 bytes on .NET Framework vs 12 bytes on 64-bit .NET) and less aggressive struct promotion.
 
-**Correctness**: All 134 tests pass identically on both targets. The Dekker-split TwoProduct fallback produces bit-identical error terms to the FMA path for all IEEE 754 doubles.
+**Correctness**: The current suite is much larger than the original port-validation set (roughly 14k tests per target in `MdCsg.Tests`), and should be validated with `dotnet test` on each target. The Dekker-split TwoProduct fallback produces bit-identical error terms to the FMA path for all IEEE 754 doubles.
 
 ## What Is NOT Conditional
 

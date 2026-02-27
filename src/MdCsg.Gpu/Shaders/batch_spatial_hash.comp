@@ -1,0 +1,59 @@
+#version 450
+
+layout(local_size_x = 256) in;
+
+layout(push_constant) uniform PushConstants {
+    uint queryCount;
+    uint pointCount;
+    float radius;
+    float cellSize;
+} pc;
+
+layout(std430, binding = 0) readonly buffer QueryPoints { vec4 queryPoints[]; };
+layout(std430, binding = 1) readonly buffer DataPoints { vec4 dataPoints[]; };
+layout(std430, binding = 2) readonly buffer CellStarts { int cellStarts[]; };
+layout(std430, binding = 3) readonly buffer CellCounts { int cellCounts[]; };
+layout(std430, binding = 4) readonly buffer SortedIndices { int sortedIndices[]; };
+layout(std430, binding = 5) buffer OutputCounts { int outputCounts[]; };
+layout(std430, binding = 6) buffer OutputNearestDist { float nearestDist[]; };
+
+// Simple spatial hash for 3D cells
+uint hashCell(int cx, int cy, int cz) {
+    uint h = uint(cx) * 73856093u ^ uint(cy) * 19349663u ^ uint(cz) * 83492791u;
+    return h;
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.queryCount) return;
+
+    vec3 q = queryPoints[idx].xyz;
+    float radiusSq = pc.radius * pc.radius;
+    float invCell = 1.0 / pc.cellSize;
+
+    // Determine cell range to search
+    int cxMin = int(floor((q.x - pc.radius) * invCell));
+    int cyMin = int(floor((q.y - pc.radius) * invCell));
+    int czMin = int(floor((q.z - pc.radius) * invCell));
+    int cxMax = int(floor((q.x + pc.radius) * invCell));
+    int cyMax = int(floor((q.y + pc.radius) * invCell));
+    int czMax = int(floor((q.z + pc.radius) * invCell));
+
+    int count = 0;
+    float minDistSq = 1e30;
+
+    // Brute-force search within radius (for when spatial hash is not pre-built)
+    // This is a direct distance computation fallback
+    for (uint i = 0; i < pc.pointCount; i++) {
+        vec3 p = dataPoints[i].xyz;
+        vec3 d = p - q;
+        float distSq = dot(d, d);
+        if (distSq <= radiusSq) {
+            count++;
+            minDistSq = min(minDistSq, distSq);
+        }
+    }
+
+    outputCounts[idx] = count;
+    nearestDist[idx] = sqrt(minDistSq);
+}

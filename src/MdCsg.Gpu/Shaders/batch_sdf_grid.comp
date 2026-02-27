@@ -1,0 +1,195 @@
+#version 450
+
+layout(local_size_x = 256) in;
+
+layout(push_constant) uniform PushConstants {
+    uint pointCount;
+    uint bvhNodeCount;
+    uint faceCount;
+} pc;
+
+// BVH node: 3 x vec4 = 48 bytes
+struct BvhNode {
+    float boundsMinX, boundsMinY, boundsMinZ, boundsMaxX;
+    float boundsMaxY, boundsMaxZ;
+    int leftOrStart, right;
+    int primitiveCount, pad0, pad1, pad2;
+};
+
+layout(std430, binding = 0) readonly buffer BvhNodes { BvhNode nodes[]; };
+layout(std430, binding = 1) readonly buffer FaceIndices { int faceIndices[]; };
+layout(std430, binding = 2) readonly buffer TriVerts { vec4 triVerts[]; };
+layout(std430, binding = 3) readonly buffer QueryPoints { vec4 queryPoints[]; };
+layout(std430, binding = 4) buffer Distances { float distances[]; };
+layout(std430, binding = 5) buffer Classifications { int classifications[]; };
+
+// AABB distance squared from point to box
+float aabbDistanceSq(vec3 p, vec3 bmin, vec3 bmax) {
+    vec3 d = max(bmin - p, vec3(0.0)) + max(p - bmax, vec3(0.0));
+    return dot(d, d);
+}
+
+// Point-to-triangle distance squared
+float pointTriangleDistanceSq(vec3 p, vec3 a, vec3 b, vec3 c) {
+    vec3 ab = b - a, ac = c - a, ap = p - a;
+    float d1 = dot(ab, ap), d2 = dot(ac, ap);
+    if (d1 <= 0.0 && d2 <= 0.0) return dot(ap, ap);
+
+    vec3 bp = p - b;
+    float d3 = dot(ab, bp), d4 = dot(ac, bp);
+    if (d3 >= 0.0 && d4 <= d3) return dot(bp, bp);
+
+    float vc = d1 * d4 - d3 * d2;
+    if (vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0) {
+        float v = d1 / (d1 - d3);
+        vec3 proj = a + v * ab;
+        vec3 diff = p - proj;
+        return dot(diff, diff);
+    }
+
+    vec3 cp = p - c;
+    float d5 = dot(ab, cp), d6 = dot(ac, cp);
+    if (d6 >= 0.0 && d5 <= d6) return dot(cp, cp);
+
+    float vb = d5 * d2 - d1 * d6;
+    if (vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0) {
+        float w = d2 / (d2 - d6);
+        vec3 proj = a + w * ac;
+        vec3 diff = p - proj;
+        return dot(diff, diff);
+    }
+
+    float va = d3 * d6 - d5 * d4;
+    if (va <= 0.0 && (d4 - d3) >= 0.0 && (d5 - d6) >= 0.0) {
+        float w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        vec3 proj = b + w * (c - b);
+        vec3 diff = p - proj;
+        return dot(diff, diff);
+    }
+
+    float denom = 1.0 / (va + vb + vc);
+    float v = vb * denom;
+    float w = vc * denom;
+    vec3 proj = a + ab * v + ac * w;
+    vec3 diff = p - proj;
+    return dot(diff, diff);
+}
+
+// Ray-AABB intersection
+bool rayIntersectsAabb(vec3 origin, vec3 invDir, vec3 bmin, vec3 bmax) {
+    vec3 t1 = (bmin - origin) * invDir;
+    vec3 t2 = (bmax - origin) * invDir;
+    vec3 tmin = min(t1, t2);
+    vec3 tmax = max(t1, t2);
+    float enter = max(max(tmin.x, tmin.y), tmin.z);
+    float exit = min(min(tmax.x, tmax.y), tmax.z);
+    return enter <= exit && exit >= 0.0;
+}
+
+// Ray-triangle intersection (Möller-Trumbore)
+bool rayIntersectsTriangle(vec3 origin, vec3 dir, vec3 v0, vec3 v1, vec3 v2) {
+    vec3 e1 = v1 - v0, e2 = v2 - v0;
+    vec3 h = cross(dir, e2);
+    float a = dot(e1, h);
+    if (abs(a) < 1e-8) return false;
+    float f = 1.0 / a;
+    vec3 s = origin - v0;
+    float u = f * dot(s, h);
+    if (u < 0.0 || u > 1.0) return false;
+    vec3 q = cross(s, e1);
+    float v = f * dot(dir, q);
+    if (v < 0.0 || u + v > 1.0) return false;
+    float t = f * dot(e2, q);
+    return t > 1e-8;
+}
+
+// Count ray-mesh intersections via BVH
+int rayCastCount(vec3 origin, vec3 dir) {
+    vec3 invDir = vec3(1.0) / dir;
+    int count = 0;
+    int stack[32];
+    int stackPtr = 0;
+    stack[stackPtr++] = 0;
+
+    while (stackPtr > 0) {
+        int nodeIdx = stack[--stackPtr];
+        BvhNode node = nodes[nodeIdx];
+        vec3 bmin = vec3(node.boundsMinX, node.boundsMinY, node.boundsMinZ);
+        vec3 bmax = vec3(node.boundsMaxX, node.boundsMaxY, node.boundsMaxZ);
+
+        if (!rayIntersectsAabb(origin, invDir, bmin, bmax)) continue;
+
+        if (node.primitiveCount > 0) {
+            for (int i = 0; i < node.primitiveCount; i++) {
+                int fi = faceIndices[node.leftOrStart + i];
+                vec3 v0 = triVerts[fi * 3 + 0].xyz;
+                vec3 v1 = triVerts[fi * 3 + 1].xyz;
+                vec3 v2 = triVerts[fi * 3 + 2].xyz;
+                if (rayIntersectsTriangle(origin, dir, v0, v1, v2))
+                    count++;
+            }
+        } else {
+            if (node.leftOrStart >= 0 && node.leftOrStart < int(pc.bvhNodeCount))
+                stack[stackPtr++] = node.leftOrStart;
+            if (node.right >= 0 && node.right < int(pc.bvhNodeCount))
+                stack[stackPtr++] = node.right;
+        }
+    }
+    return count;
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.pointCount) return;
+
+    vec3 p = queryPoints[idx].xyz;
+
+    // 1. Compute unsigned distance via BVH traversal
+    float minDistSq = 1e30;
+    int stack[32];
+    int stackPtr = 0;
+    stack[stackPtr++] = 0;
+
+    while (stackPtr > 0) {
+        int nodeIdx = stack[--stackPtr];
+        BvhNode node = nodes[nodeIdx];
+        vec3 bmin = vec3(node.boundsMinX, node.boundsMinY, node.boundsMinZ);
+        vec3 bmax = vec3(node.boundsMaxX, node.boundsMaxY, node.boundsMaxZ);
+
+        if (aabbDistanceSq(p, bmin, bmax) >= minDistSq) continue;
+
+        if (node.primitiveCount > 0) {
+            for (int i = 0; i < node.primitiveCount; i++) {
+                int fi = faceIndices[node.leftOrStart + i];
+                vec3 v0 = triVerts[fi * 3 + 0].xyz;
+                vec3 v1 = triVerts[fi * 3 + 1].xyz;
+                vec3 v2 = triVerts[fi * 3 + 2].xyz;
+                float dSq = pointTriangleDistanceSq(p, v0, v1, v2);
+                minDistSq = min(minDistSq, dSq);
+            }
+        } else {
+            if (node.leftOrStart >= 0 && node.leftOrStart < int(pc.bvhNodeCount))
+                stack[stackPtr++] = node.leftOrStart;
+            if (node.right >= 0 && node.right < int(pc.bvhNodeCount))
+                stack[stackPtr++] = node.right;
+        }
+    }
+
+    float dist = sqrt(minDistSq);
+
+    // 2. Classify via ray casting (3 perturbed directions, majority vote)
+    vec3 dirs[3] = vec3[3](
+        normalize(vec3(1.0, 0.00013, 0.00017)),
+        normalize(vec3(0.00013, 1.0, 0.00019)),
+        normalize(vec3(0.00017, 0.00019, 1.0))
+    );
+    int insideVotes = 0;
+    for (int d = 0; d < 3; d++) {
+        int hitCount = rayCastCount(p, dirs[d]);
+        if ((hitCount & 1) == 1) insideVotes++;
+    }
+    int isInside = (insideVotes >= 2) ? 1 : 0;
+
+    distances[idx] = isInside == 1 ? -dist : dist;
+    classifications[idx] = isInside;
+}

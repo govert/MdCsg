@@ -28,5 +28,10 @@ build/
 TestResults/
 BenchmarkDotNet.Artifacts/
 
+## Screenshots/Artifacts
+scene*.png
+screenshots/*.bmp
+dotnet_test*.log
+
 ## Private
 .private/

@@ -123,10 +123,10 @@ dotnet run -c Release --project benchmarks/MdCsg.Gpu.Benchmarks
 ## Running Tests
 
 ```bash
-# Core library tests (8485+ tests, no GPU needed)
+# Core library tests (~14k tests per target, no GPU needed)
 dotnet test tests/MdCsg.Tests
 
-# GPU tests (11 tests, gracefully skipped if no Vulkan)
+# GPU tests (15 tests, gracefully skipped if no Vulkan)
 dotnet test tests/MdCsg.Gpu.Tests
 ```
 
@@ -134,7 +134,7 @@ dotnet test tests/MdCsg.Gpu.Tests
 
 The GPU tests are designed to run on any platform:
 
-- **Windows (with GPU)**: All 11 tests run with Vulkan, verifying GPU results match CPU
+- **Windows (with GPU)**: All 15 tests run with Vulkan, verifying GPU results match CPU
 - **Linux ARM64 / Raspberry Pi 4+**: Same tests run against Mesa V3DV Vulkan driver
 - **Any machine without Vulkan**: Tests gracefully skip GPU-specific checks; fallback tests verify `CpuPatchClassificationStrategy` is returned
 

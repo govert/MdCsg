@@ -22,8 +22,8 @@ using MdCsg.Api;
 using MdCsg.Math;
 
 // Create two overlapping cubes
-var cubeA = MeshFactory.CreateCube(Vec3.Zero, size: 1.0);
-var cubeB = MeshFactory.CreateCube(new Vec3(0.5, 0.5, 0.5), size: 1.0);
+var cubeA = Primitives.Cube(Vec3.Zero, 1.0);
+var cubeB = Primitives.Cube(new Vec3(0.5, 0.5, 0.5), 1.0);
 
 // Boolean operations
 var union        = Csg.Union(cubeA, cubeB);
@@ -133,8 +133,9 @@ Requires .NET SDK 10.0 or later (builds both net10.0 and net48 targets).
 
 ```bash
 dotnet build
-dotnet test                                    # Core library tests (8485+ tests)
-dotnet test tests/MdCsg.Gpu.Tests              # GPU tests (gracefully skipped if no Vulkan)
+dotnet test                                    # Core library tests (~14k per target)
+dotnet test tests/MdCsg.Gpu.Tests              # GPU tests (15 tests, gracefully skipped if no Vulkan)
+dotnet run -c Release --project src/MdCsg.Showcase/MdCsg.Showcase.csproj
 ```
 
 ## Benchmarks
@@ -166,9 +167,12 @@ MdCsg/
 │   ├── Shaders/                  # GLSL compute shaders
 │   ├── Interop/                  # GPU struct layouts (GpuVec3, GpuBvhNode)
 │   └── ...                       # VulkanContext, ComputePipeline, GpuPatchClassifier
-├── tests/MdCsg.Tests/            # 8485+ tests (xUnit, net10.0 + net48)
-├── tests/MdCsg.Gpu.Tests/        # 11 GPU tests (gracefully skipped without Vulkan)
+├── src/MdCsg.Showcase/           # Windows D3D11 showcase application
+├── tests/MdCsg.Tests/            # ~14k tests (xUnit, net10.0 + net48)
+├── tests/MdCsg.Gpu.Tests/        # 15 GPU tests (gracefully skipped without Vulkan)
 ├── benchmarks/MdCsg.Benchmarks/  # BenchmarkDotNet performance tests
+├── tools/                        # Diagnostic console tools (MeshDiag, DiagRun)
+├── screenshots/                  # Showcase screenshots (PNG)
 └── docs/                         # Documentation
 ```
 

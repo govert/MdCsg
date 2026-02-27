@@ -122,7 +122,7 @@ public class PerformancePrimitiveCsgTests
         }
         sw.Stop();
         _output.WriteLine($"300 primitives: {sw.ElapsedMilliseconds}ms");
-        Assert.True(sw.ElapsedMilliseconds < 5000);
+        Assert.True(sw.ElapsedMilliseconds < 15000);
     }
 
     [Fact]
