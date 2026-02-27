@@ -38,5 +38,13 @@ public sealed class RobustDiagnostics
 
     public int TriangulationDroppedDegenerateCount { get; init; }
 
+    public int TriangulationFallbackInvalidOrCrossingConstraintCount { get; init; }
+
+    public int TriangulationFallbackPartitionFailureCount { get; init; }
+
+    public int TriangulationFallbackConstrainedEarFailureCount { get; init; }
+
+    public IReadOnlyList<string> TriangulationFallbackSignatures { get; init; } = Array.Empty<string>();
+
     public int ClassificationFallbackCount { get; init; }
 }

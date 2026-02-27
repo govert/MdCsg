@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Collections.Concurrent;
 using MdCsg.Api;
 using MdCsg.Cutting;
 using MdCsg.Math;
@@ -32,6 +33,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int triangulationNativeCount = 0;
         int triangulationLegacyFallbackCount = 0;
         int triangulationDroppedDegenerateCount = 0;
+        int triangulationFallbackInvalidOrCrossingConstraintCount = 0;
+        int triangulationFallbackPartitionFailureCount = 0;
+        int triangulationFallbackConstrainedEarFailureCount = 0;
+        var triangulationFallbackSignatureCounts = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
         var totalSw = Stopwatch.StartNew();
 
         if (opts.ValidateInput)
@@ -99,7 +104,11 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     triangulationInvocationCount,
                     triangulationNativeCount,
                     triangulationLegacyFallbackCount,
-                    triangulationDroppedDegenerateCount));
+                    triangulationDroppedDegenerateCount,
+                    triangulationFallbackInvalidOrCrossingConstraintCount,
+                    triangulationFallbackPartitionFailureCount,
+                    triangulationFallbackConstrainedEarFailureCount,
+                    SummarizeFallbackSignatures(triangulationFallbackSignatureCounts)));
         }
 
         var robustTriangulator = new RobustConstrainedTriangulator();
@@ -122,7 +131,29 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     });
 
                 if (triResult.UsedLegacyKernel)
+                {
                     System.Threading.Interlocked.Increment(ref triangulationLegacyFallbackCount);
+                    switch (triResult.LegacyFallbackReason)
+                    {
+                        case RobustTriangulationFallbackReason.InvalidOrCrossingConstraints:
+                            System.Threading.Interlocked.Increment(ref triangulationFallbackInvalidOrCrossingConstraintCount);
+                            break;
+                        case RobustTriangulationFallbackReason.PartitioningFailed:
+                            System.Threading.Interlocked.Increment(ref triangulationFallbackPartitionFailureCount);
+                            break;
+                        case RobustTriangulationFallbackReason.ConstrainedEarFailed:
+                            System.Threading.Interlocked.Increment(ref triangulationFallbackConstrainedEarFailureCount);
+                            break;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(triResult.LegacyFallbackSignature))
+                    {
+                        triangulationFallbackSignatureCounts.AddOrUpdate(
+                            triResult.LegacyFallbackSignature!,
+                            1,
+                            static (_, current) => current + 1);
+                    }
+                }
                 else
                     System.Threading.Interlocked.Increment(ref triangulationNativeCount);
 
@@ -175,7 +206,11 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 triangulationInvocationCount,
                 triangulationNativeCount,
                 triangulationLegacyFallbackCount,
-                triangulationDroppedDegenerateCount));
+                triangulationDroppedDegenerateCount,
+                triangulationFallbackInvalidOrCrossingConstraintCount,
+                triangulationFallbackPartitionFailureCount,
+                triangulationFallbackConstrainedEarFailureCount,
+                SummarizeFallbackSignatures(triangulationFallbackSignatureCounts)));
     }
 
     private static void ValidateInput(
@@ -296,7 +331,11 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int triangulationInvocationCount,
         int triangulationNativeCount,
         int triangulationLegacyFallbackCount,
-        int triangulationDroppedDegenerateCount)
+        int triangulationDroppedDegenerateCount,
+        int triangulationFallbackInvalidOrCrossingConstraintCount,
+        int triangulationFallbackPartitionFailureCount,
+        int triangulationFallbackConstrainedEarFailureCount,
+        IReadOnlyList<string> triangulationFallbackSignatures)
     {
         return new RobustDiagnostics
         {
@@ -318,7 +357,26 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             TriangulationNativeCount = triangulationNativeCount,
             TriangulationLegacyFallbackCount = triangulationLegacyFallbackCount,
             TriangulationDroppedDegenerateCount = triangulationDroppedDegenerateCount,
+            TriangulationFallbackInvalidOrCrossingConstraintCount = triangulationFallbackInvalidOrCrossingConstraintCount,
+            TriangulationFallbackPartitionFailureCount = triangulationFallbackPartitionFailureCount,
+            TriangulationFallbackConstrainedEarFailureCount = triangulationFallbackConstrainedEarFailureCount,
+            TriangulationFallbackSignatures = triangulationFallbackSignatures,
             ClassificationFallbackCount = 0
         };
+    }
+
+    private static IReadOnlyList<string> SummarizeFallbackSignatures(
+        IReadOnlyDictionary<string, int> signatureCounts,
+        int maxItems = 8)
+    {
+        if (signatureCounts.Count == 0)
+            return Array.Empty<string>();
+
+        return signatureCounts
+            .OrderByDescending(static kvp => kvp.Value)
+            .ThenBy(static kvp => kvp.Key, StringComparer.Ordinal)
+            .Take(maxItems)
+            .Select(static kvp => $"{kvp.Value}x {kvp.Key}")
+            .ToArray();
     }
 }

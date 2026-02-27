@@ -64,6 +64,13 @@ public class RobustCsgSmokeTests
         Assert.Equal(
             result.Diagnostics.TriangulationInvocationCount,
             result.Diagnostics.TriangulationNativeCount + result.Diagnostics.TriangulationLegacyFallbackCount);
+        Assert.Equal(
+            result.Diagnostics.TriangulationLegacyFallbackCount,
+            result.Diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount
+            + result.Diagnostics.TriangulationFallbackPartitionFailureCount
+            + result.Diagnostics.TriangulationFallbackConstrainedEarFailureCount);
+        if (result.Diagnostics.TriangulationLegacyFallbackCount > 0)
+            Assert.NotEmpty(result.Diagnostics.TriangulationFallbackSignatures);
     }
 
     [Fact]
@@ -84,6 +91,10 @@ public class RobustCsgSmokeTests
         Assert.Equal(0, result.Diagnostics.TriangulationInvocationCount);
         Assert.Equal(0, result.Diagnostics.TriangulationNativeCount);
         Assert.Equal(0, result.Diagnostics.TriangulationLegacyFallbackCount);
+        Assert.Equal(0, result.Diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount);
+        Assert.Equal(0, result.Diagnostics.TriangulationFallbackPartitionFailureCount);
+        Assert.Equal(0, result.Diagnostics.TriangulationFallbackConstrainedEarFailureCount);
+        Assert.Empty(result.Diagnostics.TriangulationFallbackSignatures);
     }
 
     [Fact]

@@ -14,6 +14,14 @@ namespace MdCsg.Robust.Kernel.Triangulation;
 /// </summary>
 public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulator
 {
+    private enum PartitionFailureKind
+    {
+        None = 0,
+        InvalidOrCrossingConstraints = 1,
+        ConstraintSplitFailure = 2,
+        ConstraintEdgeMissingAfterPartition = 3
+    }
+
     public RobustTriangulationResult Triangulate(
         IReadOnlyList<Vec3> vertices3D,
         IReadOnlyList<(int Start, int End)> constraints,
@@ -27,12 +35,18 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         var vertices2D = ProjectToFacePlane(vertices3D, faceNormal);
 
         bool useLegacyKernel = false;
+        var fallbackReason = RobustTriangulationFallbackReason.None;
+        string? fallbackSignature = null;
         List<(int A, int B, int C)> rawTriangles;
         if (constraints.Count == 0)
         {
             rawTriangles = EarClipTriangulate(vertices2D);
         }
-        else if (TryTriangulateConstrained(vertices2D, constraints, out var constrainedTriangles))
+        else if (TryTriangulateConstrained(
+            vertices2D,
+            constraints,
+            out var constrainedTriangles,
+            out var nativeFailureReason))
         {
             rawTriangles = constrainedTriangles;
         }
@@ -40,6 +54,8 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         {
             rawTriangles = ConstrainedTriangulator.Triangulate(vertices3D, constraints, faceNormal);
             useLegacyKernel = true;
+            fallbackReason = nativeFailureReason;
+            fallbackSignature = BuildConstraintSignature(vertices2D, constraints);
         }
 
         var normalizedTriangles = new List<(int A, int B, int C)>(rawTriangles.Count);
@@ -90,7 +106,11 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         return new RobustTriangulationResult(
             normalizedTriangles,
             droppedDegenerate,
-            UsedLegacyKernel: useLegacyKernel);
+            UsedLegacyKernel: useLegacyKernel)
+        {
+            LegacyFallbackReason = fallbackReason,
+            LegacyFallbackSignature = fallbackSignature
+        };
     }
 
     private static bool HasValidIndices((int A, int B, int C) tri, int vertexCount)
@@ -121,21 +141,45 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
     private static bool TryTriangulateConstrained(
         Vec2[] vertices2D,
         IReadOnlyList<(int Start, int End)> constraints,
-        out List<(int A, int B, int C)> triangles)
+        out List<(int A, int B, int C)> triangles,
+        out RobustTriangulationFallbackReason failureReason)
     {
-        if (TryTriangulateConstrainedByPartition(vertices2D, constraints, out triangles))
+        if (TryTriangulateConstrainedByPartition(
+            vertices2D,
+            constraints,
+            out triangles,
+            out var partitionFailure))
+        {
+            failureReason = RobustTriangulationFallbackReason.None;
             return true;
+        }
 
-        return TryTriangulateConstrainedByEarConstraints(vertices2D, constraints, out triangles);
+        if (TryTriangulateConstrainedByEarConstraints(vertices2D, constraints, out triangles))
+        {
+            failureReason = RobustTriangulationFallbackReason.None;
+            return true;
+        }
+
+        failureReason = partitionFailure switch
+        {
+            PartitionFailureKind.InvalidOrCrossingConstraints => RobustTriangulationFallbackReason.InvalidOrCrossingConstraints,
+            PartitionFailureKind.ConstraintSplitFailure => RobustTriangulationFallbackReason.PartitioningFailed,
+            PartitionFailureKind.ConstraintEdgeMissingAfterPartition => RobustTriangulationFallbackReason.PartitioningFailed,
+            _ => RobustTriangulationFallbackReason.ConstrainedEarFailed
+        };
+
+        return false;
     }
 
     private static bool TryTriangulateConstrainedByPartition(
         Vec2[] vertices2D,
         IReadOnlyList<(int Start, int End)> constraints,
-        out List<(int A, int B, int C)> triangles)
+        out List<(int A, int B, int C)> triangles,
+        out PartitionFailureKind failureKind)
     {
         int count = vertices2D.Length;
         triangles = new List<(int A, int B, int C)>(System.Math.Max(0, count - 2));
+        failureKind = PartitionFailureKind.None;
 
         var polygon = new List<int>(count);
         for (int i = 0; i < count; i++)
@@ -151,6 +195,7 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             out _))
         {
             triangles = [];
+            failureKind = PartitionFailureKind.InvalidOrCrossingConstraints;
             return false;
         }
 
@@ -186,6 +231,7 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
                     out bool alreadyBoundary))
                 {
                     triangles = [];
+                    failureKind = PartitionFailureKind.ConstraintSplitFailure;
                     return false;
                 }
 
@@ -202,6 +248,7 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             if (!satisfied)
             {
                 triangles = [];
+                failureKind = PartitionFailureKind.ConstraintSplitFailure;
                 return false;
             }
         }
@@ -215,6 +262,7 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             if (!HasTriangleEdge(triangles, constraint))
             {
                 triangles = [];
+                failureKind = PartitionFailureKind.ConstraintEdgeMissingAfterPartition;
                 return false;
             }
         }
@@ -555,6 +603,71 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         return (tri.A == start && tri.B == end) || (tri.B == start && tri.A == end)
             || (tri.B == start && tri.C == end) || (tri.C == start && tri.B == end)
             || (tri.C == start && tri.A == end) || (tri.A == start && tri.C == end);
+    }
+
+    private static string BuildConstraintSignature(
+        Vec2[] vertices2D,
+        IReadOnlyList<(int Start, int End)> constraints)
+    {
+        int invalid = 0;
+        int degenerate = 0;
+        int duplicates = 0;
+        var unique = new HashSet<long>();
+
+        int vertexCount = vertices2D.Length;
+        var degree = new Dictionary<int, int>();
+
+        foreach (var (start, end) in constraints)
+        {
+            if (start < 0 || end < 0 || start >= vertexCount || end >= vertexCount)
+            {
+                invalid++;
+                continue;
+            }
+
+            if (start == end)
+            {
+                degenerate++;
+                continue;
+            }
+
+            long key = EdgeKey(start, end);
+            if (!unique.Add(key))
+            {
+                duplicates++;
+                continue;
+            }
+
+            degree.TryGetValue(start, out int dStart);
+            degree[start] = dStart + 1;
+            degree.TryGetValue(end, out int dEnd);
+            degree[end] = dEnd + 1;
+        }
+
+        int crossing = 0;
+        var edges = new List<long>(unique);
+        for (int i = 0; i < edges.Count; i++)
+        {
+            var (a0, a1) = DecodeEdgeKey(edges[i]);
+            for (int j = i + 1; j < edges.Count; j++)
+            {
+                var (b0, b1) = DecodeEdgeKey(edges[j]);
+                if (a0 == b0 || a0 == b1 || a1 == b0 || a1 == b1)
+                    continue;
+
+                if (SegmentsProperlyIntersect(vertices2D[a0], vertices2D[a1], vertices2D[b0], vertices2D[b1]))
+                    crossing++;
+            }
+        }
+
+        int maxDegree = 0;
+        foreach (int d in degree.Values)
+        {
+            if (d > maxDegree)
+                maxDegree = d;
+        }
+
+        return $"v={vertexCount};m={constraints.Count};u={unique.Count};inv={invalid};deg={degenerate};dup={duplicates};cross={crossing};maxDeg={maxDegree}";
     }
 
     private static bool HasBlockingConstraint(

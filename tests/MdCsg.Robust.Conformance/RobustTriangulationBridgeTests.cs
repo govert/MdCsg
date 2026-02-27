@@ -93,6 +93,8 @@ public class RobustTriangulationBridgeTests
         var result = triangulator.Triangulate(verts, constraints, Vec3.UnitZ);
 
         Assert.True(result.UsedLegacyKernel);
+        Assert.Equal(RobustTriangulationFallbackReason.InvalidOrCrossingConstraints, result.LegacyFallbackReason);
+        Assert.NotNull(result.LegacyFallbackSignature);
         Assert.NotEmpty(result.Triangles);
     }
 

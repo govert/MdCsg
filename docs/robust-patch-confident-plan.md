@@ -95,6 +95,7 @@ Current status:
   - constrained input now first tries native non-crossing constraint partitioning and constrained-ear handling before falling back to legacy triangulation for unsupported/inconsistent constrained cases.
 - Legacy-bridge execution now routes face-cut triangulation through the robust kernel hook (`CsgOptions.TriangulationKernel`) with diagnostics for native vs fallback usage.
 - Current conformance telemetry still shows legacy fallback usage on stable overlap cases; zero-fallback coverage is tracked as explicit backlog target.
+- Fallback diagnostics now include reason buckets and compact signature samples to drive targeted burn-down of remaining legacy fallback cases.
 - Deterministic replay harness is available for arrangement-stage cases (`Diagnostics/Replay` with capture/serialize/replay + conformance tests).
 
 ## M3 - Robust Triangulation and Patch Extraction
