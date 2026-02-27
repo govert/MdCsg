@@ -27,9 +27,11 @@ Initial scaffold now exists:
 - `Kernel/Predicates/CertifiedPredicates` with precision-tier telemetry
 - `Kernel/Arrangement/ArrangementBuilder` native BVH+tri-tri arrangement builder
   - deterministic overlap traversal and canonical snapped-segment ordering
+  - coplanar pair orientation counters (agreeing vs opposing normals)
 - `Kernel/Arrangement/ArrangementAnalyzer` endpoint/component topology signals
 - `Kernel/Triangulation/RobustConstrainedTriangulator` bridge with deterministic output normalization
 - `Diagnostics/Replay` arrangement replay capture/serialize/replay harness
 - `Validation/DegenerateFaceInspector` using certified predicate checks
 - `RobustOperationOptions.TreatCoplanarIntersectionAsError` guardrail toggle for strict conformance runs
+- `RobustOperationOptions.TreatOpposingCoplanarPairsAsError` guardrail toggle for strict conformance runs
 - `RobustOperationOptions.TreatOpenArrangementAsError` guardrail toggle for strict conformance runs

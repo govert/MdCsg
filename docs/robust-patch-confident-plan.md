@@ -88,6 +88,7 @@ Current status:
 
 - Native arrangement construction now avoids legacy `IntersectionGraph.Compute` in the mesh-mesh path.
 - Deterministic ordering and dedup normalization are enforced before graph construction.
+- Coplanar orientation telemetry is tracked (agreeing vs opposing coplanar face-pair normals).
 - Conformance tests include repeated-run determinism and stable `parallel` flag behavior checks.
 - M3 groundwork started with `Kernel/Triangulation/RobustConstrainedTriangulator` bridge API and conformance checks.
 - Deterministic replay harness is available for arrangement-stage cases (`Diagnostics/Replay` with capture/serialize/replay + conformance tests).

@@ -7,6 +7,7 @@ public enum RobustIssueCode
     InputMeshNotEdgeManifold,
     InputMeshHasDegenerateFaces,
     InputIntersectionContainsCoplanarPairs,
+    InputIntersectionContainsOpposingCoplanarPairs,
     InputArrangementHasOpenEndpoints,
     OutputMeshNotClosed,
     OutputMeshNotEdgeManifold,

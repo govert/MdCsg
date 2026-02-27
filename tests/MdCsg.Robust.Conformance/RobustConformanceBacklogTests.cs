@@ -27,6 +27,26 @@ public class RobustConformanceBacklogTests
     }
 
     [Fact]
+    public void CoplanarSharedFace_StrictMode_FailsFastWithOpposingCoplanarIssue()
+    {
+        var a = Primitives.Cube(Vec3.Zero, 2.0);
+        var b = Primitives.Cube(new Vec3(2, 0, 0), 2.0); // shared face with opposing outward normals
+        var result = RobustCsg.Union(a, b, new RobustOperationOptions
+        {
+            Mode = RobustMode.Strict,
+            AnalyzeInputIntersection = true,
+            TreatCoplanarIntersectionAsError = false,
+            TreatOpposingCoplanarPairsAsError = true,
+            FailOnValidationError = true
+        });
+
+        Assert.False(result.Succeeded);
+        Assert.Null(result.Result);
+        Assert.Contains(result.Issues, i => i.Code == RobustIssueCode.InputIntersectionContainsOpposingCoplanarPairs);
+        Assert.True(result.Diagnostics.ArrangementCoplanarPairNormalsOpposeCount > 0);
+    }
+
+    [Fact]
     public void ThinSlab_HalfSpaceChain_StrictMode_StaysClosed()
     {
         var cube = Primitives.Cube(Vec3.Zero, 2.0);

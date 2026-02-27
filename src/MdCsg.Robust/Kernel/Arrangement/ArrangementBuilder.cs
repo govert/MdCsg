@@ -26,6 +26,7 @@ public static class ArrangementBuilder
         var uniqueSegmentKeys = new HashSet<(long, long, long, long, long, long, int, int)>();
         var coplanarFacesA = new HashSet<int>();
         var coplanarFacesB = new HashSet<int>();
+        var coplanarPairNormals = new Dictionary<(int FaceA, int FaceB), bool>();
 
         foreach (var (faceA, faceB) in overlappingPairs)
         {
@@ -44,12 +45,15 @@ public static class ArrangementBuilder
             coplanarFacesA.Add(faceA);
             coplanarFacesB.Add(faceB);
 
-            if (!TriTriIntersection.IntersectCoplanar(
+            bool hasCoplanarSegments = TriTriIntersection.IntersectCoplanar(
                 triA,
                 triB,
                 out var segsForA,
                 out var segsForB,
-                out _))
+                out bool normalsAgree);
+            coplanarPairNormals[(faceA, faceB)] = normalsAgree;
+
+            if (!hasCoplanarSegments)
             {
                 continue;
             }
@@ -67,29 +71,42 @@ public static class ArrangementBuilder
             }
         }
 
+        CountCoplanarPairNormals(coplanarPairNormals, out int pairNormalsAgreeCount, out int pairNormalsOpposeCount);
+
         return BuildFromSegments(
             segments,
             gridSize,
             coplanarFacesA.Count,
-            coplanarFacesB.Count);
+            coplanarFacesB.Count,
+            pairNormalsAgreeCount,
+            pairNormalsOpposeCount);
     }
 
     public static ArrangementGraph Build(
         IntersectionGraph graph,
         double gridSize = MathUtil.DefaultGridSize)
     {
+        CountCoplanarNormalsFromIntersectionGraph(
+            graph,
+            out int pairNormalsAgreeCount,
+            out int pairNormalsOpposeCount);
+
         return BuildFromSegments(
             graph.Segments,
             gridSize,
             graph.CoplanarFacesA.Count,
-            graph.CoplanarFacesB.Count);
+            graph.CoplanarFacesB.Count,
+            pairNormalsAgreeCount,
+            pairNormalsOpposeCount);
     }
 
     private static ArrangementGraph BuildFromSegments(
         IReadOnlyList<IntersectionSegment> segments,
         double gridSize,
         int coplanarFaceCountA,
-        int coplanarFaceCountB)
+        int coplanarFaceCountB,
+        int coplanarPairNormalsAgreeCount,
+        int coplanarPairNormalsOpposeCount)
     {
         var normalizedSegments = new List<(IntersectionSegment Segment, (long, long, long, long, long, long, int, int) Key)>(segments.Count);
         var uniqueSegmentKeys = new HashSet<(long, long, long, long, long, long, int, int)>();
@@ -146,7 +163,9 @@ public static class ArrangementBuilder
             edges,
             incident,
             coplanarFaceCountA,
-            coplanarFaceCountB);
+            coplanarFaceCountB,
+            coplanarPairNormalsAgreeCount,
+            coplanarPairNormalsOpposeCount);
     }
 
     private static int GetOrAddVertex(
@@ -254,6 +273,51 @@ public static class ArrangementBuilder
         int cmpA = a.FaceA.CompareTo(b.FaceA);
         if (cmpA != 0) return cmpA;
         return a.FaceB.CompareTo(b.FaceB);
+    }
+
+    private static void CountCoplanarPairNormals(
+        IReadOnlyDictionary<(int FaceA, int FaceB), bool> coplanarPairNormals,
+        out int pairNormalsAgreeCount,
+        out int pairNormalsOpposeCount)
+    {
+        int agree = 0;
+        int oppose = 0;
+        foreach (bool normalsAgree in coplanarPairNormals.Values)
+        {
+            if (normalsAgree) agree++;
+            else oppose++;
+        }
+
+        pairNormalsAgreeCount = agree;
+        pairNormalsOpposeCount = oppose;
+    }
+
+    private static void CountCoplanarNormalsFromIntersectionGraph(
+        IntersectionGraph graph,
+        out int pairNormalsAgreeCount,
+        out int pairNormalsOpposeCount)
+    {
+        int agree = 0;
+        int oppose = 0;
+
+        foreach (bool normalsAgree in graph.CoplanarFacesA.Values)
+        {
+            if (normalsAgree) agree++;
+            else oppose++;
+        }
+
+        // Compatibility fallback if A-side map is empty but B-side has data.
+        if (agree == 0 && oppose == 0 && graph.CoplanarFacesB.Count > 0)
+        {
+            foreach (bool normalsAgree in graph.CoplanarFacesB.Values)
+            {
+                if (normalsAgree) agree++;
+                else oppose++;
+            }
+        }
+
+        pairNormalsAgreeCount = agree;
+        pairNormalsOpposeCount = oppose;
     }
 
     private static int CompareSegmentKey(

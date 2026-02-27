@@ -50,6 +50,19 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     severity);
             }
 
+            if (arrangement.HasOpposingCoplanarPairs)
+            {
+                var severity = opts.TreatOpposingCoplanarPairsAsError
+                    ? RobustIssueSeverity.Error
+                    : RobustIssueSeverity.Warning;
+                AddIssue(
+                    issues,
+                    opts.Mode,
+                    RobustIssueCode.InputIntersectionContainsOpposingCoplanarPairs,
+                    $"Input intersection has opposing coplanar face pairs ({arrangement.CoplanarPairNormalsOpposeCount}).",
+                    severity);
+            }
+
             if (arrangementAnalysis.EndpointVertexCount > 0)
             {
                 var severity = opts.TreatOpenArrangementAsError
@@ -223,6 +236,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             ArrangementEdgeCount = arrangement?.Edges.Count ?? 0,
             ArrangementCoplanarFaceCountA = arrangement?.CoplanarFaceCountA ?? 0,
             ArrangementCoplanarFaceCountB = arrangement?.CoplanarFaceCountB ?? 0,
+            ArrangementCoplanarPairNormalsAgreeCount = arrangement?.CoplanarPairNormalsAgreeCount ?? 0,
+            ArrangementCoplanarPairNormalsOpposeCount = arrangement?.CoplanarPairNormalsOpposeCount ?? 0,
             ArrangementEndpointVertexCount = arrangementAnalysis.EndpointVertexCount,
             ArrangementConnectedComponentCount = arrangementAnalysis.ConnectedComponentCount,
             PredicateEscalationCount = predicateTelemetry.EscalationCount,

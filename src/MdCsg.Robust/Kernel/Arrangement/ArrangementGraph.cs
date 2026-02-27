@@ -7,13 +7,17 @@ public sealed class ArrangementGraph
         IReadOnlyList<ArrangementEdge> edges,
         IReadOnlyDictionary<int, IReadOnlyList<int>> incidentEdgesByVertex,
         int coplanarFaceCountA,
-        int coplanarFaceCountB)
+        int coplanarFaceCountB,
+        int coplanarPairNormalsAgreeCount = 0,
+        int coplanarPairNormalsOpposeCount = 0)
     {
         Vertices = vertices;
         Edges = edges;
         IncidentEdgesByVertex = incidentEdgesByVertex;
         CoplanarFaceCountA = coplanarFaceCountA;
         CoplanarFaceCountB = coplanarFaceCountB;
+        CoplanarPairNormalsAgreeCount = coplanarPairNormalsAgreeCount;
+        CoplanarPairNormalsOpposeCount = coplanarPairNormalsOpposeCount;
     }
 
     public IReadOnlyList<ArrangementVertex> Vertices { get; }
@@ -26,5 +30,11 @@ public sealed class ArrangementGraph
 
     public int CoplanarFaceCountB { get; }
 
+    public int CoplanarPairNormalsAgreeCount { get; }
+
+    public int CoplanarPairNormalsOpposeCount { get; }
+
     public bool HasCoplanarPairs => CoplanarFaceCountA > 0 || CoplanarFaceCountB > 0;
+
+    public bool HasOpposingCoplanarPairs => CoplanarPairNormalsOpposeCount > 0;
 }

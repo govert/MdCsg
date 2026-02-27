@@ -16,6 +16,8 @@ public sealed class RobustOperationOptions
 
     public bool TreatCoplanarIntersectionAsError { get; init; } = false;
 
+    public bool TreatOpposingCoplanarPairsAsError { get; init; } = false;
+
     public bool TreatOpenArrangementAsError { get; init; } = false;
 
     public bool FailOnValidationError { get; init; } = true;

@@ -14,6 +14,10 @@ public sealed class RobustDiagnostics
 
     public int ArrangementCoplanarFaceCountB { get; init; }
 
+    public int ArrangementCoplanarPairNormalsAgreeCount { get; init; }
+
+    public int ArrangementCoplanarPairNormalsOpposeCount { get; init; }
+
     public int ArrangementEndpointVertexCount { get; init; }
 
     public int ArrangementConnectedComponentCount { get; init; }

@@ -58,6 +58,20 @@ public class ArrangementBuilderTests
 
         Assert.True(arrangement.CoplanarFaceCountA > 0);
         Assert.True(arrangement.CoplanarFaceCountB > 0);
+        Assert.True(arrangement.CoplanarPairNormalsOpposeCount > 0);
+    }
+
+    [Fact]
+    public void IdenticalCubes_RecordAgreeingCoplanarPairs()
+    {
+        var a = Primitives.Cube(Vec3.Zero, 2.0);
+        var b = Primitives.Cube(Vec3.Zero, 2.0);
+
+        var arrangement = ArrangementBuilder.Build(a.Mesh, b.Mesh);
+
+        Assert.True(arrangement.CoplanarFaceCountA > 0);
+        Assert.True(arrangement.CoplanarPairNormalsAgreeCount > 0);
+        Assert.True(arrangement.CoplanarPairNormalsAgreeCount + arrangement.CoplanarPairNormalsOpposeCount > 0);
     }
 
     [Fact]
