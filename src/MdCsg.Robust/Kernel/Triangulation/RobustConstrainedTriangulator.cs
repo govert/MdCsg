@@ -186,6 +186,9 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         // Heuristic gate:
         // - dense/large constrained inputs are usually face-cutter style point sets,
         // - low-complexity polygonal inputs are better handled by partition/ear paths.
+        if (!IsSimpleBoundaryOrder(vertices2D))
+            return true;
+
         if (vertices2D.Length > 10)
             return true;
 
@@ -193,6 +196,52 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             return true;
 
         return AllPointsInsideSeedTriangle(vertices2D);
+    }
+
+    private static bool IsSimpleBoundaryOrder(Vec2[] vertices2D)
+    {
+        int count = vertices2D.Length;
+        if (count < 3)
+            return false;
+
+        // Reject repeated consecutive vertices.
+        for (int i = 0; i < count; i++)
+        {
+            int j = (i + 1) % count;
+            if (vertices2D[i].Equals(vertices2D[j]))
+                return false;
+        }
+
+        // Polygon edges from index order must not self-intersect at non-adjacent pairs.
+        for (int i = 0; i < count; i++)
+        {
+            int iNext = (i + 1) % count;
+            for (int j = i + 1; j < count; j++)
+            {
+                int jNext = (j + 1) % count;
+
+                if (i == j || i == jNext || iNext == j || iNext == jNext)
+                    continue;
+
+                if (SegmentsProperlyIntersect(
+                    vertices2D[i],
+                    vertices2D[iNext],
+                    vertices2D[j],
+                    vertices2D[jNext]))
+                    return false;
+            }
+        }
+
+        // Must have non-zero signed area to be a usable boundary loop.
+        double signedArea2 = 0.0;
+        for (int i = 0; i < count; i++)
+        {
+            var a = vertices2D[i];
+            var b = vertices2D[(i + 1) % count];
+            signedArea2 += a.X * b.Y - b.X * a.Y;
+        }
+
+        return System.Math.Abs(signedArea2) > 1e-18;
     }
 
     private static bool TryTriangulateFacePointSet(
