@@ -418,50 +418,78 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
 
         var orderedConstraints = new List<long>(requiredConstraints);
         orderedConstraints.Sort();
+        var remainingConstraints = new List<long>(orderedConstraints);
 
         var polygons = new List<List<int>> { polygon };
 
-        foreach (long constraint in orderedConstraints)
+        int guard = orderedConstraints.Count * orderedConstraints.Count + 16;
+        while (remainingConstraints.Count > 0 && guard-- > 0)
         {
-            var (start, end) = DecodeEdgeKey(constraint);
-            bool satisfied = false;
-
-            for (int i = 0; i < polygons.Count; i++)
+            bool madeProgress = false;
+            for (int ci = 0; ci < remainingConstraints.Count; ci++)
             {
-                var candidate = polygons[i];
-                if (!candidate.Contains(start) || !candidate.Contains(end))
-                    continue;
+                long constraint = remainingConstraints[ci];
+                var (start, end) = DecodeEdgeKey(constraint);
+                bool satisfied = false;
 
-                if (!TryApplyConstraintSplit(
-                    candidate,
-                    start,
-                    end,
-                    vertices2D,
-                    out var first,
-                    out var second,
-                    out bool alreadyBoundary))
+                if (ConstraintIsBoundaryInAnyPolygon(polygons, start, end))
                 {
-                    // Endpoints can appear in multiple sub-polygons after earlier
-                    // splits; a failed split in one candidate does not imply global failure.
-                    continue;
+                    satisfied = true;
+                }
+                else
+                {
+                    for (int i = 0; i < polygons.Count; i++)
+                    {
+                        var candidate = polygons[i];
+                        if (!candidate.Contains(start) || !candidate.Contains(end))
+                            continue;
+
+                        if (!TryApplyConstraintSplit(
+                            candidate,
+                            start,
+                            end,
+                            vertices2D,
+                            out var first,
+                            out var second,
+                            out bool alreadyBoundary))
+                        {
+                            // Endpoints can appear in multiple sub-polygons after earlier
+                            // splits; a failed split in one candidate does not imply global failure.
+                            continue;
+                        }
+
+                        if (!alreadyBoundary)
+                        {
+                            polygons[i] = first;
+                            polygons.Add(second);
+                        }
+
+                        satisfied = true;
+                        break;
+                    }
                 }
 
-                if (!alreadyBoundary)
-                {
-                    polygons[i] = first;
-                    polygons.Add(second);
-                }
+                if (!satisfied)
+                    continue;
 
-                satisfied = true;
-                break;
+                remainingConstraints.RemoveAt(ci);
+                ci--;
+                madeProgress = true;
             }
 
-            if (!satisfied)
+            if (!madeProgress)
             {
                 triangles = [];
                 failureKind = PartitionFailureKind.ConstraintSplitFailure;
                 return false;
             }
+        }
+
+        if (remainingConstraints.Count > 0)
+        {
+            triangles = [];
+            failureKind = PartitionFailureKind.ConstraintSplitFailure;
+            return false;
         }
 
         triangles = new List<(int A, int B, int C)>(System.Math.Max(0, count - 2));
@@ -479,6 +507,29 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         }
 
         return true;
+    }
+
+    private static bool ConstraintIsBoundaryInAnyPolygon(
+        IReadOnlyList<List<int>> polygons,
+        int start,
+        int end)
+    {
+        for (int i = 0; i < polygons.Count; i++)
+        {
+            var polygon = polygons[i];
+            int startIdx = polygon.IndexOf(start);
+            if (startIdx < 0)
+                continue;
+
+            int endIdx = polygon.IndexOf(end);
+            if (endIdx < 0)
+                continue;
+
+            if (AreAdjacentIndices(startIdx, endIdx, polygon.Count))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool TryTriangulateConstrainedByEarConstraints(
