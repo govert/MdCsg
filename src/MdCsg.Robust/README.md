@@ -28,6 +28,7 @@ Initial scaffold now exists:
 - `Kernel/Arrangement/ArrangementBuilder` native BVH+tri-tri arrangement builder
   - deterministic overlap traversal and canonical snapped-segment ordering
 - `Kernel/Arrangement/ArrangementAnalyzer` endpoint/component topology signals
+- `Kernel/Triangulation/RobustConstrainedTriangulator` bridge with deterministic output normalization
 - `Validation/DegenerateFaceInspector` using certified predicate checks
 - `RobustOperationOptions.TreatCoplanarIntersectionAsError` guardrail toggle for strict conformance runs
 - `RobustOperationOptions.TreatOpenArrangementAsError` guardrail toggle for strict conformance runs
