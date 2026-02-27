@@ -6,6 +6,14 @@ public sealed class RobustDiagnostics
 
     public TimeSpan OperationElapsed { get; init; }
 
+    public int ArrangementVertexCount { get; init; }
+
+    public int ArrangementEdgeCount { get; init; }
+
+    public int ArrangementCoplanarFaceCountA { get; init; }
+
+    public int ArrangementCoplanarFaceCountB { get; init; }
+
     public int PredicateEscalationCount { get; init; }
 
     public int PredicateDoubleCount { get; init; }

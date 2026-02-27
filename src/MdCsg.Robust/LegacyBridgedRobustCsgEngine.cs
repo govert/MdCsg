@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using MdCsg.Api;
 using MdCsg.Mesh;
+using MdCsg.Robust.Kernel.Arrangement;
 using MdCsg.Robust.Kernel.Predicates;
 using MdCsg.Robust.Validation;
 
@@ -22,6 +23,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         var opts = options ?? RobustOperationOptions.Default;
         var issues = new List<RobustIssue>();
         var predicateTelemetry = new PredicateTelemetryCounter();
+        ArrangementGraph? arrangement = null;
         var totalSw = Stopwatch.StartNew();
 
         if (opts.ValidateInput)
@@ -30,13 +32,30 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             ValidateInput(b, "B", opts.Mode, issues, predicateTelemetry);
         }
 
+        if (opts.AnalyzeInputIntersection)
+        {
+            arrangement = ArrangementBuilder.Build(a.Mesh, b.Mesh);
+            if (arrangement.HasCoplanarPairs)
+            {
+                var severity = opts.TreatCoplanarIntersectionAsError
+                    ? RobustIssueSeverity.Error
+                    : RobustIssueSeverity.Warning;
+                AddIssue(
+                    issues,
+                    opts.Mode,
+                    RobustIssueCode.InputIntersectionContainsCoplanarPairs,
+                    $"Input intersection has coplanar face pairs (A={arrangement.CoplanarFaceCountA}, B={arrangement.CoplanarFaceCountB}).",
+                    severity);
+            }
+        }
+
         if (opts.FailOnValidationError && issues.Any(i => i.Severity == RobustIssueSeverity.Error))
         {
             totalSw.Stop();
             return new RobustCsgResult(
                 result: null,
                 issues,
-                BuildDiagnostics(totalSw.Elapsed, TimeSpan.Zero, predicateTelemetry));
+                BuildDiagnostics(totalSw.Elapsed, TimeSpan.Zero, predicateTelemetry, arrangement));
         }
 
         var opSw = Stopwatch.StartNew();
@@ -62,7 +81,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         return new RobustCsgResult(
             result: finalResult,
             issues,
-            BuildDiagnostics(totalSw.Elapsed, opSw.Elapsed, predicateTelemetry));
+            BuildDiagnostics(totalSw.Elapsed, opSw.Elapsed, predicateTelemetry, arrangement));
     }
 
     private static void ValidateInput(
@@ -165,23 +184,29 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         List<RobustIssue> issues,
         RobustMode mode,
         RobustIssueCode code,
-        string message)
+        string message,
+        RobustIssueSeverity? explicitSeverity = null)
     {
-        var severity = mode == RobustMode.Strict
+        var severity = explicitSeverity ?? (mode == RobustMode.Strict
             ? RobustIssueSeverity.Error
-            : RobustIssueSeverity.Warning;
+            : RobustIssueSeverity.Warning);
         issues.Add(new RobustIssue(severity, code, message));
     }
 
     private static RobustDiagnostics BuildDiagnostics(
         TimeSpan totalElapsed,
         TimeSpan operationElapsed,
-        PredicateTelemetryCounter predicateTelemetry)
+        PredicateTelemetryCounter predicateTelemetry,
+        ArrangementGraph? arrangement)
     {
         return new RobustDiagnostics
         {
             TotalElapsed = totalElapsed,
             OperationElapsed = operationElapsed,
+            ArrangementVertexCount = arrangement?.Vertices.Count ?? 0,
+            ArrangementEdgeCount = arrangement?.Edges.Count ?? 0,
+            ArrangementCoplanarFaceCountA = arrangement?.CoplanarFaceCountA ?? 0,
+            ArrangementCoplanarFaceCountB = arrangement?.CoplanarFaceCountB ?? 0,
             PredicateEscalationCount = predicateTelemetry.EscalationCount,
             PredicateDoubleCount = predicateTelemetry.DoubleCount,
             PredicateExpansionCount = predicateTelemetry.ExpansionCount,

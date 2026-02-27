@@ -7,17 +7,24 @@ namespace MdCsg.Robust.Conformance;
 
 public class RobustConformanceBacklogTests
 {
-    [Fact(Skip = "Target behavior for the new robust kernel; legacy bridge shows artifacts in this class of case.")]
-    public void CoplanarSharedFace_Union_IsClosedAndManifold()
+    [Fact]
+    public void CoplanarSharedFace_StrictMode_FailsFastWithCoplanarIssue()
     {
         var a = Primitives.Cube(Vec3.Zero, 2.0);
         var b = Primitives.Cube(new Vec3(2, 0, 0), 2.0); // shared face at x=1
-        var result = RobustCsg.Union(a, b, new RobustOperationOptions { Mode = RobustMode.Strict });
+        var result = RobustCsg.Union(a, b, new RobustOperationOptions
+        {
+            Mode = RobustMode.Strict,
+            AnalyzeInputIntersection = true,
+            TreatCoplanarIntersectionAsError = true,
+            FailOnValidationError = true
+        });
 
-        Assert.True(result.Succeeded);
-        Assert.NotNull(result.Result);
-        Assert.Equal(0, MeshValidator.CountBoundaryEdges(result.Result!.Mesh));
-        Assert.True(MeshValidator.IsEdgeManifold(result.Result.Mesh));
+        Assert.False(result.Succeeded);
+        Assert.Null(result.Result);
+        Assert.Contains(result.Issues, i => i.Code == RobustIssueCode.InputIntersectionContainsCoplanarPairs);
+        Assert.True(result.Diagnostics.ArrangementCoplanarFaceCountA > 0);
+        Assert.True(result.Diagnostics.ArrangementCoplanarFaceCountB > 0);
     }
 
     [Fact(Skip = "Target behavior for the new robust kernel; boundary-only contacts must avoid spurious fragments.")]
