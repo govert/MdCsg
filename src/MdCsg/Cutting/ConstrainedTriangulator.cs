@@ -32,11 +32,10 @@ public static class ConstrainedTriangulator
         if (vertices3D.Count < 3)
             return [];
 
-        // Project to 2D using the dominant axis
-        int dropAxis = GetDominantAxis(faceNormal);
-        var pts = new Vec2[vertices3D.Count];
-        for (int i = 0; i < vertices3D.Count; i++)
-            pts[i] = ProjectTo2D(vertices3D[i], dropAxis);
+        // Project to 2D using face-plane basis vectors for maximum precision.
+        // All vertices lie on or near the face plane, so the 2D representation is
+        // faithful and avoids the area loss from oblique axis-dropping.
+        var pts = ProjectToFacePlane(vertices3D, faceNormal);
 
         if (vertices3D.Count == 3)
             return [(0, 1, 2)];
@@ -46,6 +45,30 @@ public static class ConstrainedTriangulator
 
         // Constrained Delaunay triangulation
         return ConstrainedDelaunay(pts, constraints);
+    }
+
+    /// <summary>
+    /// Triangulates using pre-computed 2D vertex positions. Use this overload when the
+    /// caller needs to control vertex projection (e.g., to snap edge-adjacent vertices
+    /// to exact 2D edge positions for conformality).
+    /// </summary>
+    /// <param name="vertices2D">Pre-projected 2D vertex positions.</param>
+    /// <param name="constraints">Constrained edges as index pairs.</param>
+    /// <returns>List of triangles as index triples.</returns>
+    public static List<(int A, int B, int C)> Triangulate(
+        Vec2[] vertices2D,
+        IReadOnlyList<(int Start, int End)> constraints)
+    {
+        if (vertices2D.Length < 3)
+            return [];
+
+        if (vertices2D.Length == 3)
+            return [(0, 1, 2)];
+
+        if (constraints.Count == 0)
+            return EarClipTriangulate(vertices2D);
+
+        return ConstrainedDelaunay(vertices2D, constraints);
     }
 
     // =========================================================================
@@ -324,7 +347,14 @@ public static class ConstrainedTriangulator
                 crossingIndices.Add(t);
         }
 
-        if (crossingIndices.Count == 0) return;
+        if (crossingIndices.Count == 0)
+        {
+            // The constraint passes through existing vertices (collinear with s and e),
+            // causing all containing triangles to be skipped by TriangleCrossedBySegment.
+            // Split the constraint at intermediate collinear vertices and enforce each sub-constraint.
+            SplitAndEnforceAtCollinearVertices(tris, pts, s, e);
+            return;
+        }
 
         var cavity = new HashSet<int>();
         foreach (int t in crossingIndices)
@@ -356,6 +386,55 @@ public static class ConstrainedTriangulator
         TriangulateCavitySide(tris, pts, e, s, below);
     }
 
+    /// <summary>
+    /// When TriangleCrossedBySegment finds no crossing triangles (because the constraint
+    /// passes through existing vertices), find those collinear intermediate vertices
+    /// and recursively enforce the sub-constraints s→v1, v1→v2, ..., vN→e.
+    /// </summary>
+    private static void SplitAndEnforceAtCollinearVertices(
+        List<(int A, int B, int C)> tris, Vec2[] pts, int s, int e)
+    {
+        double dx = pts[e].X - pts[s].X;
+        double dy = pts[e].Y - pts[s].Y;
+        double lenSq = dx * dx + dy * dy;
+        if (lenSq < 1e-30) return;
+
+        var collinear = new List<(int Idx, double T)>();
+        // Check all vertices in the triangulation (not just pts.Length, use actual vertex count)
+        int vertexCount = 0;
+        foreach (var (a, b, c) in tris)
+        {
+            if (a + 1 > vertexCount) vertexCount = a + 1;
+            if (b + 1 > vertexCount) vertexCount = b + 1;
+            if (c + 1 > vertexCount) vertexCount = c + 1;
+        }
+
+        for (int v = 0; v < vertexCount; v++)
+        {
+            if (v == s || v == e) continue;
+            if (Orient2D.Evaluate(pts[s], pts[e], pts[v]) != PredicateSign.Zero) continue;
+
+            // Check if v is strictly between s and e (parametric t in (0, 1))
+            double t = (pts[v].X - pts[s].X) * dx + (pts[v].Y - pts[s].Y) * dy;
+            if (t > 0 && t < lenSq)
+                collinear.Add((v, t));
+        }
+
+        if (collinear.Count == 0) return;
+
+        // Sort by parametric position along the constraint
+        collinear.Sort((a, b) => a.T.CompareTo(b.T));
+
+        // Enforce sub-constraints: s→c1, c1→c2, ..., cN→e
+        int prev = s;
+        foreach (var (v, _) in collinear)
+        {
+            EnforceConstraint(tris, pts, prev, v);
+            prev = v;
+        }
+        EnforceConstraint(tris, pts, prev, e);
+    }
+
     private static void TriangulateCavitySide(
         List<(int A, int B, int C)> tris, Vec2[] pts,
         int s, int e, List<int> side)
@@ -383,6 +462,8 @@ public static class ConstrainedTriangulator
         while (poly.Count > 3)
         {
             bool earFound = false;
+
+            // First pass: find a strictly positive-area ear
             for (int i = 0; i < poly.Count; i++)
             {
                 int prev = poly[(i - 1 + poly.Count) % poly.Count];
@@ -397,12 +478,12 @@ public static class ConstrainedTriangulator
                     break;
                 }
             }
-            if (!earFound)
-            {
-                for (int i = 1; i < poly.Count - 1; i++)
-                    tris.Add((poly[0], poly[i], poly[i + 1]));
-                return;
-            }
+            if (earFound) continue;
+
+            // Fan fallback
+            for (int i = 1; i < poly.Count - 1; i++)
+                tris.Add((poly[0], poly[i], poly[i + 1]));
+            return;
         }
 
         if (poly.Count == 3)
@@ -544,6 +625,50 @@ public static class ConstrainedTriangulator
         return !(hasNeg && hasPos);
     }
 
+    /// <summary>
+    /// Snaps non-corner 2D vertices that lie near an original triangle edge to the exact
+    /// parametric position on that edge. This ensures the CDT treats them as on-edge
+    /// (triggering SplitEdge) instead of interior (creating degenerate triangles).
+    /// </summary>
+    private static void SnapVerticesToTriangleEdges(Vec2[] pts, int count)
+    {
+        // Original triangle corners are indices 0, 1, 2
+        // Edges: 0→1, 1→2, 2→0
+        ReadOnlySpan<int> edgeStart = [0, 1, 2];
+        ReadOnlySpan<int> edgeEnd = [1, 2, 0];
+
+        for (int i = 3; i < count; i++)
+        {
+            var p = pts[i];
+
+            for (int e = 0; e < 3; e++)
+            {
+                var a = pts[edgeStart[e]];
+                var b = pts[edgeEnd[e]];
+                double dx = b.X - a.X;
+                double dy = b.Y - a.Y;
+                double lenSq = dx * dx + dy * dy;
+                if (lenSq < 1e-30) continue;
+
+                // Parametric position along edge
+                double t = ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / lenSq;
+                if (t <= 0.0 || t >= 1.0) continue; // Not interior to edge
+
+                // Distance from point to edge line
+                double projX = a.X + t * dx;
+                double projY = a.Y + t * dy;
+                double distSq = (p.X - projX) * (p.X - projX) + (p.Y - projY) * (p.Y - projY);
+
+                // Snap if close to edge (relative to edge length)
+                if (distSq < lenSq * 1e-10)
+                {
+                    pts[i] = new Vec2(projX, projY);
+                    break; // Each vertex can be on at most one edge interior
+                }
+            }
+        }
+    }
+
     private static long EdgeKey(int a, int b) =>
         a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
 
@@ -569,4 +694,59 @@ public static class ConstrainedTriangulator
         1 => new Vec2(p.X, p.Z),
         _ => new Vec2(p.X, p.Y),
     };
+
+    /// <summary>
+    /// Projects vertices to 2D using orthogonal basis vectors in the face plane.
+    /// This gives maximum precision for in-plane geometry: points on 3D edges project
+    /// exactly onto 2D edges, and the 2D triangle has maximum area (no loss from
+    /// oblique axis-dropping). The first vertex is used as the projection origin.
+    /// </summary>
+    private static Vec2[] ProjectToFacePlane(IReadOnlyList<Vec3> vertices3D, Vec3 faceNormal)
+    {
+        var a = vertices3D[0];
+        var b = vertices3D[1];
+        var c = vertices3D[2];
+
+        // Build orthonormal basis in the face plane
+        var edge = b - a;
+        double edgeLen = edge.Length;
+        Vec3 u, v;
+
+        if (edgeLen > 1e-15)
+        {
+            u = edge * (1.0 / edgeLen);
+        }
+        else
+        {
+            // Degenerate edge A→B, try A→C
+            var edge2 = c - a;
+            double edge2Len = edge2.Length;
+            u = edge2Len > 1e-15 ? edge2 * (1.0 / edge2Len) : new Vec3(1, 0, 0);
+        }
+
+        // v = cross(normal, u) — perpendicular to u, in the face plane
+        v = Vec3.Cross(faceNormal, u);
+        double vLen = v.Length;
+        if (vLen > 1e-15)
+            v = v * (1.0 / vLen);
+        else
+        {
+            // Fallback: face normal parallel to u (shouldn't happen)
+            int dropAxis = GetDominantAxis(faceNormal);
+            var pts = new Vec2[vertices3D.Count];
+            for (int i = 0; i < vertices3D.Count; i++)
+                pts[i] = ProjectTo2D(vertices3D[i], dropAxis);
+            return pts;
+        }
+
+        // Project all vertices: 2D coords = (dot(P-A, u), dot(P-A, v))
+        var result = new Vec2[vertices3D.Count];
+        for (int i = 0; i < vertices3D.Count; i++)
+        {
+            var d = vertices3D[i] - a;
+            result[i] = new Vec2(Vec3.Dot(d, u), Vec3.Dot(d, v));
+        }
+
+        return result;
+    }
 }

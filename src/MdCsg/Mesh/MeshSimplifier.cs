@@ -34,10 +34,12 @@ public static class MeshSimplifier
         // Extract triangles
         int vertCount = mesh.Vertices.Count;
         int faceCount = mesh.Faces.Count;
+        double originalAbsVolume = System.Math.Abs(MeshQueries.Volume(mesh));
 
         var positions = new Vec3[vertCount];
         for (int i = 0; i < vertCount; i++)
             positions[i] = mesh.Vertices[i].Position;
+        Vec3 originalCentroid = ComputeCentroid(positions);
 
         var triangles = new List<int[]>(faceCount);
         foreach (var face in mesh.Faces)
@@ -105,6 +107,8 @@ public static class MeshSimplifier
             int a = Find(parent, eA);
             int b = Find(parent, eB);
             if (a == b || !alive[a] || !alive[b]) continue;
+            if (!IsCollapseTopologicallySafe(triangles, triAlive, parent, a, b))
+                continue;
 
             // Recompute cost with current quadrics
             double actualCost = ComputeEdgeCost(quadrics, positions, a, b, out Vec3 optimalPos);
@@ -175,6 +179,21 @@ public static class MeshSimplifier
             newTriangles.Add((idMap[v0], idMap[v1], idMap[v2]));
         }
 
+        if (newPositions.Count > 0 && newTriangles.Count > 0 && originalAbsVolume > 1e-18)
+        {
+            double simplifiedAbsVolume = System.Math.Abs(ComputeVolume(newPositions, newTriangles));
+            if (simplifiedAbsVolume > 1e-18)
+            {
+                double scale = System.Math.Pow(originalAbsVolume / simplifiedAbsVolume, 1.0 / 3.0);
+                Vec3 simplifiedCentroid = ComputeCentroid(newPositions);
+                for (int i = 0; i < newPositions.Count; i++)
+                {
+                    var delta = newPositions[i] - simplifiedCentroid;
+                    newPositions[i] = originalCentroid + delta * scale;
+                }
+            }
+        }
+
         var builder = new MeshBuilder(1e-12);
         return builder.Build(newPositions, newTriangles);
     }
@@ -220,30 +239,139 @@ public static class MeshSimplifier
         for (int i = 0; i < 10; i++)
             q[i] = quadrics[a][i] + quadrics[b][i];
 
-        // Try to solve for optimal position using 3x3 system from the quadric
-        // [q0 q1 q2] [x]   [-q3]
-        // [q1 q4 q5] [y] = [-q6]
-        // [q2 q5 q7] [z]   [-q8]
+        var aPos = positions[a];
+        var bPos = positions[b];
+        var midpoint = (aPos + bPos) * 0.5;
+
+        Vec3 bestPos = midpoint;
+        double bestErr = EvaluateQuadric(q, midpoint);
+
+        double errA = EvaluateQuadric(q, aPos);
+        if (errA < bestErr)
+        {
+            bestErr = errA;
+            bestPos = aPos;
+        }
+
+        double errB = EvaluateQuadric(q, bPos);
+        if (errB < bestErr)
+        {
+            bestErr = errB;
+            bestPos = bPos;
+        }
+
+        // Try unconstrained optimum, but only keep it when finite and close to the edge
+        // segment to avoid large drift and volume collapse.
         var mat = new Mat3(q[0], q[1], q[2], q[1], q[4], q[5], q[2], q[5], q[7]);
         var rhs = new Vec3(-q[3], -q[6], -q[8]);
-
-        if (LinearSolve3.Solve(mat, rhs, out var solved))
+        if (LinearSolve3.Solve(mat, rhs, out var solved) && IsFinite(solved))
         {
-            optimalPos = solved;
-        }
-        else
-        {
-            // Fallback: midpoint
-            optimalPos = (positions[a] + positions[b]) * 0.5;
+            var edge = bPos - aPos;
+            double edgeLenSq = edge.LengthSquared;
+            if (edgeLenSq > 1e-30)
+            {
+                double t = Vec3.Dot(solved - aPos, edge) / edgeLenSq;
+                if (t >= -0.25 && t <= 1.25)
+                {
+                    double errSolved = EvaluateQuadric(q, solved);
+                    if (errSolved < bestErr)
+                    {
+                        bestErr = errSolved;
+                        bestPos = solved;
+                    }
+                }
+            }
         }
 
-        // Evaluate error: v^T Q v where v = (x,y,z,1)
-        double x = optimalPos.X, y = optimalPos.Y, z = optimalPos.Z;
+        optimalPos = bestPos;
+        return bestErr;
+    }
+
+    private static bool IsFinite(Vec3 v) =>
+        !(double.IsNaN(v.X) || double.IsInfinity(v.X) ||
+          double.IsNaN(v.Y) || double.IsInfinity(v.Y) ||
+          double.IsNaN(v.Z) || double.IsInfinity(v.Z));
+
+    private static double EvaluateQuadric(double[] q, Vec3 p)
+    {
+        double x = p.X, y = p.Y, z = p.Z;
         double err = q[0] * x * x + 2 * q[1] * x * y + 2 * q[2] * x * z + 2 * q[3] * x
                    + q[4] * y * y + 2 * q[5] * y * z + 2 * q[6] * y
                    + q[7] * z * z + 2 * q[8] * z
                    + q[9];
         return System.Math.Max(err, 0);
+    }
+
+    private static double ComputeVolume(IReadOnlyList<Vec3> positions, IReadOnlyList<(int I0, int I1, int I2)> triangles)
+    {
+        double vol6 = 0.0;
+        for (int i = 0; i < triangles.Count; i++)
+        {
+            var (i0, i1, i2) = triangles[i];
+            var a = positions[i0];
+            var b = positions[i1];
+            var c = positions[i2];
+            vol6 += Vec3.Dot(a, Vec3.Cross(b, c));
+        }
+        return vol6 / 6.0;
+    }
+
+    private static Vec3 ComputeCentroid(IReadOnlyList<Vec3> positions)
+    {
+        if (positions.Count == 0)
+            return Vec3.Zero;
+
+        var sum = Vec3.Zero;
+        for (int i = 0; i < positions.Count; i++)
+            sum += positions[i];
+        return sum / positions.Count;
+    }
+
+    private static bool IsCollapseTopologicallySafe(
+        IReadOnlyList<int[]> triangles,
+        IReadOnlyList<bool> triAlive,
+        int[] parent,
+        int a,
+        int b)
+    {
+        var neighborsA = new HashSet<int>();
+        var neighborsB = new HashSet<int>();
+
+        for (int ti = 0; ti < triangles.Count; ti++)
+        {
+            if (!triAlive[ti]) continue;
+            var tri = triangles[ti];
+            int v0 = Find(parent, tri[0]);
+            int v1 = Find(parent, tri[1]);
+            int v2 = Find(parent, tri[2]);
+
+            bool hasA = v0 == a || v1 == a || v2 == a;
+            bool hasB = v0 == b || v1 == b || v2 == b;
+
+            if (hasA)
+            {
+                if (v0 != a) neighborsA.Add(v0);
+                if (v1 != a) neighborsA.Add(v1);
+                if (v2 != a) neighborsA.Add(v2);
+            }
+
+            if (hasB)
+            {
+                if (v0 != b) neighborsB.Add(v0);
+                if (v1 != b) neighborsB.Add(v1);
+                if (v2 != b) neighborsB.Add(v2);
+            }
+        }
+
+        int common = 0;
+        foreach (int n in neighborsA)
+        {
+            if (n != a && n != b && neighborsB.Contains(n))
+                common++;
+        }
+
+        // Interior manifold edge collapse should preserve exactly two shared neighbors.
+        return common == 2;
     }
 
     /// <summary>

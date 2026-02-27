@@ -26,4 +26,14 @@
     <ProjectReference Include="..\..\src\MdCsg\MdCsg.csproj" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <ProjectReference Include="..\..\src\MdCsg.Gpu\MdCsg.Gpu.csproj" />
+  </ItemGroup>
+
+  <!-- Exclude GPU integration tests from net48 (MdCsg.Gpu targets net10.0 only) -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <Compile Remove="Integration\GpuPipelineIntegrationTests.cs" />
+    <Compile Remove="Integration\GpuLargeBatchTests.cs" />
+  </ItemGroup>
+
 </Project>

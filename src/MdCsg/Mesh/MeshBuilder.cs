@@ -27,25 +27,56 @@ public class MeshBuilder
         var mesh = new HalfEdgeMesh();
         var vertexMap = new Dictionary<long, List<Vertex>>();
         var weldTolSq = _weldTolerance * _weldTolerance;
+        var invTol = 1.0 / _weldTolerance;
+
+        (long gx, long gy, long gz) GridCoords(Vec3 pos)
+        {
+            return (
+                (long)System.Math.Round(pos.X * invTol),
+                (long)System.Math.Round(pos.Y * invTol),
+                (long)System.Math.Round(pos.Z * invTol));
+        }
+
+        long HashGrid(long gx, long gy, long gz)
+        {
+#if NET
+            return HashCode.Combine(gx, gy, gz);
+#else
+            unchecked { return (gx * 397L ^ gy) * 397L ^ gz; }
+#endif
+        }
 
         Vertex GetOrAddVertex(Vec3 pos)
         {
-            var key = HashPosition(pos);
-            if (vertexMap.TryGetValue(key, out var bucket))
+            var (gx, gy, gz) = GridCoords(pos);
+
+            // Check current cell and all 26 neighbors to handle cell-boundary cases.
+            // Two points within weldTolerance can map to adjacent grid cells when they
+            // straddle a cell boundary, so we must check all 3^3 = 27 neighboring cells.
+            for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
             {
-                for (int i = 0; i < bucket.Count; i++)
+                var key = HashGrid(gx + dx, gy + dy, gz + dz);
+                if (vertexMap.TryGetValue(key, out var bucket))
                 {
-                    if (Vec3.DistanceSquared(bucket[i].Position, pos) < weldTolSq)
-                        return bucket[i];
+                    for (int i = 0; i < bucket.Count; i++)
+                    {
+                        if (Vec3.DistanceSquared(bucket[i].Position, pos) < weldTolSq)
+                            return bucket[i];
+                    }
                 }
             }
-            else
+
+            // Not found — add to primary cell
+            var primaryKey = HashGrid(gx, gy, gz);
+            if (!vertexMap.TryGetValue(primaryKey, out var primaryBucket))
             {
-                bucket = [];
-                vertexMap[key] = bucket;
+                primaryBucket = [];
+                vertexMap[primaryKey] = primaryBucket;
             }
             var v = mesh.AddVertex(pos);
-            bucket.Add(v);
+            primaryBucket.Add(v);
             return v;
         }
 
@@ -86,40 +117,41 @@ public class MeshBuilder
 
     private static void LinkTwins(HalfEdgeMesh mesh)
     {
-        // Map from (originId, targetId) → half-edge
-        var edgeMap = new Dictionary<(int, int), HalfEdge>();
+        // Map from (originId, targetId) → list of half-edges.
+        // Using a list handles non-manifold edges where multiple half-edges share
+        // the same directed edge key. A single-valued dictionary would overwrite
+        // earlier entries, leaving them permanently orphaned (unable to find twins).
+        var edgeMap = new Dictionary<(int, int), List<HalfEdge>>();
 
         foreach (var he in mesh.HalfEdges)
         {
-            var originId = he.Origin.Id;
-            var targetId = he.Target.Id;
-            var key = (originId, targetId);
-            edgeMap[key] = he;
+            var key = (he.Origin.Id, he.Target.Id);
+            if (!edgeMap.TryGetValue(key, out var list))
+            {
+                list = new List<HalfEdge>(1);
+                edgeMap[key] = list;
+            }
+            list.Add(he);
         }
 
         foreach (var he in mesh.HalfEdges)
         {
             if (he.Twin != null) continue;
             var twinKey = (he.Target.Id, he.Origin.Id);
-            if (edgeMap.TryGetValue(twinKey, out var twin))
+            if (edgeMap.TryGetValue(twinKey, out var candidates))
             {
-                he.Twin = twin;
-                twin.Twin = he;
+                for (int i = 0; i < candidates.Count; i++)
+                {
+                    var twin = candidates[i];
+                    if (twin.Twin == null && twin != he)
+                    {
+                        he.Twin = twin;
+                        twin.Twin = he;
+                        break;
+                    }
+                }
             }
         }
     }
 
-    private long HashPosition(Vec3 pos)
-    {
-        // Snap to grid and hash
-        var invTol = 1.0 / _weldTolerance;
-        long x = (long)System.Math.Round(pos.X * invTol);
-        long y = (long)System.Math.Round(pos.Y * invTol);
-        long z = (long)System.Math.Round(pos.Z * invTol);
-#if NET
-        return HashCode.Combine(x, y, z);
-#else
-        unchecked { return (x * 397L ^ y) * 397L ^ z; }
-#endif
-    }
 }

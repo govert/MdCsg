@@ -67,7 +67,19 @@ public static class NelderMead
 
             // Check convergence: range of values
             double range = values[worst] - values[best];
-            if (range < tol) break;
+            double simplexSpan = 0.0;
+            for (int i = 0; i < nv; i++)
+            {
+                for (int j = 0; j < n; j++)
+                {
+                    double d = System.Math.Abs(simplex[i][j] - simplex[best][j]);
+                    if (d > simplexSpan) simplexSpan = d;
+                }
+            }
+
+            // Require both value and simplex-size convergence to avoid
+            // early termination on symmetric plateaus.
+            if (range < tol && simplexSpan < tol) break;
 
             // Centroid of all points except worst
             var centroid = new double[n];

@@ -66,6 +66,20 @@ public class IntersectionGraph
         return ComputeSequential(meshA, meshB, overlappingPairs, gridSize);
     }
 
+    /// <summary>
+    /// Runs the edge-based dedup pass on both meshes' face segments.
+    /// </summary>
+    private static void DeduplicateAll(
+        HalfEdgeMesh meshA, HalfEdgeMesh meshB,
+        List<IntersectionSegment> segments,
+        Dictionary<int, List<IntersectionSegment>> faceSegmentsA,
+        Dictionary<int, List<IntersectionSegment>> faceSegmentsB,
+        double gridSize)
+    {
+        DeduplicateEdgePoints(meshA, faceSegmentsA, segments, gridSize);
+        DeduplicateEdgePoints(meshB, faceSegmentsB, segments, gridSize);
+    }
+
     private static IntersectionGraph ComputeSequential(
         HalfEdgeMesh meshA,
         HalfEdgeMesh meshB,
@@ -87,6 +101,8 @@ public class IntersectionGraph
                 segments, faceSegmentsA, faceSegmentsB, coplanarFacesA, coplanarFacesB);
         }
 
+        DeduplicateAll(meshA, meshB, segments, faceSegmentsA, faceSegmentsB, gridSize);
+
         return new IntersectionGraph(segments, faceSegmentsA, faceSegmentsB, coplanarFacesA, coplanarFacesB);
     }
 
@@ -107,7 +123,16 @@ public class IntersectionGraph
             results[i] = ProcessPair(triA, triB, faceA, faceB, gridSize);
         });
 
-        return MergePairOutputs(results);
+        var graph = MergePairOutputs(results);
+
+        // Dedup after merging parallel results
+        DeduplicateAll(meshA, meshB,
+            (List<IntersectionSegment>)graph.Segments,
+            (Dictionary<int, List<IntersectionSegment>>)graph.FaceSegmentsA,
+            (Dictionary<int, List<IntersectionSegment>>)graph.FaceSegmentsB,
+            gridSize);
+
+        return graph;
     }
 
     /// <summary>
@@ -303,6 +328,180 @@ public class IntersectionGraph
 
         /// <summary>Coplanar segments for face B (already snapped, non-degenerate).</summary>
         public List<IntersectionSegment>? CoplanarSegsB;
+    }
+
+    /// <summary>
+    /// Deduplicates intersection points that lie on the same original mesh edge.
+    /// When two adjacent faces share an edge and both have an intersection point
+    /// on it, the raw computed positions may differ slightly. This pass ensures
+    /// they get identical Vec3 values by canonicalizing per-edge split points.
+    /// </summary>
+    private static void DeduplicateEdgePoints(
+        HalfEdgeMesh mesh,
+        Dictionary<int, List<IntersectionSegment>> faceSegments,
+        List<IntersectionSegment> allSegments,
+        double gridSize)
+    {
+        if (faceSegments.Count == 0) return;
+
+        var tolSq = gridSize * gridSize;
+
+        // Phase 1: Collect all intersection points on each original edge.
+        // EdgeKey = packed (lo, hi) vertex IDs.
+        var edgeCanonical = new Dictionary<long, List<Vec3>>();
+
+        foreach (var kvp in faceSegments)
+        {
+            int faceIdx = kvp.Key;
+            var segs = kvp.Value;
+            if (faceIdx >= mesh.Faces.Count) continue;
+
+            var face = mesh.Faces[faceIdx];
+            var he0 = face.Edge;
+            var he1 = he0.Next;
+            var he2 = he1.Next;
+
+            var faceEdges = new (Vec3 P0, Vec3 P1, long Key)[]
+            {
+                (he0.Origin.Position, he0.Target.Position, PackEdgeKey(he0.Origin.Id, he0.Target.Id)),
+                (he1.Origin.Position, he1.Target.Position, PackEdgeKey(he1.Origin.Id, he1.Target.Id)),
+                (he2.Origin.Position, he2.Target.Position, PackEdgeKey(he2.Origin.Id, he2.Target.Id))
+            };
+
+            foreach (var seg in segs)
+            {
+                RegisterPointOnEdge(seg.Start, faceEdges, edgeCanonical, gridSize, tolSq);
+                RegisterPointOnEdge(seg.End, faceEdges, edgeCanonical, gridSize, tolSq);
+            }
+        }
+
+        if (edgeCanonical.Count == 0) return;
+
+        // Phase 2: Build a replacement map from any point to its canonical version.
+        // For each edge, all points within gridSize of each other share the first one.
+        var pointReplacements = new Dictionary<(long, long, long), Vec3>();
+
+        foreach (var ecKvp in edgeCanonical)
+        {
+            var points = ecKvp.Value;
+            if (points.Count <= 1) continue;
+
+            // For each point, find its canonical (first point within gridSize)
+            for (int i = 1; i < points.Count; i++)
+            {
+                for (int j = 0; j < i; j++)
+                {
+                    if (Vec3.DistanceSquared(points[i], points[j]) < tolSq)
+                    {
+                        var key = MakeBitKey(points[i]);
+                        if (!pointReplacements.ContainsKey(key))
+                            pointReplacements[key] = points[j];
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (pointReplacements.Count == 0) return;
+
+        // Phase 3: Rewrite segments in the face-segments dictionary and allSegments list.
+        RewriteSegments(faceSegments, allSegments, pointReplacements);
+    }
+
+    private static void RegisterPointOnEdge(
+        Vec3 point,
+        (Vec3 P0, Vec3 P1, long Key)[] faceEdges,
+        Dictionary<long, List<Vec3>> edgeCanonical,
+        double gridSize,
+        double tolSq)
+    {
+        foreach (var (p0, p1, key) in faceEdges)
+        {
+            // Skip if point is at an original vertex
+            if (Vec3.DistanceSquared(point, p0) < tolSq) return;
+            if (Vec3.DistanceSquared(point, p1) < tolSq) return;
+
+            var edge = p1 - p0;
+            double edgeLenSq = edge.LengthSquared;
+            if (edgeLenSq < tolSq) continue;
+
+            double t = Vec3.Dot(point - p0, edge) / edgeLenSq;
+            if (t <= gridSize || t >= 1.0 - gridSize) continue;
+
+            var projected = p0 + edge * t;
+            if (Vec3.DistanceSquared(point, projected) < tolSq)
+            {
+                if (!edgeCanonical.TryGetValue(key, out var list))
+                {
+                    list = [];
+                    edgeCanonical[key] = list;
+                }
+
+                // Only add if not already present (bitwise)
+                bool found = false;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    if (Vec3.DistanceSquared(list[i], point) < double.Epsilon)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) list.Add(point);
+                return;
+            }
+        }
+    }
+
+    private static void RewriteSegments(
+        Dictionary<int, List<IntersectionSegment>> faceSegments,
+        List<IntersectionSegment> allSegments,
+        Dictionary<(long, long, long), Vec3> replacements)
+    {
+        // Rewrite allSegments
+        for (int i = 0; i < allSegments.Count; i++)
+        {
+            var seg = allSegments[i];
+            var start = TryReplace(seg.Start, replacements);
+            var end = TryReplace(seg.End, replacements);
+            if (start != seg.Start || end != seg.End)
+                allSegments[i] = new IntersectionSegment(start, end, seg.FaceIndexA, seg.FaceIndexB);
+        }
+
+        // Rewrite faceSegments
+        foreach (var fsKvp in faceSegments)
+        {
+            var segments = fsKvp.Value;
+            for (int i = 0; i < segments.Count; i++)
+            {
+                var seg = segments[i];
+                var start = TryReplace(seg.Start, replacements);
+                var end = TryReplace(seg.End, replacements);
+                if (start != seg.Start || end != seg.End)
+                    segments[i] = new IntersectionSegment(start, end, seg.FaceIndexA, seg.FaceIndexB);
+            }
+        }
+    }
+
+    private static Vec3 TryReplace(Vec3 point, Dictionary<(long, long, long), Vec3> replacements)
+    {
+        var key = MakeBitKey(point);
+        return replacements.TryGetValue(key, out var canonical) ? canonical : point;
+    }
+
+    private static (long, long, long) MakeBitKey(Vec3 v)
+    {
+        return (
+            BitConverter.DoubleToInt64Bits(v.X),
+            BitConverter.DoubleToInt64Bits(v.Y),
+            BitConverter.DoubleToInt64Bits(v.Z));
+    }
+
+    private static long PackEdgeKey(int id0, int id1)
+    {
+        int lo = id0 < id1 ? id0 : id1;
+        int hi = id0 < id1 ? id1 : id0;
+        return ((long)lo << 32) | (uint)hi;
     }
 
     private static void AddToDict(Dictionary<int, List<IntersectionSegment>> dict, int faceIdx, IntersectionSegment seg)

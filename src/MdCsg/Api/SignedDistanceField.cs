@@ -30,6 +30,8 @@ public class SignedDistanceField
     public double SignedDistance(Vec3 point)
     {
         double dist = _classifier.DistanceToSurface(point);
+        if (dist <= 1e-15)
+            dist = 1e-15;
         var cls = _classifier.Classify(point);
         return cls == SolidClassification.Inside ? -dist : dist;
     }

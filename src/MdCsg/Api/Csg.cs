@@ -1,4 +1,3 @@
-using MdCsg.Bvh;
 using MdCsg.Classification;
 using MdCsg.Cutting;
 using MdCsg.Intersection;
@@ -21,19 +20,19 @@ public static class Csg
     /// Computes the union A ∪ B.
     /// </summary>
     public static CsgResult Union(Solid a, Solid b, CsgOptions? options = null) =>
-        Evaluate(a, b, CsgOperation.Union, options ?? new CsgOptions());
+        EvaluateWithComplements(a, b, CsgOperation.Union, options ?? new CsgOptions());
 
     /// <summary>
     /// Computes the intersection A ∩ B.
     /// </summary>
     public static CsgResult Intersect(Solid a, Solid b, CsgOptions? options = null) =>
-        Evaluate(a, b, CsgOperation.Intersection, options ?? new CsgOptions());
+        EvaluateWithComplements(a, b, CsgOperation.Intersection, options ?? new CsgOptions());
 
     /// <summary>
     /// Computes the difference A \ B.
     /// </summary>
     public static CsgResult Difference(Solid a, Solid b, CsgOptions? options = null) =>
-        Evaluate(a, b, CsgOperation.Difference, options ?? new CsgOptions());
+        EvaluateWithComplements(a, b, CsgOperation.Difference, options ?? new CsgOptions());
 
     // ── Mesh × HalfSpace ────────────────────────────────────────
 
@@ -114,15 +113,26 @@ public static class Csg
         var intersections = IntersectionGraph.Compute(a.Mesh, b.Mesh, options.GridSize, options.Parallel);
 
         // Step 2: Cut both meshes along intersection curves
-        var cutA = MeshCutter.Cut(a.Mesh, intersections.FaceSegmentsA, options.Parallel);
-        var cutB = MeshCutter.Cut(b.Mesh, intersections.FaceSegmentsB, options.Parallel);
+        var cutA = MeshCutter.Cut(a.Mesh, intersections.FaceSegmentsA, options.Parallel, options.GridSize, useEdgeSplitConstraints: true);
+        var cutB = MeshCutter.Cut(b.Mesh, intersections.FaceSegmentsB, options.Parallel, options.GridSize, useEdgeSplitConstraints: true);
 
-        // Step 3: Build adjacency and extract patches
+        // Step 3: Build adjacency and extract patches.
+        // For intersecting meshes, intra-face extraction is more robust when
+        // intersection chains are not perfectly closed across face boundaries.
         var adjA = SubTriangleAdjacency.Build(cutA.SubTriangles);
         var adjB = SubTriangleAdjacency.Build(cutB.SubTriangles);
-
-        var patchesA = PatchExtractor.Extract(cutA.SubTriangles, adjA);
-        var patchesB = PatchExtractor.Extract(cutB.SubTriangles, adjB);
+        List<Patch> patchesA;
+        List<Patch> patchesB;
+        if (intersections.Segments.Count > 0)
+        {
+            patchesA = IntraFacePatchExtractor.Extract(cutA.SubTriangles);
+            patchesB = IntraFacePatchExtractor.Extract(cutB.SubTriangles);
+        }
+        else
+        {
+            patchesA = PatchExtractor.Extract(cutA.SubTriangles, adjA);
+            patchesB = PatchExtractor.Extract(cutB.SubTriangles, adjB);
+        }
 
         // Step 3b: Mark coplanar patches
         MarkCoplanarPatches(patchesA, cutA.SubTriangles, intersections.CoplanarFacesA);
@@ -141,6 +151,19 @@ public static class Csg
 
         // Step 6: Stitch into output mesh
         var resultMesh = MeshStitcher.Stitch(assembly.Triangles, options.WeldTolerance);
+        if (intersections.Segments.Count > 0)
+        {
+            if (MeshValidator.CountBoundaryEdges(resultMesh) > 0)
+            {
+                double repairTolerance = System.Math.Max(options.WeldTolerance * 2.0, options.GridSize * 8.0);
+                MeshStitcher.RepairBoundary(resultMesh, repairTolerance);
+            }
+
+            if (MeshValidator.CountBoundaryEdges(resultMesh) > 0)
+                MeshStitcher.CloseBoundaryLoops(resultMesh);
+
+            resultMesh = PruneFragmentComponents(resultMesh, options.WeldTolerance);
+        }
 
         return new CsgResult
         {
@@ -152,13 +175,95 @@ public static class Csg
         };
     }
 
+    private static CsgResult EvaluateWithComplements(Solid a, Solid b, CsgOperation operation, CsgOptions options)
+    {
+        bool compA = a.IsComplemented;
+        bool compB = b.IsComplemented;
+        if (!compA && !compB)
+            return Evaluate(a, b, operation, options);
+
+        var baseA = compA ? a.Complement() : a;
+        var baseB = compB ? b.Complement() : b;
+
+        CsgResult result;
+        bool complementResult;
+
+        switch (operation)
+        {
+            case CsgOperation.Union:
+                if (compA && compB)
+                {
+                    result = Evaluate(baseA, baseB, CsgOperation.Intersection, options);
+                    complementResult = true; // ~A ∪ ~B = ~(A ∩ B)
+                }
+                else if (compA)
+                {
+                    result = Evaluate(baseA, baseB, CsgOperation.Difference, options);
+                    complementResult = true; // ~A ∪ B = ~(A \ B)
+                }
+                else
+                {
+                    result = Evaluate(baseB, baseA, CsgOperation.Difference, options);
+                    complementResult = true; // A ∪ ~B = ~(B \ A)
+                }
+                break;
+
+            case CsgOperation.Intersection:
+                if (compA && compB)
+                {
+                    result = Evaluate(baseA, baseB, CsgOperation.Union, options);
+                    complementResult = true; // ~A ∩ ~B = ~(A ∪ B)
+                }
+                else if (compA)
+                {
+                    result = Evaluate(baseB, baseA, CsgOperation.Difference, options);
+                    complementResult = false; // ~A ∩ B = B \ A
+                }
+                else
+                {
+                    result = Evaluate(baseA, baseB, CsgOperation.Difference, options);
+                    complementResult = false; // A ∩ ~B = A \ B
+                }
+                break;
+
+            case CsgOperation.Difference:
+                if (compA && compB)
+                {
+                    result = Evaluate(baseB, baseA, CsgOperation.Difference, options);
+                    complementResult = false; // ~A \ ~B = B \ A
+                }
+                else if (compA)
+                {
+                    result = Evaluate(baseA, baseB, CsgOperation.Union, options);
+                    complementResult = true; // ~A \ B = ~(A ∪ B)
+                }
+                else if (compB)
+                {
+                    result = Evaluate(baseA, baseB, CsgOperation.Intersection, options);
+                    complementResult = false; // A \ ~B = A ∩ B
+                }
+                else
+                {
+                    result = Evaluate(baseA, baseB, CsgOperation.Difference, options);
+                    complementResult = false;
+                }
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(operation), operation, null);
+        }
+
+        result.Mesh.IsComplemented = complementResult;
+        return result;
+    }
+
     // ── Complement ──────────────────────────────────────────────────
 
     /// <summary>
-    /// Returns the complement of a solid by reversing the winding of all faces.
+    /// Returns the set-theoretic complement of a solid.
     /// </summary>
     /// <param name="solid">The solid to complement.</param>
-    /// <returns>A new solid with reversed face normals.</returns>
+    /// <returns>A new solid marked as complemented with reversed winding.</returns>
     public static Solid Complement(Solid solid)
     {
         var positions = new List<Vec3>(solid.Mesh.Vertices.Count);
@@ -169,12 +274,12 @@ public static class Csg
         foreach (var face in solid.Mesh.Faces)
         {
             var verts = face.GetVertices();
-            // Swap second and third to reverse winding
             triangles.Add((verts[0].Id, verts[2].Id, verts[1].Id));
         }
 
         var builder = new MeshBuilder(1e-12);
         var mesh = builder.Build(positions, triangles);
+        mesh.IsComplemented = !solid.IsComplemented;
         return new Solid(mesh);
     }
 
@@ -268,5 +373,220 @@ public static class Csg
                 }
             }
         }
+    }
+
+    private static HalfEdgeMesh PruneFragmentComponents(HalfEdgeMesh mesh, double weldTolerance)
+    {
+        var components = MeshQueries.ConnectedComponents(mesh);
+        if (components.Count <= 1)
+            return mesh;
+
+        var keep = new bool[components.Count];
+        var faceCounts = new int[components.Count];
+        var absVolumes = new double[components.Count];
+        for (int ci = 0; ci < components.Count; ci++)
+        {
+            keep[ci] = true;
+            faceCounts[ci] = components[ci].Count;
+            absVolumes[ci] = System.Math.Abs(ComputeSignedVolume(mesh, components[ci]));
+
+            // A closed triangular surface component cannot have fewer than 4 faces.
+            if (components[ci].Count < 4)
+            {
+                keep[ci] = false;
+                continue;
+            }
+
+            var stats = GetComponentEdgeStats(mesh, components[ci]);
+            if (components[ci].Count <= 8 && (stats.BoundaryEdgeCount > 0 || stats.NonManifoldEdgeCount > 0))
+            {
+                keep[ci] = false;
+            }
+        }
+
+        int maxFaces = 0;
+        double maxAbsVolume = 0.0;
+        for (int ci = 0; ci < components.Count; ci++)
+        {
+            if (!keep[ci]) continue;
+            if (faceCounts[ci] > maxFaces) maxFaces = faceCounts[ci];
+            if (absVolumes[ci] > maxAbsVolume) maxAbsVolume = absVolumes[ci];
+        }
+
+        if (maxFaces > 0 && maxAbsVolume > 0.0)
+        {
+            const double relFaceThreshold = 0.05;
+            const double relVolumeThreshold = 0.01;
+            double minFaces = maxFaces * relFaceThreshold;
+            double minVolume = maxAbsVolume * relVolumeThreshold;
+
+            for (int ci = 0; ci < components.Count; ci++)
+            {
+                if (!keep[ci]) continue;
+                if (faceCounts[ci] < minFaces && absVolumes[ci] < minVolume)
+                    keep[ci] = false;
+            }
+        }
+
+        int totalKeptFaces = 0;
+        for (int ci = 0; ci < components.Count; ci++)
+        {
+            if (keep[ci]) totalKeptFaces += faceCounts[ci];
+        }
+
+        if (totalKeptFaces > 0 && maxFaces >= totalKeptFaces * 0.70)
+        {
+            double minFaces = maxFaces * 0.20;
+            double minVolume = maxAbsVolume * 0.20;
+            for (int ci = 0; ci < components.Count; ci++)
+            {
+                if (!keep[ci]) continue;
+                if (faceCounts[ci] < minFaces && absVolumes[ci] < minVolume)
+                    keep[ci] = false;
+            }
+        }
+
+        int largestIdx = -1;
+        int largestFaces = 0;
+        int secondLargestFaces = 0;
+        for (int ci = 0; ci < components.Count; ci++)
+        {
+            if (!keep[ci]) continue;
+            int f = faceCounts[ci];
+            if (f > largestFaces)
+            {
+                secondLargestFaces = largestFaces;
+                largestFaces = f;
+                largestIdx = ci;
+            }
+            else if (f > secondLargestFaces)
+            {
+                secondLargestFaces = f;
+            }
+        }
+
+        if (largestIdx >= 0 && secondLargestFaces > 0 && largestFaces >= secondLargestFaces * 10)
+        {
+            for (int ci = 0; ci < components.Count; ci++)
+                keep[ci] = ci == largestIdx;
+        }
+
+        int keepCount = 0;
+        for (int i = 0; i < keep.Length; i++)
+            if (keep[i]) keepCount++;
+
+        if (keepCount == 0)
+            return mesh;
+
+        if (keepCount == components.Count)
+            return mesh;
+
+        var positions = new List<Vec3>(mesh.Vertices.Count);
+        foreach (var v in mesh.Vertices)
+            positions.Add(v.Position);
+
+        var triangles = new List<(int I0, int I1, int I2)>();
+        for (int ci = 0; ci < components.Count; ci++)
+        {
+            if (!keep[ci]) continue;
+            foreach (int faceIdx in components[ci])
+            {
+                var verts = mesh.Faces[faceIdx].GetVertices();
+                triangles.Add((verts[0].Id, verts[1].Id, verts[2].Id));
+            }
+        }
+
+        var rebuilt = new MeshBuilder(0.0).Build(positions, triangles);
+        rebuilt.IsComplemented = mesh.IsComplemented;
+        return rebuilt;
+    }
+
+    private readonly struct ComponentEdgeStats
+    {
+        public int BoundaryEdgeCount { get; }
+        public int NonManifoldEdgeCount { get; }
+
+        public ComponentEdgeStats(int boundaryEdgeCount, int nonManifoldEdgeCount)
+        {
+            BoundaryEdgeCount = boundaryEdgeCount;
+            NonManifoldEdgeCount = nonManifoldEdgeCount;
+        }
+    }
+
+    private static ComponentEdgeStats GetComponentEdgeStats(HalfEdgeMesh mesh, IReadOnlyList<int> componentFaces)
+    {
+        var edgeUse = new Dictionary<long, int>(componentFaces.Count * 3);
+        foreach (int faceIdx in componentFaces)
+        {
+            var verts = mesh.Faces[faceIdx].GetVertices();
+            CountUndirectedEdge(edgeUse, verts[0].Id, verts[1].Id);
+            CountUndirectedEdge(edgeUse, verts[1].Id, verts[2].Id);
+            CountUndirectedEdge(edgeUse, verts[2].Id, verts[0].Id);
+        }
+
+        int boundary = 0;
+        int nonManifold = 0;
+        foreach (int count in edgeUse.Values)
+        {
+            if (count == 1) boundary++;
+            else if (count > 2) nonManifold++;
+        }
+
+        return new ComponentEdgeStats(boundary, nonManifold);
+    }
+
+    private static double ComputeSignedVolume(HalfEdgeMesh mesh, IReadOnlyList<int> componentFaces)
+    {
+        double vol6 = 0.0;
+        foreach (int faceIdx in componentFaces)
+        {
+            var face = mesh.Faces[faceIdx];
+            face.GetTrianglePositions(out var a, out var b, out var c);
+            vol6 += Vec3.Dot(a, Vec3.Cross(b, c));
+        }
+        return vol6 / 6.0;
+    }
+
+    private static void CountUndirectedEdge(Dictionary<long, int> edgeUse, int i0, int i1)
+    {
+        int lo = i0 < i1 ? i0 : i1;
+        int hi = i0 < i1 ? i1 : i0;
+        long key = ((long)lo << 32) | (uint)hi;
+        edgeUse.TryGetValue(key, out int count);
+        edgeUse[key] = count + 1;
+    }
+
+    private static HalfEdgeMesh KeepLargestComponent(HalfEdgeMesh mesh)
+    {
+        var components = MeshQueries.ConnectedComponents(mesh);
+        if (components.Count <= 1)
+            return mesh;
+
+        int largestIdx = 0;
+        int largestCount = components[0].Count;
+        for (int i = 1; i < components.Count; i++)
+        {
+            int count = components[i].Count;
+            if (count > largestCount)
+            {
+                largestCount = count;
+                largestIdx = i;
+            }
+        }
+
+        var positions = new List<Vec3>(mesh.Vertices.Count);
+        foreach (var v in mesh.Vertices)
+            positions.Add(v.Position);
+
+        var triangles = new List<(int I0, int I1, int I2)>(components[largestIdx].Count);
+        foreach (int faceIdx in components[largestIdx])
+        {
+            var verts = mesh.Faces[faceIdx].GetVertices();
+            triangles.Add((verts[0].Id, verts[1].Id, verts[2].Id));
+        }
+
+        var rebuilt = new MeshBuilder(0.0).Build(positions, triangles);
+        rebuilt.IsComplemented = mesh.IsComplemented;
+        return rebuilt;
     }
 }

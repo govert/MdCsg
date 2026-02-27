@@ -140,8 +140,10 @@ public class CsgIntegrationTests
         if (ab.FaceCount > 0)
         {
             var abc = Csg.Intersect(new Solid(ab.Mesh), c);
-            // Chain of intersections should shrink or stay same
-            Assert.True(abc.FaceCount <= ab.FaceCount || abc.FaceCount == 0);
+            // Chain of intersections should shrink or stay same in volume.
+            var volAb = new Solid(ab.Mesh).Volume();
+            var volAbc = new Solid(abc.Mesh).Volume();
+            Assert.True(volAbc <= volAb + 1e-9);
         }
     }
 

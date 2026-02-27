@@ -17,6 +17,11 @@ public class Solid
     /// <summary>The BVH built from the mesh faces.</summary>
     public BvhTree Bvh { get; }
 
+    /// <summary>
+    /// True if this solid represents the set-theoretic complement of the bounded mesh interior.
+    /// </summary>
+    public bool IsComplemented => Mesh.IsComplemented;
+
     /// <summary>The axis-aligned bounding box of the solid.</summary>
     public Aabb Bounds => Mesh.GetBounds();
 
@@ -66,16 +71,34 @@ public class Solid
     /// </summary>
     /// <param name="point">The query point.</param>
     /// <returns>True if the point is inside.</returns>
-    public bool IsInside(Vec3 point) =>
-        new BvhPointClassifier(Bvh).Classify(point) == SolidClassification.Inside;
+    public bool IsInside(Vec3 point)
+    {
+        // Use orientation-insensitive ray casting here so complement metadata
+        // controls semantic inversion consistently, even if face winding flips.
+        bool inside = new BvhPointClassifier(Bvh, useWindingNumber: false).Classify(point) == SolidClassification.Inside;
+
+        // For non-complement solids, fall back to winding-number classification when
+        // ray casting says outside. This improves robustness on noisy meshes produced
+        // by simplification/smoothing where parity can be unstable.
+        if (!inside && !IsComplemented)
+        {
+            inside = new BvhPointClassifier(Bvh, useWindingNumber: true).Classify(point) == SolidClassification.Inside;
+        }
+
+        return IsComplemented ? !inside : inside;
+    }
 
     /// <summary>
     /// Returns a new solid with all vertex positions transformed.
     /// </summary>
     /// <param name="transform">The transform to apply.</param>
     /// <returns>A new solid with transformed geometry.</returns>
-    public Solid Transform(Transform3 transform) =>
-        new(MeshTransform.Apply(Mesh, transform));
+    public Solid Transform(Transform3 transform)
+    {
+        var mesh = MeshTransform.Apply(Mesh, transform);
+        mesh.IsComplemented = Mesh.IsComplemented;
+        return new Solid(mesh);
+    }
 
     /// <summary>
     /// Returns the complement of this solid (reversed winding).

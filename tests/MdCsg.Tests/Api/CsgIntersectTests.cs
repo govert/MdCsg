@@ -137,8 +137,10 @@ public class CsgIntersectTests
         var bLarge = new Solid(MeshFactory.CreateCube(new Vec3(0.1, 0.1, 0.1)).Mesh);
         var rSmall = Csg.Intersect(a, bSmall);
         var rLarge = Csg.Intersect(a, bLarge);
-        // Larger overlap should produce more faces
-        Assert.True(rLarge.FaceCount >= rSmall.FaceCount);
+        // Larger overlap should produce at least as much intersection volume.
+        var vSmall = new Solid(rSmall.Mesh).Volume();
+        var vLarge = new Solid(rLarge.Mesh).Volume();
+        Assert.True(vLarge >= vSmall - 1e-9);
     }
 
     [Fact]

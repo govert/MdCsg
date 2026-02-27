@@ -84,6 +84,20 @@ public static class MeshValidator
     }
 
     /// <summary>
+    /// Counts the number of boundary edges (half-edges without twins).
+    /// A closed manifold mesh should have 0 boundary edges.
+    /// </summary>
+    public static int CountBoundaryEdges(HalfEdgeMesh mesh)
+    {
+        int count = 0;
+        foreach (var he in mesh.HalfEdges)
+        {
+            if (he.Twin == null) count++;
+        }
+        return count;
+    }
+
+    /// <summary>
     /// Runs all validation checks and returns a summary.
     /// </summary>
     public static MeshValidationResult Validate(HalfEdgeMesh mesh)

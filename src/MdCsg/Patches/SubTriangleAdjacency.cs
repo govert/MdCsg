@@ -35,37 +35,81 @@ public class SubTriangleAdjacency
         for (int i = 0; i < n; i++)
             adjacency.Add([]);
 
-        // Build edge map: (snapped v1, snapped v2) → list of (triIndex, isThisEdgeIntersection)
-        var edgeMap = new Dictionary<(long, long), List<(int TriIndex, bool IsThisEdgeIntersection)>>();
+        // Phase 1: Assign canonical vertex IDs using spatial hashing with neighbor-cell
+        // lookup. This ensures two positions within tolerance always get the same ID,
+        // even when they straddle a hash-grid cell boundary.
+        var vertexMap = new Dictionary<long, List<(int Id, Vec3 Pos)>>();
         var toleranceInv = 1.0 / tolerance;
+        var toleranceSq = tolerance * tolerance;
+        int nextId = 0;
+
+        int GetCanonicalId(Vec3 pos)
+        {
+            long gx = (long)System.Math.Round(pos.X * toleranceInv);
+            long gy = (long)System.Math.Round(pos.Y * toleranceInv);
+            long gz = (long)System.Math.Round(pos.Z * toleranceInv);
+
+            // Check current cell and all 26 neighbors
+            for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                var key = HashGrid(gx + dx, gy + dy, gz + dz);
+                if (vertexMap.TryGetValue(key, out var bucket))
+                {
+                    for (int k = 0; k < bucket.Count; k++)
+                    {
+                        if (Vec3.DistanceSquared(bucket[k].Pos, pos) < toleranceSq)
+                            return bucket[k].Id;
+                    }
+                }
+            }
+
+            // Not found — assign new ID and store in primary cell
+            var primaryKey = HashGrid(gx, gy, gz);
+            if (!vertexMap.TryGetValue(primaryKey, out var primaryBucket))
+            {
+                primaryBucket = [];
+                vertexMap[primaryKey] = primaryBucket;
+            }
+            int id = nextId++;
+            primaryBucket.Add((id, pos));
+            return id;
+        }
+
+        // Phase 2: Build edge map using canonical vertex IDs (not position hashes).
+        // This guarantees that geometrically shared edges always produce the same key.
+        var edgeMap = new Dictionary<(int, int), List<(int TriIndex, bool IsThisEdgeIntersection)>>();
 
         for (int i = 0; i < n; i++)
         {
             var tri = subTriangles[i];
-            var verts = new[] { tri.A, tri.B, tri.C };
+            var va = tri.A;
+            var vb = tri.B;
+            var vc = tri.C;
+            int idA = GetCanonicalId(va);
+            int idB = GetCanonicalId(vb);
+            int idC = GetCanonicalId(vc);
+            var ids = new[] { idA, idB, idC };
 
             for (int e = 0; e < 3; e++)
             {
-                var v1 = verts[e];
-                var v2 = verts[(e + 1) % 3];
-
-                long h1 = HashVec3(v1, toleranceInv);
-                long h2 = HashVec3(v2, toleranceInv);
+                int id1 = ids[e];
+                int id2 = ids[(e + 1) % 3];
 
                 // Canonical edge ordering
-                var edgeKey = h1 < h2 ? (h1, h2) : (h2, h1);
+                var edgeKey = id1 < id2 ? (id1, id2) : (id2, id1);
 
                 if (!edgeMap.TryGetValue(edgeKey, out var list))
                 {
                     list = [];
                     edgeMap[edgeKey] = list;
                 }
-                // Use the per-edge flag: is THIS specific edge an intersection edge?
                 list.Add((i, tri.IsEdgeIntersection(e)));
             }
         }
 
-        // Connect triangles that share edges
+        // Phase 3: Connect triangles that share edges
         foreach (var kvp in edgeMap)
         {
             var tris = kvp.Value;
@@ -87,15 +131,12 @@ public class SubTriangleAdjacency
         return new SubTriangleAdjacency(adjacency);
     }
 
-    private static long HashVec3(Vec3 v, double invTol)
+    private static long HashGrid(long gx, long gy, long gz)
     {
-        long x = (long)System.Math.Round(v.X * invTol);
-        long y = (long)System.Math.Round(v.Y * invTol);
-        long z = (long)System.Math.Round(v.Z * invTol);
 #if NET
-        return HashCode.Combine(x, y, z);
+        return HashCode.Combine(gx, gy, gz);
 #else
-        unchecked { return (x * 397L ^ y) * 397L ^ z; }
+        unchecked { return (gx * 397L ^ gy) * 397L ^ gz; }
 #endif
     }
 }

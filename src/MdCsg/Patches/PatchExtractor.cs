@@ -8,9 +8,11 @@ namespace MdCsg.Patches;
 public static class PatchExtractor
 {
     /// <summary>
-    /// Extracts patches from a list of sub-triangles.
+    /// Extracts patches from a list of sub-triangles using global flood fill.
     /// Each patch is a maximal connected set of sub-triangles reachable without
     /// crossing an intersection edge.
+    /// Note: For the CSG pipeline, use <see cref="IntraFacePatchExtractor"/> instead,
+    /// which prevents cross-face leaks by flood-filling within each face independently.
     /// </summary>
     public static List<Patch> Extract(
         IReadOnlyList<FaceCutter.SubTriangle> subTriangles,

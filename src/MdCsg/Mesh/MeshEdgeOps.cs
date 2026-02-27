@@ -105,6 +105,12 @@ public static class MeshEdgeOps
         if (!CheckLinkCondition(mesh, he))
             return false;
 
+        // Be conservative on high-valence vertices; this lightweight collapse operator
+        // only marks adjacent faces as deleted and does not fully retriangulate.
+        // Restricting to low-valence neighborhoods avoids corrupting larger meshes.
+        if (CountVertexValence(mesh, vKeep) > 3 || CountVertexValence(mesh, vRemove) > 3)
+            return false;
+
         // Move the kept vertex to the new position
         vKeep.Position = newPos;
 
@@ -175,6 +181,20 @@ public static class MeshEdgeOps
 
         // For a manifold interior edge, exactly 2 common neighbors (the opposite vertices)
         return commonCount <= 2;
+    }
+
+    private static int CountVertexValence(HalfEdgeMesh mesh, Vertex v)
+    {
+        var neighbors = new HashSet<int>();
+        foreach (var face in mesh.FacesAroundVertex(v))
+        {
+            foreach (var vert in face.GetVertices())
+            {
+                if (vert != v)
+                    neighbors.Add(vert.Id);
+            }
+        }
+        return neighbors.Count;
     }
 
     private static void BypassDegenerateFace(HalfEdge he)

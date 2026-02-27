@@ -20,6 +20,12 @@ public class HalfEdgeMesh
     /// <summary>All faces in the mesh.</summary>
     public IReadOnlyList<Face> Faces => _faces;
 
+    /// <summary>
+    /// True if this mesh is interpreted as the complement of its bounded interior.
+    /// This is metadata used for set semantics; the geometry itself remains bounded.
+    /// </summary>
+    public bool IsComplemented { get; set; }
+
     /// <summary>Adds a new vertex at the given position.</summary>
     public Vertex AddVertex(Vec3 position)
     {

@@ -25,7 +25,7 @@ public class CsgOptions
     /// Winding numbers are more robust for non-manifold or open meshes,
     /// but slightly slower.
     /// </summary>
-    public bool UseWindingNumber { get; set; }
+    public bool UseWindingNumber { get; set; } = false;
 
     /// <summary>
     /// Vertex welding tolerance for the output mesh.

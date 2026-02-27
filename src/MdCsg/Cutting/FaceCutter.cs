@@ -32,21 +32,139 @@ public static class FaceCutter
     /// <returns>Sub-triangles after cutting.</returns>
     public static List<SubTriangle> CutFace(Triangle3 triangle, int faceIndex, IReadOnlyList<IntersectionSegment> segments)
     {
-        if (segments.Count == 0)
+        return CutFace(triangle, faceIndex, segments, null);
+    }
+
+    /// <summary>
+    /// Cuts a triangle along the given intersection segments, with optional edge split constraints.
+    /// Edge split constraints ensure that split points on shared edges produce matching
+    /// edge subdivisions in adjacent faces, maintaining mesh conformality.
+    /// </summary>
+    /// <param name="triangle">The original triangle.</param>
+    /// <param name="faceIndex">The original face index.</param>
+    /// <param name="segments">Intersection segments that cross this triangle.</param>
+    /// <param name="edgeSplitPoints">Optional split points per edge (index 0=A-B, 1=B-C, 2=C-A). Null entries mean no splits.</param>
+    /// <returns>Sub-triangles after cutting.</returns>
+    public static List<SubTriangle> CutFace(Triangle3 triangle, int faceIndex,
+        IReadOnlyList<IntersectionSegment> segments, List<Vec3>[]? edgeSplitPoints)
+    {
+        if (!IsFinite(triangle.A) || !IsFinite(triangle.B) || !IsFinite(triangle.C))
+            return [];
+
+        if (segments.Count == 0 && edgeSplitPoints == null)
         {
             return [new SubTriangle(triangle.A, triangle.B, triangle.C, faceIndex, false)];
+        }
+
+        var planeNormal = triangle.Normal;
+        double planeNormalLenSq = planeNormal.LengthSquared;
+        bool hasValidPlane = planeNormalLenSq > 1e-30;
+
+        Vec3 ProjectToFacePlane(Vec3 point)
+        {
+            if (!hasValidPlane) return point;
+            double t = Vec3.Dot(point - triangle.A, planeNormal) / planeNormalLenSq;
+            return point - planeNormal * t;
+        }
+
+        Vec3 ProjectAndClampToFace(Vec3 point)
+        {
+            var projected = ProjectToFacePlane(point);
+            return GeometryUtil.NearestPointOnTriangle(projected, triangle.A, triangle.B, triangle.C);
         }
 
         // Collect all unique vertices: original triangle corners + intersection endpoints
         var vertices = new List<Vec3> { triangle.A, triangle.B, triangle.C };
         var constraintPairs = new List<(int Start, int End)>();
+        // Track which constraints are intersection edges (vs edge-split constraints)
+        var isIntersectionConstraint = new List<bool>();
 
         foreach (var seg in segments)
         {
-            int startIdx = AddOrFindVertex(vertices, seg.Start);
-            int endIdx = AddOrFindVertex(vertices, seg.End);
+            if (!IsFinite(seg.Start) || !IsFinite(seg.End))
+                continue;
+
+            int startIdx = AddOrFindVertex(vertices, ProjectAndClampToFace(seg.Start));
+            int endIdx = AddOrFindVertex(vertices, ProjectAndClampToFace(seg.End));
+            if (startIdx < 0 || endIdx < 0)
+                continue;
+
             if (startIdx != endIdx)
+            {
                 constraintPairs.Add((startIdx, endIdx));
+                isIntersectionConstraint.Add(true);
+            }
+        }
+
+        // Add edge-split constraints: for each original edge with split points,
+        // constrain the chain corner→split1→split2→...→nextCorner
+        if (edgeSplitPoints != null)
+        {
+            // Edge indices: 0=A-B (vertex 0→1), 1=B-C (vertex 1→2), 2=C-A (vertex 2→0)
+            int[] edgeStartVtx = [0, 1, 2];
+            int[] edgeEndVtx = [1, 2, 0];
+
+            for (int e = 0; e < 3; e++)
+            {
+                if (edgeSplitPoints.Length <= e || edgeSplitPoints[e] == null || edgeSplitPoints[e].Count == 0)
+                    continue;
+
+                var splits = edgeSplitPoints[e];
+                // Add split point vertices, snapping to exact edge positions.
+                // This ensures the CDT sees them exactly on the edge in 2D.
+                var eA = vertices[edgeStartVtx[e]];
+                var eB = vertices[edgeEndVtx[e]];
+                var eDirSnap = eB - eA;
+                double eLenSq = eDirSnap.LengthSquared;
+
+                var splitIndices = new List<int>(splits.Count);
+                foreach (var sp in splits)
+                {
+                    if (!IsFinite(sp))
+                        continue;
+
+                    int idx = AddOrFindVertex(vertices, ProjectAndClampToFace(sp));
+                    if (idx < 0)
+                        continue;
+
+                    if (idx >= 3) // Only if not an original vertex
+                    {
+                        // Snap vertex to exact position on edge: P = A + t*(B-A)
+                        if (eLenSq > 1e-30)
+                        {
+                            double t = Vec3.Dot(vertices[idx] - eA, eDirSnap) / eLenSq;
+                            if (double.IsNaN(t) || double.IsInfinity(t))
+                                continue;
+                            t = System.Math.Max(0.0, System.Math.Min(1.0, t));
+                            vertices[idx] = eA + eDirSnap * t;
+                        }
+                        splitIndices.Add(idx);
+                    }
+                }
+
+                if (splitIndices.Count == 0) continue;
+
+                // Sort by parametric t along the edge
+                var eStart = vertices[edgeStartVtx[e]];
+                var eDir = vertices[edgeEndVtx[e]] - eStart;
+                splitIndices.Sort((a, b) =>
+                {
+                    double ta = Vec3.Dot(vertices[a] - eStart, eDir);
+                    double tb = Vec3.Dot(vertices[b] - eStart, eDir);
+                    return ta.CompareTo(tb);
+                });
+
+                // Chain: corner → split1 → split2 → ... → nextCorner
+                int prev = edgeStartVtx[e];
+                foreach (int si in splitIndices)
+                {
+                    constraintPairs.Add((prev, si));
+                    isIntersectionConstraint.Add(false);
+                    prev = si;
+                }
+                constraintPairs.Add((prev, edgeEndVtx[e]));
+                isIntersectionConstraint.Add(false);
+            }
         }
 
         // Triangulate with constraints
@@ -54,18 +172,32 @@ public static class FaceCutter
         var triIndices = ConstrainedTriangulator.Triangulate(vertices, constraintPairs, faceNormal);
 
         var result = new List<SubTriangle>();
+        var intersectionConstraints = new List<(Vec3 Start, Vec3 End)>();
+        for (int ci = 0; ci < constraintPairs.Count; ci++)
+        {
+            if (!isIntersectionConstraint[ci]) continue;
+            var (cs, ce) = constraintPairs[ci];
+            intersectionConstraints.Add((vertices[cs], vertices[ce]));
+        }
+
         foreach (var (a, b, c) in triIndices)
         {
+            // Filter out degenerate sub-triangles using 3D area.
+            // The CDT filters by 2D orientation, but face-plane projection can introduce
+            // near-degenerate triangles that pass the 2D check. The 3D check is authoritative.
+            var pa = vertices[a];
+            var pb = vertices[b];
+            var pc = vertices[c];
+            double areaSq = Vec3.Cross(pb - pa, pc - pa).LengthSquared;
+            if (areaSq < 1e-30) continue; // Skip truly degenerate triangles
+
             // Check each edge individually: A-B (bit 0), B-C (bit 1), C-A (bit 2)
             byte edgeFlags = 0;
-            foreach (var (cs, ce) in constraintPairs)
-            {
-                if (IsEdgePair(a, b, cs, ce)) edgeFlags |= 1;      // A-B
-                if (IsEdgePair(b, c, cs, ce)) edgeFlags |= 1 << 1;  // B-C
-                if (IsEdgePair(c, a, cs, ce)) edgeFlags |= 1 << 2;  // C-A
-            }
+            if (IsIntersectionOutputEdge(pa, pb, intersectionConstraints)) edgeFlags |= 1;       // A-B
+            if (IsIntersectionOutputEdge(pb, pc, intersectionConstraints)) edgeFlags |= 1 << 1;  // B-C
+            if (IsIntersectionOutputEdge(pc, pa, intersectionConstraints)) edgeFlags |= 1 << 2;  // C-A
 
-            result.Add(new SubTriangle(vertices[a], vertices[b], vertices[c], faceIndex, edgeFlags != 0, edgeFlags));
+            result.Add(new SubTriangle(pa, pb, pc, faceIndex, edgeFlags != 0, edgeFlags));
         }
 
         return result;
@@ -73,6 +205,9 @@ public static class FaceCutter
 
     private static int AddOrFindVertex(List<Vec3> vertices, Vec3 point, double tolerance = 1e-8)
     {
+        if (!IsFinite(point))
+            return -1;
+
         for (int i = 0; i < vertices.Count; i++)
         {
             if (Vec3.DistanceSquared(vertices[i], point) < tolerance * tolerance)
@@ -82,8 +217,88 @@ public static class FaceCutter
         return vertices.Count - 1;
     }
 
-    private static bool IsEdgePair(int e0, int e1, int cs, int ce)
+    private static bool IsIntersectionOutputEdge(
+        Vec3 edgeStart,
+        Vec3 edgeEnd,
+        IReadOnlyList<(Vec3 Start, Vec3 End)> intersectionConstraints)
     {
-        return (e0 == cs && e1 == ce) || (e0 == ce && e1 == cs);
+        if (intersectionConstraints.Count == 0)
+            return false;
+
+        foreach (var (cs, ce) in intersectionConstraints)
+        {
+            if (EdgeLiesOnConstraint(edgeStart, edgeEnd, cs, ce))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool EdgeLiesOnConstraint(Vec3 e0, Vec3 e1, Vec3 c0, Vec3 c1)
+    {
+        var c = c1 - c0;
+        double cLenSq = c.LengthSquared;
+        if (cLenSq < 1e-24)
+            return false;
+
+        // Output edge must be collinear with the constraint segment.
+        double col0 = Vec3.Cross(e0 - c0, c).LengthSquared;
+        double col1 = Vec3.Cross(e1 - c0, c).LengthSquared;
+        if (col0 > 1e-14 || col1 > 1e-14)
+            return false;
+
+        double t0 = Vec3.Dot(e0 - c0, c) / cLenSq;
+        double t1 = Vec3.Dot(e1 - c0, c) / cLenSq;
+        const double eps = 1e-8;
+        return t0 >= -eps && t0 <= 1.0 + eps &&
+               t1 >= -eps && t1 <= 1.0 + eps;
+    }
+
+    private static bool IsFinite(Vec3 v) =>
+        !(double.IsNaN(v.X) || double.IsInfinity(v.X) ||
+          double.IsNaN(v.Y) || double.IsInfinity(v.Y) ||
+          double.IsNaN(v.Z) || double.IsInfinity(v.Z));
+
+    /// <summary>
+    /// Snaps non-corner 2D vertices that lie near an original triangle edge to the exact
+    /// parametric position on that edge. This prevents the CDT from seeing near-collinear
+    /// points as off-edge, which would produce degenerate triangles.
+    /// </summary>
+    private static void SnapVertices2DToEdges(Vec2[] pts, int count)
+    {
+        // Original triangle corners are indices 0, 1, 2
+        // Edges: 0→1, 1→2, 2→0
+        ReadOnlySpan<int> edgeStart = [0, 1, 2];
+        ReadOnlySpan<int> edgeEnd = [1, 2, 0];
+
+        for (int i = 3; i < count; i++)
+        {
+            var p = pts[i];
+
+            for (int e = 0; e < 3; e++)
+            {
+                var a = pts[edgeStart[e]];
+                var b = pts[edgeEnd[e]];
+                double dx = b.X - a.X;
+                double dy = b.Y - a.Y;
+                double lenSq = dx * dx + dy * dy;
+                if (lenSq < 1e-30) continue;
+
+                // Parametric position along edge
+                double t = ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / lenSq;
+                if (t <= 0.0 || t >= 1.0) continue; // Not interior to edge
+
+                // Distance from point to edge line
+                double projX = a.X + t * dx;
+                double projY = a.Y + t * dy;
+                double distSq = (p.X - projX) * (p.X - projX) + (p.Y - projY) * (p.Y - projY);
+
+                // Snap if close to edge (within ~1e-6 in 2D)
+                if (distSq < 1e-12)
+                {
+                    pts[i] = new Vec2(projX, projY);
+                    break; // Each vertex can be on at most one edge interior
+                }
+            }
+        }
     }
 }

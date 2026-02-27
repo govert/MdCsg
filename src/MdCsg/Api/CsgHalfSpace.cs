@@ -2,6 +2,7 @@ using MdCsg.Classification;
 using MdCsg.Cutting;
 using MdCsg.Intersection;
 using MdCsg.Math;
+using MdCsg.Mesh;
 using MdCsg.Operations;
 using MdCsg.Patches;
 
@@ -32,11 +33,21 @@ public static class CsgHalfSpace
             segmentCount += kvp.Value.Count;
 
         // Step 2: Cut the mesh along intersection curves
-        var cut = MeshCutter.Cut(mesh.Mesh, faceSegments, options.Parallel);
+        var cut = MeshCutter.Cut(mesh.Mesh, faceSegments, options.Parallel, options.GridSize, useEdgeSplitConstraints: true);
 
-        // Step 3: Build adjacency and extract patches
-        var adj = SubTriangleAdjacency.Build(cut.SubTriangles);
-        var patches = PatchExtractor.Extract(cut.SubTriangles, adj);
+        // Step 3: Build adjacency and extract patches.
+        // Intersecting cases are more robust with intra-face extraction when
+        // cut-edge flags are imperfect across face boundaries.
+        List<Patch> patches;
+        if (segmentCount > 0)
+        {
+            patches = IntraFacePatchExtractor.Extract(cut.SubTriangles);
+        }
+        else
+        {
+            var adjacency = SubTriangleAdjacency.Build(cut.SubTriangles);
+            patches = PatchExtractor.Extract(cut.SubTriangles, adjacency);
+        }
 
         // Step 4: Classify patches against the half-space
         var classifier = new PlanePointClassifier(plane);
@@ -57,6 +68,13 @@ public static class CsgHalfSpace
 
         // Step 6: Stitch into output mesh
         var resultMesh = MeshStitcher.Stitch(assembly.Triangles, options.WeldTolerance);
+        if (MeshValidator.CountBoundaryEdges(resultMesh) > 0)
+        {
+            double repairTolerance = System.Math.Max(options.WeldTolerance * 2.0, options.GridSize * 8.0);
+            MeshStitcher.RepairBoundary(resultMesh, repairTolerance);
+        }
+        if (MeshValidator.CountBoundaryEdges(resultMesh) > 0)
+            MeshStitcher.CloseBoundaryLoops(resultMesh);
 
         return new CsgResult
         {

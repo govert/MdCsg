@@ -2,6 +2,7 @@ using MdCsg.Classification;
 using MdCsg.Cutting;
 using MdCsg.Intersection;
 using MdCsg.Math;
+using MdCsg.Mesh;
 using MdCsg.Operations;
 using MdCsg.Patches;
 
@@ -26,6 +27,20 @@ public static class CsgImplicit
     /// <param name="options">CSG options.</param>
     public static CsgResult Evaluate(Solid mesh, ImplicitSolid @implicit, CsgOperation operation, CsgOptions options)
     {
+        // Robust fallback: tessellate known implicit primitives and run the
+        // standard mesh-vs-mesh CSG pipeline. This handles containment cases
+        // (no explicit intersection segments) that the analytic patch-only
+        // pipeline cannot represent by itself.
+        if (TryTessellateImplicit(@implicit, out var implicitMesh))
+        {
+            return operation switch
+            {
+                CsgOperation.Intersection => Csg.Intersect(mesh, implicitMesh, options),
+                CsgOperation.Difference => Csg.Difference(mesh, implicitMesh, options),
+                _ => throw new NotSupportedException("Implicit CSG supports Intersection and Difference only.")
+            };
+        }
+
         // Step 1: Find implicit-mesh intersections
         var faceSegments = @implicit.ComputeIntersections(mesh.Mesh, options.GridSize);
 
@@ -34,11 +49,21 @@ public static class CsgImplicit
             segmentCount += kvp.Value.Count;
 
         // Step 2: Cut the mesh along intersection curves
-        var cut = MeshCutter.Cut(mesh.Mesh, faceSegments, options.Parallel);
+        var cut = MeshCutter.Cut(mesh.Mesh, faceSegments, options.Parallel, options.GridSize, useEdgeSplitConstraints: true);
 
-        // Step 3: Build adjacency and extract patches
-        var adj = SubTriangleAdjacency.Build(cut.SubTriangles);
-        var patches = PatchExtractor.Extract(cut.SubTriangles, adj);
+        // Step 3: Build adjacency and extract patches.
+        // Intersecting cases are more robust with intra-face extraction when
+        // cut-edge flags are imperfect across face boundaries.
+        List<Patch> patches;
+        if (segmentCount > 0)
+        {
+            patches = IntraFacePatchExtractor.Extract(cut.SubTriangles);
+        }
+        else
+        {
+            var adjacency = SubTriangleAdjacency.Build(cut.SubTriangles);
+            patches = PatchExtractor.Extract(cut.SubTriangles, adjacency);
+        }
 
         // Step 4: Classify patches against the implicit solid
         var classifier = @implicit.CreateClassifier();
@@ -59,6 +84,13 @@ public static class CsgImplicit
 
         // Step 6: Stitch into output mesh
         var resultMesh = MeshStitcher.Stitch(assembly.Triangles, options.WeldTolerance);
+        if (MeshValidator.CountBoundaryEdges(resultMesh) > 0)
+        {
+            double repairTolerance = System.Math.Max(options.WeldTolerance * 2.0, options.GridSize * 8.0);
+            MeshStitcher.RepairBoundary(resultMesh, repairTolerance);
+        }
+        if (MeshValidator.CountBoundaryEdges(resultMesh) > 0)
+            MeshStitcher.CloseBoundaryLoops(resultMesh);
 
         return new CsgResult
         {
@@ -123,6 +155,22 @@ public static class CsgImplicit
         }
 
         return result;
+    }
+
+    private static bool TryTessellateImplicit(ImplicitSolid @implicit, out Solid solid)
+    {
+        switch (@implicit)
+        {
+            case ImplicitSphere sphere:
+                solid = Primitives.Sphere(sphere.Center, sphere.Radius, subdivisions: 3);
+                return true;
+            case ImplicitCylinder cylinder:
+                solid = Primitives.Cylinder(cylinder.Base, cylinder.Axis, cylinder.Radius, cylinder.Height, segments: 32);
+                return true;
+            default:
+                solid = null!;
+                return false;
+        }
     }
 
     /// <summary>
