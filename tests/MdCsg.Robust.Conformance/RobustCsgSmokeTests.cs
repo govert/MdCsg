@@ -19,6 +19,9 @@ public class RobustCsgSmokeTests
         Assert.True(result.Result!.FaceCount > 0);
         Assert.True(result.Diagnostics.TotalElapsed >= TimeSpan.Zero);
         Assert.True(result.Diagnostics.OperationElapsed >= TimeSpan.Zero);
+        Assert.True(result.Diagnostics.ArrangementVertexCount >= 0);
+        Assert.True(result.Diagnostics.ArrangementEdgeCount >= 0);
+        Assert.True(result.Diagnostics.ArrangementConnectedComponentCount >= 0);
     }
 
     [Fact]

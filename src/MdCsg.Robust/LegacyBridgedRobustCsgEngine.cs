@@ -24,6 +24,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         var issues = new List<RobustIssue>();
         var predicateTelemetry = new PredicateTelemetryCounter();
         ArrangementGraph? arrangement = null;
+        ArrangementAnalysis arrangementAnalysis = default;
         var totalSw = Stopwatch.StartNew();
 
         if (opts.ValidateInput)
@@ -35,6 +36,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         if (opts.AnalyzeInputIntersection)
         {
             arrangement = ArrangementBuilder.Build(a.Mesh, b.Mesh);
+            arrangementAnalysis = ArrangementAnalyzer.Analyze(arrangement);
             if (arrangement.HasCoplanarPairs)
             {
                 var severity = opts.TreatCoplanarIntersectionAsError
@@ -47,6 +49,19 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     $"Input intersection has coplanar face pairs (A={arrangement.CoplanarFaceCountA}, B={arrangement.CoplanarFaceCountB}).",
                     severity);
             }
+
+            if (arrangementAnalysis.EndpointVertexCount > 0)
+            {
+                var severity = opts.TreatOpenArrangementAsError
+                    ? RobustIssueSeverity.Error
+                    : RobustIssueSeverity.Warning;
+                AddIssue(
+                    issues,
+                    opts.Mode,
+                    RobustIssueCode.InputArrangementHasOpenEndpoints,
+                    $"Input arrangement has open endpoints ({arrangementAnalysis.EndpointVertexCount}).",
+                    severity);
+            }
         }
 
         if (opts.FailOnValidationError && issues.Any(i => i.Severity == RobustIssueSeverity.Error))
@@ -55,7 +70,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             return new RobustCsgResult(
                 result: null,
                 issues,
-                BuildDiagnostics(totalSw.Elapsed, TimeSpan.Zero, predicateTelemetry, arrangement));
+                BuildDiagnostics(totalSw.Elapsed, TimeSpan.Zero, predicateTelemetry, arrangement, arrangementAnalysis));
         }
 
         var opSw = Stopwatch.StartNew();
@@ -81,7 +96,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         return new RobustCsgResult(
             result: finalResult,
             issues,
-            BuildDiagnostics(totalSw.Elapsed, opSw.Elapsed, predicateTelemetry, arrangement));
+            BuildDiagnostics(totalSw.Elapsed, opSw.Elapsed, predicateTelemetry, arrangement, arrangementAnalysis));
     }
 
     private static void ValidateInput(
@@ -197,7 +212,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         TimeSpan totalElapsed,
         TimeSpan operationElapsed,
         PredicateTelemetryCounter predicateTelemetry,
-        ArrangementGraph? arrangement)
+        ArrangementGraph? arrangement,
+        ArrangementAnalysis arrangementAnalysis)
     {
         return new RobustDiagnostics
         {
@@ -207,6 +223,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             ArrangementEdgeCount = arrangement?.Edges.Count ?? 0,
             ArrangementCoplanarFaceCountA = arrangement?.CoplanarFaceCountA ?? 0,
             ArrangementCoplanarFaceCountB = arrangement?.CoplanarFaceCountB ?? 0,
+            ArrangementEndpointVertexCount = arrangementAnalysis.EndpointVertexCount,
+            ArrangementConnectedComponentCount = arrangementAnalysis.ConnectedComponentCount,
             PredicateEscalationCount = predicateTelemetry.EscalationCount,
             PredicateDoubleCount = predicateTelemetry.DoubleCount,
             PredicateExpansionCount = predicateTelemetry.ExpansionCount,

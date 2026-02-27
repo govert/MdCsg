@@ -26,5 +26,6 @@ Initial scaffold now exists:
 - `LegacyBridgedRobustCsgEngine` (transitional bridge + validation diagnostics)
 - `Kernel/Predicates/CertifiedPredicates` with precision-tier telemetry
 - `Kernel/Arrangement/ArrangementBuilder` adapter for intersection arrangement diagnostics
+- `Kernel/Arrangement/ArrangementAnalyzer` endpoint/component topology signals
 - `Validation/DegenerateFaceInspector` using certified predicate checks
 - `RobustOperationOptions.TreatCoplanarIntersectionAsError` guardrail toggle for strict conformance runs
