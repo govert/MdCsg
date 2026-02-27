@@ -92,7 +92,7 @@ Current status:
 - Conformance tests include repeated-run determinism and stable `parallel` flag behavior checks.
 - M3 internals replacement started in `Kernel/Triangulation/RobustConstrainedTriangulator`:
   - unconstrained polygons now use a native robust ear-clipping path based on certified `Orient2D` predicates,
-  - constrained input now first tries a native constrained-ear path for non-crossing diagonal constraints and falls back to legacy triangulation for unsupported/inconsistent constrained cases.
+  - constrained input now first tries native non-crossing constraint partitioning and constrained-ear handling before falling back to legacy triangulation for unsupported/inconsistent constrained cases.
 - Legacy-bridge execution now routes face-cut triangulation through the robust kernel hook (`CsgOptions.TriangulationKernel`) with diagnostics for native vs fallback usage.
 - Current conformance telemetry still shows legacy fallback usage on stable overlap cases; zero-fallback coverage is tracked as explicit backlog target.
 - Deterministic replay harness is available for arrangement-stage cases (`Diagnostics/Replay` with capture/serialize/replay + conformance tests).

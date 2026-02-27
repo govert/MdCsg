@@ -123,6 +123,110 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         IReadOnlyList<(int Start, int End)> constraints,
         out List<(int A, int B, int C)> triangles)
     {
+        if (TryTriangulateConstrainedByPartition(vertices2D, constraints, out triangles))
+            return true;
+
+        return TryTriangulateConstrainedByEarConstraints(vertices2D, constraints, out triangles);
+    }
+
+    private static bool TryTriangulateConstrainedByPartition(
+        Vec2[] vertices2D,
+        IReadOnlyList<(int Start, int End)> constraints,
+        out List<(int A, int B, int C)> triangles)
+    {
+        int count = vertices2D.Length;
+        triangles = new List<(int A, int B, int C)>(System.Math.Max(0, count - 2));
+
+        var polygon = new List<int>(count);
+        for (int i = 0; i < count; i++)
+            polygon.Add(i);
+
+        EnsureCounterClockwise(vertices2D, polygon);
+
+        if (!TryBuildRequiredConstraintState(
+            vertices2D,
+            polygon,
+            constraints,
+            out var requiredConstraints,
+            out _))
+        {
+            triangles = [];
+            return false;
+        }
+
+        if (requiredConstraints.Count == 0)
+        {
+            triangles = EarClipTriangulate(vertices2D, polygon);
+            return true;
+        }
+
+        var orderedConstraints = new List<long>(requiredConstraints);
+        orderedConstraints.Sort();
+
+        var polygons = new List<List<int>> { polygon };
+
+        foreach (long constraint in orderedConstraints)
+        {
+            var (start, end) = DecodeEdgeKey(constraint);
+            bool satisfied = false;
+
+            for (int i = 0; i < polygons.Count; i++)
+            {
+                var candidate = polygons[i];
+                if (!candidate.Contains(start) || !candidate.Contains(end))
+                    continue;
+
+                if (!TryApplyConstraintSplit(
+                    candidate,
+                    start,
+                    end,
+                    vertices2D,
+                    out var first,
+                    out var second,
+                    out bool alreadyBoundary))
+                {
+                    triangles = [];
+                    return false;
+                }
+
+                if (!alreadyBoundary)
+                {
+                    polygons[i] = first;
+                    polygons.Add(second);
+                }
+
+                satisfied = true;
+                break;
+            }
+
+            if (!satisfied)
+            {
+                triangles = [];
+                return false;
+            }
+        }
+
+        triangles = new List<(int A, int B, int C)>(System.Math.Max(0, count - 2));
+        foreach (var subPolygon in polygons)
+            triangles.AddRange(EarClipTriangulate(vertices2D, subPolygon));
+
+        foreach (long constraint in orderedConstraints)
+        {
+            if (!HasTriangleEdge(triangles, constraint))
+            {
+                triangles = [];
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool TryTriangulateConstrainedByEarConstraints(
+        Vec2[] vertices2D,
+        IReadOnlyList<(int Start, int End)> constraints,
+        out List<(int A, int B, int C)> triangles)
+    {
         int count = vertices2D.Length;
         triangles = new List<(int A, int B, int C)>(System.Math.Max(0, count - 2));
 
@@ -199,11 +303,35 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
 
     private static List<(int A, int B, int C)> EarClipTriangulate(Vec2[] vertices2D)
     {
-        int count = vertices2D.Length;
-        var triangles = new List<(int A, int B, int C)>(System.Math.Max(0, count - 2));
-        var polygon = new List<int>(count);
-        for (int i = 0; i < count; i++)
+        var polygon = new List<int>(vertices2D.Length);
+        for (int i = 0; i < vertices2D.Length; i++)
             polygon.Add(i);
+
+        return EarClipTriangulate(vertices2D, polygon);
+    }
+
+    private static List<(int A, int B, int C)> EarClipTriangulate(
+        Vec2[] vertices2D,
+        List<int> polygonSource)
+    {
+        var polygon = new List<int>(polygonSource);
+        int count = polygon.Count;
+        var triangles = new List<(int A, int B, int C)>(System.Math.Max(0, count - 2));
+
+        if (count < 3)
+            return triangles;
+
+        if (count == 3)
+        {
+            triangles.Add((polygon[0], polygon[1], polygon[2]));
+            return triangles;
+        }
+
+        for (int i = 0; i < count; i++)
+        {
+            if (polygon[i] < 0 || polygon[i] >= vertices2D.Length)
+                return [];
+        }
 
         EnsureCounterClockwise(vertices2D, polygon);
 
@@ -302,6 +430,131 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         }
 
         return boundaryEdges;
+    }
+
+    private static bool TryApplyConstraintSplit(
+        List<int> polygon,
+        int start,
+        int end,
+        Vec2[] vertices2D,
+        out List<int> first,
+        out List<int> second,
+        out bool alreadyBoundary)
+    {
+        first = [];
+        second = [];
+        alreadyBoundary = false;
+
+        int startIdx = polygon.IndexOf(start);
+        int endIdx = polygon.IndexOf(end);
+        if (startIdx < 0 || endIdx < 0)
+            return false;
+
+        if (AreAdjacentIndices(startIdx, endIdx, polygon.Count))
+        {
+            alreadyBoundary = true;
+            return true;
+        }
+
+        if (!DiagonalRespectsPolygonEdges(start, end, polygon, vertices2D))
+            return false;
+
+        first = BuildPathBetween(polygon, startIdx, endIdx);
+        second = BuildPathBetween(polygon, endIdx, startIdx);
+
+        if (first.Count < 3 || second.Count < 3)
+            return false;
+
+        if (!HasUniqueVertices(first) || !HasUniqueVertices(second))
+            return false;
+
+        return true;
+    }
+
+    private static bool AreAdjacentIndices(int a, int b, int count)
+    {
+        if (count < 2)
+            return false;
+
+        if (a == b)
+            return false;
+
+        return (a + 1) % count == b || (b + 1) % count == a;
+    }
+
+    private static List<int> BuildPathBetween(List<int> polygon, int fromIndex, int toIndex)
+    {
+        var path = new List<int>();
+        int idx = fromIndex;
+        int guard = polygon.Count + 1;
+
+        while (guard-- > 0)
+        {
+            path.Add(polygon[idx]);
+            if (idx == toIndex)
+                break;
+
+            idx = (idx + 1) % polygon.Count;
+        }
+
+        return path;
+    }
+
+    private static bool HasUniqueVertices(List<int> polygon)
+    {
+        var seen = new HashSet<int>();
+        foreach (int v in polygon)
+        {
+            if (!seen.Add(v))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool DiagonalRespectsPolygonEdges(
+        int start,
+        int end,
+        List<int> polygon,
+        Vec2[] vertices2D)
+    {
+        var a = vertices2D[start];
+        var b = vertices2D[end];
+
+        for (int i = 0; i < polygon.Count; i++)
+        {
+            int edgeStart = polygon[i];
+            int edgeEnd = polygon[(i + 1) % polygon.Count];
+
+            if (edgeStart == start || edgeStart == end || edgeEnd == start || edgeEnd == end)
+                continue;
+
+            if (SegmentsProperlyIntersect(a, b, vertices2D[edgeStart], vertices2D[edgeEnd]))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool HasTriangleEdge(
+        IReadOnlyList<(int A, int B, int C)> triangles,
+        long edgeKey)
+    {
+        var (start, end) = DecodeEdgeKey(edgeKey);
+        for (int i = 0; i < triangles.Count; i++)
+        {
+            if (HasEdge(triangles[i], start, end))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasEdge((int A, int B, int C) tri, int start, int end)
+    {
+        return (tri.A == start && tri.B == end) || (tri.B == start && tri.A == end)
+            || (tri.B == start && tri.C == end) || (tri.C == start && tri.B == end)
+            || (tri.C == start && tri.A == end) || (tri.A == start && tri.C == end);
     }
 
     private static bool HasBlockingConstraint(
