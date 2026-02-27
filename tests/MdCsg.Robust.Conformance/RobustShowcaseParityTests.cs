@@ -41,7 +41,7 @@ public class RobustShowcaseParityTests
         var step1Solid = new Solid(step1.Result!.Mesh);
 
         var step2 = RobustCsg.Difference(step1Solid, cylX, StrictRobustOpts);
-        AssertRobustClosed(step2);
+        AssertRobustClosedWithoutFallback(step2);
     }
 
     private static void AssertRobustClosedWithoutFallback(RobustCsgResult result)
