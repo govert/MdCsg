@@ -90,6 +90,7 @@ Current status:
 - Deterministic ordering and dedup normalization are enforced before graph construction.
 - Conformance tests include repeated-run determinism and stable `parallel` flag behavior checks.
 - M3 groundwork started with `Kernel/Triangulation/RobustConstrainedTriangulator` bridge API and conformance checks.
+- Deterministic replay harness is available for arrangement-stage cases (`Diagnostics/Replay` with capture/serialize/replay + conformance tests).
 
 ## M3 - Robust Triangulation and Patch Extraction
 
@@ -149,10 +150,10 @@ Parallel streams:
 
 ## 5. Immediate Next Tasks
 
-1. Add deterministic replay harness (fixed seed + serialized case inputs) for arrangement-stage failures.
-2. Expand coplanar tie-break policy from guardrail detection into explicit reconstruction semantics.
-3. Start `Kernel/Triangulation` replacement path with robust constrained triangulation prototype.
-4. Convert the tangent/kissing backlog into an active conformance test once semantics are locked.
+1. Expand coplanar tie-break policy from guardrail detection into explicit reconstruction semantics.
+2. Start replacing constrained triangulation internals under `Kernel/Triangulation` (remove legacy delegation stepwise).
+3. Convert the tangent/kissing backlog into an active conformance test once semantics are locked.
+4. Add replay corpus files for known showcase artifact cases and run them in CI conformance.
 
 ## 6. Risks and Mitigations
 

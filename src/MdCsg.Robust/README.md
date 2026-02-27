@@ -29,6 +29,7 @@ Initial scaffold now exists:
   - deterministic overlap traversal and canonical snapped-segment ordering
 - `Kernel/Arrangement/ArrangementAnalyzer` endpoint/component topology signals
 - `Kernel/Triangulation/RobustConstrainedTriangulator` bridge with deterministic output normalization
+- `Diagnostics/Replay` arrangement replay capture/serialize/replay harness
 - `Validation/DegenerateFaceInspector` using certified predicate checks
 - `RobustOperationOptions.TreatCoplanarIntersectionAsError` guardrail toggle for strict conformance runs
 - `RobustOperationOptions.TreatOpenArrangementAsError` guardrail toggle for strict conformance runs
