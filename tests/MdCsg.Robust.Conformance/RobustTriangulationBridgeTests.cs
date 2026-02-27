@@ -127,6 +127,26 @@ public class RobustTriangulationBridgeTests
     }
 
     [Fact]
+    public void SeededNonCrossingConstraintCorpus_UsesNativePath()
+    {
+        var triangulator = new RobustConstrainedTriangulator();
+        var rng = new Random(20260227);
+
+        for (int caseIdx = 0; caseIdx < 64; caseIdx++)
+        {
+            int vertexCount = rng.Next(5, 11);
+            var verts = CreateConvexPolygon(vertexCount, radiusBase: 3.0, rng);
+            var constraints = CreateFanConstraintSubset(vertexCount, rng);
+
+            var result = triangulator.Triangulate(verts, constraints, Vec3.UnitZ);
+
+            Assert.False(result.UsedLegacyKernel);
+            foreach (var (start, end) in constraints)
+                Assert.Contains(result.Triangles, t => HasEdge(t, start, end));
+        }
+    }
+
+    [Fact]
     public void DegenerateTolerance_CanDropAllTriangles()
     {
         var triangulator = new RobustConstrainedTriangulator();
@@ -159,4 +179,33 @@ public class RobustTriangulationBridgeTests
         => (tri.A == start && tri.B == end) || (tri.B == start && tri.A == end)
             || (tri.B == start && tri.C == end) || (tri.C == start && tri.B == end)
             || (tri.C == start && tri.A == end) || (tri.A == start && tri.C == end);
+
+    private static Vec3[] CreateConvexPolygon(int count, double radiusBase, Random rng)
+    {
+        var verts = new Vec3[count];
+        for (int i = 0; i < count; i++)
+        {
+            double angle = i * (2.0 * System.Math.PI / count);
+            double jitter = 0.75 + 0.35 * rng.NextDouble();
+            double r = radiusBase * jitter;
+            verts[i] = new Vec3(r * System.Math.Cos(angle), r * System.Math.Sin(angle), 0);
+        }
+
+        return verts;
+    }
+
+    private static (int Start, int End)[] CreateFanConstraintSubset(int vertexCount, Random rng)
+    {
+        var constraints = new List<(int Start, int End)>();
+        for (int i = 2; i <= vertexCount - 2; i++)
+        {
+            if (rng.NextDouble() < 0.65)
+                constraints.Add((0, i));
+        }
+
+        if (constraints.Count == 0)
+            constraints.Add((0, vertexCount / 2));
+
+        return constraints.ToArray();
+    }
 }

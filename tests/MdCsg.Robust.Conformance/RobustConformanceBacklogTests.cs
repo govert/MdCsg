@@ -96,4 +96,21 @@ public class RobustConformanceBacklogTests
         Assert.NotNull(robust.Result);
         Assert.Equal(0, MeshValidator.CountBoundaryEdges(robust.Result!.Mesh));
     }
+
+    [Fact(Skip = "Target behavior for robust triangulation burn-down; stable overlap should not need legacy fallback in bridge path.")]
+    public void StableOverlap_Union_UsesZeroLegacyTriangulationFallback()
+    {
+        var a = Primitives.Cube(Vec3.Zero, 2.0);
+        var b = Primitives.Cube(new Vec3(0.75, 0, 0), 2.0);
+
+        var result = RobustCsg.Union(a, b, new RobustOperationOptions
+        {
+            Mode = RobustMode.Strict,
+            Deterministic = true,
+            UseRobustTriangulationKernel = true
+        });
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(0, result.Diagnostics.TriangulationLegacyFallbackCount);
+    }
 }
