@@ -5,6 +5,8 @@ public enum RobustIssueCode
     InputMeshContainsNonFiniteCoordinate,
     InputMeshNotClosed,
     InputMeshNotEdgeManifold,
+    InputMeshHasDegenerateFaces,
     OutputMeshNotClosed,
-    OutputMeshNotEdgeManifold
+    OutputMeshNotEdgeManifold,
+    OutputMeshHasDegenerateFaces
 }

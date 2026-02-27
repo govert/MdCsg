@@ -24,3 +24,5 @@ Initial scaffold now exists:
 - `IRobustCsgEngine`
 - `RobustCsg` API wrapper
 - `LegacyBridgedRobustCsgEngine` (transitional bridge + validation diagnostics)
+- `Kernel/Predicates/CertifiedPredicates` with precision-tier telemetry
+- `Validation/DegenerateFaceInspector` using certified predicate checks

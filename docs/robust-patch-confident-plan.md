@@ -9,7 +9,8 @@ This plan operationalizes [ROBUSTNESS_SPEC.md](ROBUSTNESS_SPEC.md) into delivera
 - Added `src/MdCsg.Robust` project with:
   - robust API surface (`RobustCsg`, result/options/diagnostics contracts),
   - `IRobustCsgEngine`,
-  - transitional `LegacyBridgedRobustCsgEngine` with strict validation diagnostics.
+  - transitional `LegacyBridgedRobustCsgEngine` with strict validation diagnostics,
+  - certified predicate layer (`Kernel/Predicates`) and predicate-tier telemetry counters.
 - Added `tests/MdCsg.Robust.Conformance` project with:
   - passing smoke tests for robust API wiring,
   - skipped backlog tests encoding adversarial target cases (coplanar, kissing, thin-slab).

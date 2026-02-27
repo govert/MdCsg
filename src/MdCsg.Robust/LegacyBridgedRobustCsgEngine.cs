@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using MdCsg.Api;
 using MdCsg.Mesh;
+using MdCsg.Robust.Kernel.Predicates;
+using MdCsg.Robust.Validation;
 
 namespace MdCsg.Robust;
 
@@ -19,12 +21,13 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
     {
         var opts = options ?? RobustOperationOptions.Default;
         var issues = new List<RobustIssue>();
+        var predicateTelemetry = new PredicateTelemetryCounter();
         var totalSw = Stopwatch.StartNew();
 
         if (opts.ValidateInput)
         {
-            ValidateInput(a, "A", opts.Mode, issues);
-            ValidateInput(b, "B", opts.Mode, issues);
+            ValidateInput(a, "A", opts.Mode, issues, predicateTelemetry);
+            ValidateInput(b, "B", opts.Mode, issues, predicateTelemetry);
         }
 
         if (opts.FailOnValidationError && issues.Any(i => i.Severity == RobustIssueSeverity.Error))
@@ -33,7 +36,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             return new RobustCsgResult(
                 result: null,
                 issues,
-                new RobustDiagnostics { TotalElapsed = totalSw.Elapsed });
+                BuildDiagnostics(totalSw.Elapsed, TimeSpan.Zero, predicateTelemetry));
         }
 
         var opSw = Stopwatch.StartNew();
@@ -48,7 +51,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
 
         if (opts.ValidateOutput)
         {
-            ValidateOutput(result.Mesh, opts.Mode, issues);
+            ValidateOutput(result.Mesh, opts.Mode, issues, predicateTelemetry);
         }
 
         totalSw.Stop();
@@ -59,20 +62,15 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         return new RobustCsgResult(
             result: finalResult,
             issues,
-            new RobustDiagnostics
-            {
-                TotalElapsed = totalSw.Elapsed,
-                OperationElapsed = opSw.Elapsed,
-                PredicateEscalationCount = 0,
-                ClassificationFallbackCount = 0
-            });
+            BuildDiagnostics(totalSw.Elapsed, opSw.Elapsed, predicateTelemetry));
     }
 
     private static void ValidateInput(
         Solid solid,
         string label,
         RobustMode mode,
-        List<RobustIssue> issues)
+        List<RobustIssue> issues,
+        PredicateTelemetryCounter predicateTelemetry)
     {
         if (!HasFiniteVertices(solid.Mesh))
         {
@@ -101,12 +99,23 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 RobustIssueCode.InputMeshNotEdgeManifold,
                 $"{label}: input mesh is not edge-manifold.");
         }
+
+        int degenerateFaces = DegenerateFaceInspector.CountDegenerateFaces(solid.Mesh, predicateTelemetry);
+        if (degenerateFaces > 0)
+        {
+            AddIssue(
+                issues,
+                mode,
+                RobustIssueCode.InputMeshHasDegenerateFaces,
+                $"{label}: input mesh has degenerate faces ({degenerateFaces}).");
+        }
     }
 
     private static void ValidateOutput(
         HalfEdgeMesh mesh,
         RobustMode mode,
-        List<RobustIssue> issues)
+        List<RobustIssue> issues,
+        PredicateTelemetryCounter predicateTelemetry)
     {
         int boundary = MeshValidator.CountBoundaryEdges(mesh);
         if (boundary > 0)
@@ -125,6 +134,16 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 mode,
                 RobustIssueCode.OutputMeshNotEdgeManifold,
                 "Output mesh is not edge-manifold.");
+        }
+
+        int degenerateFaces = DegenerateFaceInspector.CountDegenerateFaces(mesh, predicateTelemetry);
+        if (degenerateFaces > 0)
+        {
+            AddIssue(
+                issues,
+                mode,
+                RobustIssueCode.OutputMeshHasDegenerateFaces,
+                $"Output mesh has degenerate faces ({degenerateFaces}).");
         }
     }
 
@@ -152,5 +171,22 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             ? RobustIssueSeverity.Error
             : RobustIssueSeverity.Warning;
         issues.Add(new RobustIssue(severity, code, message));
+    }
+
+    private static RobustDiagnostics BuildDiagnostics(
+        TimeSpan totalElapsed,
+        TimeSpan operationElapsed,
+        PredicateTelemetryCounter predicateTelemetry)
+    {
+        return new RobustDiagnostics
+        {
+            TotalElapsed = totalElapsed,
+            OperationElapsed = operationElapsed,
+            PredicateEscalationCount = predicateTelemetry.EscalationCount,
+            PredicateDoubleCount = predicateTelemetry.DoubleCount,
+            PredicateExpansionCount = predicateTelemetry.ExpansionCount,
+            PredicateExactCount = predicateTelemetry.ExactCount,
+            ClassificationFallbackCount = 0
+        };
     }
 }
