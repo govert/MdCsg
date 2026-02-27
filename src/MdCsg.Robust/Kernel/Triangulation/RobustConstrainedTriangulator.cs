@@ -183,6 +183,10 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         Vec2[] vertices2D,
         IReadOnlyList<(int Start, int End)> constraints)
     {
+        if (vertices2D.Length <= 4
+            && ConstraintsContainProperCrossing(vertices2D, constraints))
+            return false;
+
         // Heuristic gate:
         // - dense/large constrained inputs are usually face-cutter style point sets,
         // - low-complexity polygonal inputs are better handled by partition/ear paths.
@@ -192,10 +196,47 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         if (vertices2D.Length > 10)
             return true;
 
-        if (constraints.Count > vertices2D.Length - 2)
+        if (constraints.Count >= vertices2D.Length - 2)
             return true;
 
         return AllPointsInsideSeedTriangle(vertices2D);
+    }
+
+    private static bool ConstraintsContainProperCrossing(
+        Vec2[] vertices2D,
+        IReadOnlyList<(int Start, int End)> constraints)
+    {
+        int count = vertices2D.Length;
+        if (constraints.Count < 2 || count < 4)
+            return false;
+
+        var unique = new List<long>(constraints.Count);
+        var seen = new HashSet<long>();
+        foreach (var (start, end) in constraints)
+        {
+            if (start < 0 || end < 0 || start >= count || end >= count || start == end)
+                continue;
+
+            long key = EdgeKey(start, end);
+            if (seen.Add(key))
+                unique.Add(key);
+        }
+
+        for (int i = 0; i < unique.Count; i++)
+        {
+            var (a0, a1) = DecodeEdgeKey(unique[i]);
+            for (int j = i + 1; j < unique.Count; j++)
+            {
+                var (b0, b1) = DecodeEdgeKey(unique[j]);
+                if (a0 == b0 || a0 == b1 || a1 == b0 || a1 == b1)
+                    continue;
+
+                if (SegmentsProperlyIntersect(vertices2D[a0], vertices2D[a1], vertices2D[b0], vertices2D[b1]))
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsSimpleBoundaryOrder(Vec2[] vertices2D)

@@ -382,11 +382,28 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         if (boundary == 0 && manifold)
             return;
 
-        double repairTolerance = System.Math.Max(weldTolerance * 4.0, 1e-6);
-        MeshStitcher.RepairBoundary(mesh, repairTolerance);
+        var bounds = mesh.GetBounds();
+        double sceneScale = System.Math.Max(1.0, bounds.Size.Length);
+        double baseTolerance = System.Math.Max(
+            System.Math.Max(weldTolerance * 4.0, sceneScale * 1e-8),
+            1e-6);
 
-        if (MeshValidator.CountBoundaryEdges(mesh) > 0)
-            MeshStitcher.CloseBoundaryLoops(mesh);
+        for (int pass = 0; pass < 3; pass++)
+        {
+            double tol = baseTolerance * (1 << pass);
+            MeshStitcher.RepairBoundary(mesh, tol);
+
+            if (MeshValidator.CountBoundaryEdges(mesh) > 0)
+                MeshStitcher.CloseBoundaryLoops(mesh);
+
+            // A second relink pass after loop fill catches new near-equal endpoints.
+            MeshStitcher.RepairBoundary(mesh, tol * 2.0);
+
+            boundary = MeshValidator.CountBoundaryEdges(mesh);
+            manifold = MeshValidator.IsEdgeManifold(mesh);
+            if (boundary == 0 && manifold)
+                return;
+        }
     }
 
     private static bool HasFiniteVertices(HalfEdgeMesh mesh)

@@ -43,8 +43,9 @@ Initial scaffold now exists:
 
 Current conformance snapshot:
 
-- `tests/MdCsg.Robust.Conformance` currently runs 36/36 passing (no skipped tests).
+- `tests/MdCsg.Robust.Conformance` currently runs 37/37 passing (no skipped tests).
 - Stable-overlap and smoke union zero-fallback checks are active and passing.
 - Showcase parity:
   - `CsgOperations` strict mode is closed + zero-fallback,
-  - `ChainedCsg` step-2 strict mode currently asserts closed/succeeded while fallback burn-down continues.
+  - `ChainedCsg` step-2 strict mode is closed + zero-fallback,
+  - `ChainedCsg` step-3 strict mode currently has an active repro asserting topology failure with zero triangulation fallback.

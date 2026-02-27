@@ -44,6 +44,36 @@ public class RobustShowcaseParityTests
         AssertRobustClosedWithoutFallback(step2);
     }
 
+    [Fact]
+    public void ChainedCsgSceneCase_Step3_ReproducesTopologyDefect_WithZeroFallback()
+    {
+        var y = new Vec3(0, 1, 0);
+        var sphere = Primitives.Sphere(Vec3.Zero, 1.3, 3);
+        var box = Primitives.Cube(Vec3.Zero, 1.8);
+        var cylX = Primitives.Cylinder(new Vec3(-1.5, 0, 0), new Vec3(1, 0, 0), 0.5, 3.0);
+        var cylY = Primitives.Cylinder(new Vec3(0, -1.5, 0), y, 0.5, 3.0);
+
+        var step1 = RobustCsg.Intersect(sphere, box, StrictRobustOpts);
+        AssertRobustClosedWithoutFallback(step1);
+        var step1Solid = new Solid(step1.Result!.Mesh);
+
+        var step2 = RobustCsg.Difference(step1Solid, cylX, StrictRobustOpts);
+        AssertRobustClosedWithoutFallback(step2);
+        var step2Solid = new Solid(step2.Result!.Mesh);
+
+        var step3 = RobustCsg.Difference(step2Solid, cylY, StrictRobustOpts);
+        Assert.False(step3.Succeeded);
+        Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);
+        Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotEdgeManifold);
+        Assert.True(
+            step3.Diagnostics.TriangulationLegacyFallbackCount == 0,
+            BuildFallbackMessage(step3.Diagnostics));
+        Assert.Equal(0, step3.Diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount);
+        Assert.Equal(0, step3.Diagnostics.TriangulationFallbackPartitionFailureCount);
+        Assert.Equal(0, step3.Diagnostics.TriangulationFallbackConstrainedEarFailureCount);
+        Assert.Empty(step3.Diagnostics.TriangulationFallbackSignatures);
+    }
+
     private static void AssertRobustClosedWithoutFallback(RobustCsgResult result)
     {
         Assert.True(result.Succeeded, BuildIssueMessage(result));
