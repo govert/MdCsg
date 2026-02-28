@@ -136,6 +136,7 @@ dotnet build
 dotnet test                                    # Core library tests (~14k per target)
 dotnet test tests/MdCsg.Gpu.Tests              # GPU tests (15 tests, gracefully skipped if no Vulkan)
 dotnet test tests/MdCsg.Robust.Conformance     # Robustness conformance scaffold
+pwsh ./tools/ci/run-robustness-gate.ps1        # Robustness rescue-bar gate (same command used in CI)
 dotnet run -c Release --project src/MdCsg.Showcase/MdCsg.Showcase.csproj
 ```
 

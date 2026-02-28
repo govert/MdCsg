@@ -38,6 +38,14 @@ Non-negotiable execution rules:
 - Constrained triangulation must prove all constraints are satisfied or return structured failure.
 - Every new failure class must be captured by deterministic replay/conformance tests before closure.
 
+Rescue bar CI gate:
+
+- `tools/ci/run-robustness-gate.ps1` is the canonical robustness gate entrypoint.
+- CI must fail if strict-mode conformance regresses on:
+  - zero legacy triangulation fallback across showcase/replay suites,
+  - unresolved correctness failures in seeded fuzz smoke.
+- This gate is wired in `.github/workflows/robustness-gate.yml`.
+
 ## 2. Proposed Architecture
 
 Planned package: `src/MdCsg.Robust/`

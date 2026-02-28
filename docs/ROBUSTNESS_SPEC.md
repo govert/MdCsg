@@ -141,6 +141,9 @@ The conformance suite must include:
 A candidate robust engine is production-ready only if:
 
 - All conformance tests pass in CI on `net10.0` and `net48` (or documented target subset).
+- Strict-mode rescue bar is green in CI:
+  - zero legacy triangulation fallback on showcase-parity and replay corpus suites,
+  - seeded fuzz smoke completes with zero unresolved correctness failures.
 - Fuzz campaign reaches target iteration budget with zero unresolved correctness failures.
 - Determinism checks pass across repeated runs.
 - Showcase corpus renders without topological artifacts.
