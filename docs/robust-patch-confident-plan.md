@@ -115,6 +115,7 @@ Current status:
 - Legacy-bridge output now applies deterministic post-op degenerate-face pruning and topology repair before strict output validation.
 - Native constrained triangulation now prefers a selective face-point-set path for dense/face-cutter style inputs while routing low-complexity polygonal constraints through partition/ear paths to preserve constrained-edge invariants.
 - Deterministic replay harness is available for arrangement-stage cases (`Diagnostics/Replay` with capture/serialize/replay + conformance tests).
+- Checked-in arrangement replay corpus now lives under `tests/MdCsg.Robust.Conformance/ReplayCorpus/arrangement` with manifest-backed signature assertions.
 
 ## M3 - Robust Triangulation and Patch Extraction
 

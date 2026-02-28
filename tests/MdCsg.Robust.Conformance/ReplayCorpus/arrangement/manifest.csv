@@ -1,0 +1,6 @@
+case_file,arrangement_vertices,arrangement_edges,endpoint_vertices,connected_components,coplanar_face_a,coplanar_face_b,coplanar_oppose
+showcase-offset-sphere-cube.txt,130,91,80,41,0,0,0
+coplanar-shared-face-cubes.txt,4,8,0,1,10,10,4
+stable-overlap-cubes.txt,16,64,0,1,8,8,0
+kissing-spheres.txt,0,0,0,0,6,6,6
+showcase-chained-step3-input.txt,19481,17453,12177,6158,0,0,0
