@@ -53,5 +53,5 @@ Invoke-GateSlice `
     "FullyQualifiedName~RobustFuzzSmokeTests"
 
 Invoke-GateSlice `
-    "3/3: Triangulation bridge + smoke guardrails..." `
-    "(FullyQualifiedName~RobustTriangulationBridgeTests|FullyQualifiedName~RobustCsgSmokeTests|FullyQualifiedName~ReconstructionIncidenceTests|FullyQualifiedName~RobustAlgebraicConformanceTests)"
+    "3/3: Triangulation bridge + smoke + reconstruction/algebraic/differential guardrails..." `
+    "(FullyQualifiedName~RobustTriangulationBridgeTests|FullyQualifiedName~RobustCsgSmokeTests|FullyQualifiedName~ReconstructionIncidenceTests|FullyQualifiedName~RobustAlgebraicConformanceTests|FullyQualifiedName~RobustDifferentialParityTests)"

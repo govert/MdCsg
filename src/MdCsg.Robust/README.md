@@ -65,7 +65,7 @@ Current conformance snapshot:
 - `tests/MdCsg.Robust.Conformance` currently runs green in the robustness gate slices (no known skipped gate cases).
 - CI rescue bar entrypoint is `tools/ci/run-robustness-gate.ps1` (wired to `.github/workflows/robustness-gate.yml`).
   - gate runner now retries a slice once when test-host crash/abort markers are detected, and fails hard if the retry is not clean
-  - gate slices: showcase/backlog/replay, strict fuzz smoke, triangulation+smoke+reconstruction+algebraic guardrails (with hang-timeout protection)
+  - gate slices: showcase/backlog/replay, strict fuzz smoke, triangulation+smoke+reconstruction+algebraic+differential guardrails (with hang-timeout protection)
 - Stable-overlap and smoke union zero-fallback checks are active and passing.
 - Seeded strict fuzz smoke tests are active and passing with deterministic seeds.
 - Stable-case differential parity tests are active (`RobustDifferentialParityTests`) and assert robust boundary dominance against legacy plus bounded relative-volume drift for legacy-closed outputs.

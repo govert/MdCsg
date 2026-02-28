@@ -140,7 +140,7 @@ Current status:
 - Patch extraction now assigns deterministic stable patch identity/provenance (`StableId`, source-face lineage, and boundary authority), with arrangement mode explicitly marked as arrangement-authoritative.
 - Native constrained triangulation now includes a second-chance face-point-set rescue pass (after partition/ear failure) and expanded dense non-crossing chord replay/bridge coverage.
 - Reconstruction certificates/diagnostics now include deterministic component-level validity accounting (`components`, `invalidComponents`) with strict error surfacing for invalid reconstructed components.
-- Rescue-bar gate slice 3 now explicitly includes reconstruction-incidence and algebraic conformance suites alongside triangulation/smoke guardrails.
+- Rescue-bar gate slice 3 now explicitly includes reconstruction-incidence, algebraic, and differential parity conformance suites alongside triangulation/smoke guardrails.
 - Added explicit conformance coverage for the formerly failing `partition/split-failure` triangulation signature class, now expected to succeed natively with preserved constraint edges.
 - Reconstruction now applies arrangement-edge-guided boundary snapping (`arrEdgeSnap`) in addition to arrangement-vertex snapping before boundary repair.
 - Strict robust diagnostics now emit reconstruction policy certificates (`reconstruction-policy:*`) with operation-aware truth-table checks on source/flip accounting.
