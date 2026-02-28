@@ -9,6 +9,8 @@ namespace MdCsg.Operations;
 /// </summary>
 public static class PatchAssembler
 {
+    private readonly record struct CoplanarPatchDecision(bool Keep, bool FlipNormals);
+
     /// <summary>
     /// Result of patch assembly: selected sub-triangles with normal direction info.
     /// </summary>
@@ -38,10 +40,15 @@ public static class PatchAssembler
         foreach (var patch in patchesA)
         {
             bool keep;
+            bool flip = false;
             if (patch.CoplanarNormalsAgree.HasValue && !patch.HasConfidentPoint)
             {
-                // Coplanar patch from A: apply special rules
-                keep = ShouldKeepCoplanarPatchFromA(patch.CoplanarNormalsAgree.Value, operation);
+                var decision = ResolveCoplanarPatchDecision(
+                    fromMeshA: true,
+                    patch.CoplanarNormalsAgree.Value,
+                    operation);
+                keep = decision.Keep;
+                flip = decision.FlipNormals;
             }
             else
             {
@@ -52,8 +59,11 @@ public static class PatchAssembler
             foreach (int triIdx in patch.SubTriangleIndices)
             {
                 var st = subTrianglesA[triIdx];
-                triangles.Add(new Triangle3(st.A, st.B, st.C));
-                flipNormals.Add(false); // A's normals stay as-is
+                if (flip)
+                    triangles.Add(new Triangle3(st.A, st.C, st.B));
+                else
+                    triangles.Add(new Triangle3(st.A, st.B, st.C));
+                flipNormals.Add(flip);
             }
         }
 
@@ -62,8 +72,23 @@ public static class PatchAssembler
         {
             if (patch.CoplanarNormalsAgree.HasValue && !patch.HasConfidentPoint)
             {
-                // Coplanar patches from B: A takes priority for the shared surface.
-                // B's coplanar patches are discarded to avoid doubled geometry.
+                var decision = ResolveCoplanarPatchDecision(
+                    fromMeshA: false,
+                    patch.CoplanarNormalsAgree.Value,
+                    operation);
+                if (!decision.Keep)
+                    continue;
+
+                foreach (int triIdx in patch.SubTriangleIndices)
+                {
+                    var st = subTrianglesB[triIdx];
+                    if (decision.FlipNormals)
+                        triangles.Add(new Triangle3(st.A, st.C, st.B));
+                    else
+                        triangles.Add(new Triangle3(st.A, st.B, st.C));
+                    flipNormals.Add(decision.FlipNormals);
+                }
+
                 continue;
             }
 
@@ -124,16 +149,34 @@ public static class PatchAssembler
     };
 
     /// <summary>
-    /// For coplanar patches from mesh A: determines if the patch should be kept.
-    /// Rules:
-    ///   Same normal: keep for Union and Intersection (one copy from A), discard for Difference
-    ///   Opposite normal: discard for Union and Intersection, keep for Difference
+    /// Resolves coplanar patch inclusion for each source mesh and operation.
+    /// The policy is explicit and deterministic; mesh A remains authoritative when
+    /// both surfaces are coplanar and ambiguous.
     /// </summary>
-    private static bool ShouldKeepCoplanarPatchFromA(bool normalsAgree, CsgOperation operation) => operation switch
+    private static CoplanarPatchDecision ResolveCoplanarPatchDecision(
+        bool fromMeshA,
+        bool normalsAgree,
+        CsgOperation operation)
     {
-        CsgOperation.Union => normalsAgree,
-        CsgOperation.Intersection => normalsAgree,
-        CsgOperation.Difference => !normalsAgree,
-        _ => false
-    };
+        if (fromMeshA)
+        {
+            return operation switch
+            {
+                CsgOperation.Union => normalsAgree
+                    ? new CoplanarPatchDecision(Keep: true, FlipNormals: false)
+                    : new CoplanarPatchDecision(Keep: false, FlipNormals: false),
+                CsgOperation.Intersection => normalsAgree
+                    ? new CoplanarPatchDecision(Keep: true, FlipNormals: false)
+                    : new CoplanarPatchDecision(Keep: false, FlipNormals: false),
+                CsgOperation.Difference => normalsAgree
+                    ? new CoplanarPatchDecision(Keep: false, FlipNormals: false)
+                    : new CoplanarPatchDecision(Keep: true, FlipNormals: false),
+                _ => new CoplanarPatchDecision(Keep: false, FlipNormals: false)
+            };
+        }
+
+        // Mesh B coplanar policy: A-side selection remains authoritative for
+        // unresolved coplanar regions so we do not duplicate shared surfaces.
+        return new CoplanarPatchDecision(Keep: false, FlipNormals: false);
+    }
 }

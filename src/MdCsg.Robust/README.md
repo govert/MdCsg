@@ -34,6 +34,7 @@ Initial scaffold now exists:
 - `Kernel/Arrangement/ArrangementBuilder` native BVH+tri-tri arrangement builder
   - deterministic overlap traversal and canonical snapped-segment ordering
   - coplanar pair orientation counters (agreeing vs opposing normals)
+- reconstruction coplanar patch selection follows an explicit source/operation truth table (see `docs/ROBUSTNESS_SPEC.md`)
 - `Kernel/Arrangement/ArrangementAnalyzer` endpoint/component topology signals
 - `Kernel/Triangulation/RobustConstrainedTriangulator` with native robust unconstrained triangulation plus staged native constrained handling (face-point-set incremental solver, non-crossing constraint partitioning, constrained-ear path), deterministic output normalization, and legacy fallback for unsupported constrained inputs
   - face-point-set activation is selectively gated to favor dense/face-cutter style inputs while preserving constrained-polygon bridge invariants

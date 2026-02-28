@@ -120,6 +120,19 @@ The engine must have explicit rules for:
 Tie-breaking must be deterministic and global (not local epsilon hacks).
 Simulation-of-Simplicity style symbolic perturbation is acceptable if consistently implemented and documented.
 
+Current coplanar patch-selection truth table (bridge implementation):
+
+- Source A, normals agree:
+  - `union`: keep
+  - `intersection`: keep
+  - `difference`: discard
+- Source A, normals oppose:
+  - `union`: discard
+  - `intersection`: discard
+  - `difference`: keep
+- Source B coplanar fallback patches (no confident point):
+  - all operations: discard (A-side authority to avoid duplicate shared surfaces)
+
 ## 9. Conformance Test Matrix
 
 The conformance suite must include:

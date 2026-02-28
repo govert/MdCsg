@@ -126,6 +126,7 @@ Current status:
 - Rescue bar script now runs explicit gate slices with hang protection: showcase/backlog/replay, strict fuzz smoke, and triangulation bridge/smoke guardrails.
 - Reconstruction-stage telemetry now reports boundary/open-loop/unmatched/non-manifold invariants with dedicated reconstruction certificates and strict-mode reconstruction issue codes.
 - Reconstruction invariant analysis is now centralized in deterministic boundary-incidence accounting (`MeshStitcher.AnalyzeBoundaryIncidence`) and covered by deterministic conformance tests.
+- Coplanar reconstruction selection is now routed through an explicit per-operation/source truth table in `PatchAssembler` (documented in `ROBUSTNESS_SPEC.md`).
 
 ## M3 - Robust Triangulation and Patch Extraction
 
