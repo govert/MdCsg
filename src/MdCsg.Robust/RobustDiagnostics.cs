@@ -48,5 +48,17 @@ public sealed class RobustDiagnostics
 
     public IReadOnlyList<string> TriangulationFallbackSignatures { get; init; } = Array.Empty<string>();
 
+    public int TriangulationNativeFailureCount { get; init; }
+
+    public int TriangulationNativeFailureInvalidOrCrossingConstraintCount { get; init; }
+
+    public int TriangulationNativeFailurePartitionFailureCount { get; init; }
+
+    public int TriangulationNativeFailureConstrainedEarFailureCount { get; init; }
+
+    public int TriangulationNativeFailureWorkBudgetExceededCount { get; init; }
+
+    public IReadOnlyList<string> TriangulationNativeFailureSignatures { get; init; } = Array.Empty<string>();
+
     public int ClassificationFallbackCount { get; init; }
 }

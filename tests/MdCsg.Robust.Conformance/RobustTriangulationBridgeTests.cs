@@ -74,7 +74,7 @@ public class RobustTriangulationBridgeTests
     }
 
     [Fact]
-    public void CrossingConstraints_FallBackToLegacyPath()
+    public void CrossingConstraints_FailClosedByDefault()
     {
         var triangulator = new RobustConstrainedTriangulator();
         var verts = new[]
@@ -92,6 +92,37 @@ public class RobustTriangulationBridgeTests
 
         var result = triangulator.Triangulate(verts, constraints, Vec3.UnitZ);
 
+        Assert.False(result.Succeeded);
+        Assert.False(result.UsedLegacyKernel);
+        Assert.Equal(RobustTriangulationFallbackReason.InvalidOrCrossingConstraints, result.FailureReason);
+        Assert.NotNull(result.FailureSignature);
+        Assert.Empty(result.Triangles);
+    }
+
+    [Fact]
+    public void CrossingConstraints_CanUseLegacyFallback_WhenExplicitlyEnabled()
+    {
+        var triangulator = new RobustConstrainedTriangulator();
+        var verts = new[]
+        {
+            new Vec3(0, 0, 0),
+            new Vec3(2, 0, 0),
+            new Vec3(2, 2, 0),
+            new Vec3(0, 2, 0)
+        };
+        var constraints = new (int Start, int End)[]
+        {
+            (0, 2),
+            (1, 3)
+        };
+
+        var result = triangulator.Triangulate(
+            verts,
+            constraints,
+            Vec3.UnitZ,
+            new RobustTriangulationOptions { AllowLegacyFallback = true });
+
+        Assert.True(result.Succeeded);
         Assert.True(result.UsedLegacyKernel);
         Assert.Equal(RobustTriangulationFallbackReason.InvalidOrCrossingConstraints, result.LegacyFallbackReason);
         Assert.NotNull(result.LegacyFallbackSignature);

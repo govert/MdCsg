@@ -5,6 +5,13 @@ public sealed record RobustTriangulationResult(
     int DroppedDegenerateTriangleCount,
     bool UsedLegacyKernel)
 {
+    public bool Succeeded { get; init; } = true;
+
+    public RobustTriangulationFallbackReason FailureReason { get; init; } =
+        RobustTriangulationFallbackReason.None;
+
+    public string? FailureSignature { get; init; }
+
     public RobustTriangulationFallbackReason LegacyFallbackReason { get; init; } =
         RobustTriangulationFallbackReason.None;
 

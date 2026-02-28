@@ -39,7 +39,13 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int triangulationFallbackPartitionFailureCount = 0;
         int triangulationFallbackConstrainedEarFailureCount = 0;
         int triangulationFallbackWorkBudgetExceededCount = 0;
+        int triangulationNativeFailureCount = 0;
+        int triangulationNativeFailureInvalidOrCrossingConstraintCount = 0;
+        int triangulationNativeFailurePartitionFailureCount = 0;
+        int triangulationNativeFailureConstrainedEarFailureCount = 0;
+        int triangulationNativeFailureWorkBudgetExceededCount = 0;
         var triangulationFallbackSignatureCounts = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
+        var triangulationNativeFailureSignatureCounts = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
         var totalSw = Stopwatch.StartNew();
 
         if (opts.ValidateInput)
@@ -112,7 +118,13 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     triangulationFallbackPartitionFailureCount,
                     triangulationFallbackConstrainedEarFailureCount,
                     triangulationFallbackWorkBudgetExceededCount,
-                    SummarizeFallbackSignatures(triangulationFallbackSignatureCounts)));
+                    SummarizeFallbackSignatures(triangulationFallbackSignatureCounts),
+                    triangulationNativeFailureCount,
+                    triangulationNativeFailureInvalidOrCrossingConstraintCount,
+                    triangulationNativeFailurePartitionFailureCount,
+                    triangulationNativeFailureConstrainedEarFailureCount,
+                    triangulationNativeFailureWorkBudgetExceededCount,
+                    SummarizeFallbackSignatures(triangulationNativeFailureSignatureCounts)));
         }
 
         var robustTriangulator = new RobustConstrainedTriangulator();
@@ -129,10 +141,42 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     faceNormal,
                     new RobustTriangulationOptions
                     {
+                        AllowLegacyFallback = opts.Mode != RobustMode.Strict,
                         DeterministicOrdering = opts.Deterministic,
                         DropDegenerateTriangles = true,
                         DegenerateAreaTolerance = MathUtil.Epsilon
                     });
+
+                if (!triResult.Succeeded)
+                {
+                    System.Threading.Interlocked.Increment(ref triangulationNativeFailureCount);
+                    switch (triResult.FailureReason)
+                    {
+                        case RobustTriangulationFallbackReason.InvalidOrCrossingConstraints:
+                            System.Threading.Interlocked.Increment(ref triangulationNativeFailureInvalidOrCrossingConstraintCount);
+                            break;
+                        case RobustTriangulationFallbackReason.PartitioningFailed:
+                            System.Threading.Interlocked.Increment(ref triangulationNativeFailurePartitionFailureCount);
+                            break;
+                        case RobustTriangulationFallbackReason.ConstrainedEarFailed:
+                            System.Threading.Interlocked.Increment(ref triangulationNativeFailureConstrainedEarFailureCount);
+                            break;
+                        case RobustTriangulationFallbackReason.WorkBudgetExceeded:
+                            System.Threading.Interlocked.Increment(ref triangulationNativeFailureWorkBudgetExceededCount);
+                            break;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(triResult.FailureSignature))
+                    {
+                        triangulationNativeFailureSignatureCounts.AddOrUpdate(
+                            triResult.FailureSignature!,
+                            1,
+                            static (_, current) => current + 1);
+                    }
+
+                    // Fail closed in strict robust mode by withholding triangles from failed faces.
+                    return Array.Empty<(int A, int B, int C)>();
+                }
 
                 if (triResult.UsedLegacyKernel)
                 {
@@ -195,6 +239,56 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         RepairOutputTopology(result.Mesh, csgOptions.WeldTolerance);
         result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
 
+        if (triangulationNativeFailureInvalidOrCrossingConstraintCount > 0)
+        {
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.TriangulationInvalidOrCrossingConstraints,
+                $"Native constrained triangulation rejected invalid/crossing constraints ({triangulationNativeFailureInvalidOrCrossingConstraintCount}).",
+                RobustIssueSeverity.Error);
+        }
+
+        if (triangulationNativeFailurePartitionFailureCount > 0)
+        {
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.TriangulationPartitioningFailed,
+                $"Native constrained triangulation partitioning failed ({triangulationNativeFailurePartitionFailureCount}).",
+                RobustIssueSeverity.Error);
+        }
+
+        if (triangulationNativeFailureConstrainedEarFailureCount > 0)
+        {
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.TriangulationConstrainedEarFailed,
+                $"Native constrained triangulation constrained-ear solving failed ({triangulationNativeFailureConstrainedEarFailureCount}).",
+                RobustIssueSeverity.Error);
+        }
+
+        if (triangulationNativeFailureWorkBudgetExceededCount > 0)
+        {
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.TriangulationWorkBudgetExceeded,
+                $"Native constrained triangulation work budget was exceeded ({triangulationNativeFailureWorkBudgetExceededCount}).",
+                RobustIssueSeverity.Error);
+        }
+
+        if (triangulationNativeFailureCount > 0)
+        {
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.TriangulationNativeFailure,
+                $"Native constrained triangulation failed on {triangulationNativeFailureCount} face(s); strict mode is fail-closed for these faces.",
+                RobustIssueSeverity.Error);
+        }
+
         if (triangulationFallbackWorkBudgetExceededCount > 0)
         {
             AddIssue(
@@ -232,7 +326,13 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 triangulationFallbackPartitionFailureCount,
                 triangulationFallbackConstrainedEarFailureCount,
                 triangulationFallbackWorkBudgetExceededCount,
-                SummarizeFallbackSignatures(triangulationFallbackSignatureCounts)));
+                SummarizeFallbackSignatures(triangulationFallbackSignatureCounts),
+                triangulationNativeFailureCount,
+                triangulationNativeFailureInvalidOrCrossingConstraintCount,
+                triangulationNativeFailurePartitionFailureCount,
+                triangulationNativeFailureConstrainedEarFailureCount,
+                triangulationNativeFailureWorkBudgetExceededCount,
+                SummarizeFallbackSignatures(triangulationNativeFailureSignatureCounts)));
     }
 
     private static void ValidateInput(
@@ -463,7 +563,13 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int triangulationFallbackPartitionFailureCount,
         int triangulationFallbackConstrainedEarFailureCount,
         int triangulationFallbackWorkBudgetExceededCount,
-        IReadOnlyList<string> triangulationFallbackSignatures)
+        IReadOnlyList<string> triangulationFallbackSignatures,
+        int triangulationNativeFailureCount,
+        int triangulationNativeFailureInvalidOrCrossingConstraintCount,
+        int triangulationNativeFailurePartitionFailureCount,
+        int triangulationNativeFailureConstrainedEarFailureCount,
+        int triangulationNativeFailureWorkBudgetExceededCount,
+        IReadOnlyList<string> triangulationNativeFailureSignatures)
     {
         return new RobustDiagnostics
         {
@@ -490,6 +596,12 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             TriangulationFallbackConstrainedEarFailureCount = triangulationFallbackConstrainedEarFailureCount,
             TriangulationFallbackWorkBudgetExceededCount = triangulationFallbackWorkBudgetExceededCount,
             TriangulationFallbackSignatures = triangulationFallbackSignatures,
+            TriangulationNativeFailureCount = triangulationNativeFailureCount,
+            TriangulationNativeFailureInvalidOrCrossingConstraintCount = triangulationNativeFailureInvalidOrCrossingConstraintCount,
+            TriangulationNativeFailurePartitionFailureCount = triangulationNativeFailurePartitionFailureCount,
+            TriangulationNativeFailureConstrainedEarFailureCount = triangulationNativeFailureConstrainedEarFailureCount,
+            TriangulationNativeFailureWorkBudgetExceededCount = triangulationNativeFailureWorkBudgetExceededCount,
+            TriangulationNativeFailureSignatures = triangulationNativeFailureSignatures,
             ClassificationFallbackCount = 0
         };
     }

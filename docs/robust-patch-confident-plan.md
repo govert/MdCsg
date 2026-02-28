@@ -116,6 +116,7 @@ Current status:
 - Native constrained triangulation now prefers a selective face-point-set path for dense/face-cutter style inputs while routing low-complexity polygonal constraints through partition/ear paths to preserve constrained-edge invariants.
 - Deterministic replay harness is available for arrangement-stage cases (`Diagnostics/Replay` with capture/serialize/replay + conformance tests).
 - Checked-in arrangement replay corpus now lives under `tests/MdCsg.Robust.Conformance/ReplayCorpus/arrangement` with manifest-backed signature assertions.
+- Strict robust execution now fail-closes native constrained triangulation failures without implicit legacy triangulation fallback.
 
 ## M3 - Robust Triangulation and Patch Extraction
 

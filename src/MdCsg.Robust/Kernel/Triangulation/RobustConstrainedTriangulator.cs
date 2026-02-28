@@ -42,6 +42,7 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         var normalizedConstraints = NormalizeConstraints(vertices2D, constraints);
 
         bool useLegacyKernel = false;
+        bool triangulationFailed = false;
         var fallbackReason = RobustTriangulationFallbackReason.None;
         string? fallbackSignature = null;
         List<(int A, int B, int C)> rawTriangles;
@@ -59,13 +60,22 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         }
         else
         {
-            rawTriangles = ConstrainedTriangulator.Triangulate(vertices3D, normalizedConstraints, faceNormal);
-            useLegacyKernel = true;
             fallbackReason = nativeFailureReason;
             var signature = BuildConstraintSignature(vertices2D, normalizedConstraints);
             fallbackSignature = fallbackReason == RobustTriangulationFallbackReason.WorkBudgetExceeded
                 ? $"work-budget-exceeded:{signature}"
                 : signature;
+
+            if (opts.AllowLegacyFallback)
+            {
+                rawTriangles = ConstrainedTriangulator.Triangulate(vertices3D, normalizedConstraints, faceNormal);
+                useLegacyKernel = true;
+            }
+            else
+            {
+                rawTriangles = [];
+                triangulationFailed = true;
+            }
         }
 
         var normalizedTriangles = new List<(int A, int B, int C)>(rawTriangles.Count);
@@ -118,8 +128,15 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             droppedDegenerate,
             UsedLegacyKernel: useLegacyKernel)
         {
-            LegacyFallbackReason = fallbackReason,
-            LegacyFallbackSignature = fallbackSignature
+            Succeeded = !triangulationFailed,
+            FailureReason = triangulationFailed
+                ? fallbackReason
+                : RobustTriangulationFallbackReason.None,
+            FailureSignature = triangulationFailed ? fallbackSignature : null,
+            LegacyFallbackReason = useLegacyKernel
+                ? fallbackReason
+                : RobustTriangulationFallbackReason.None,
+            LegacyFallbackSignature = useLegacyKernel ? fallbackSignature : null
         };
     }
 
