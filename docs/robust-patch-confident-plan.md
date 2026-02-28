@@ -125,6 +125,7 @@ Current status:
 - Strict showcase/backlog/smoke conformance assertions now reject both legacy fallback and native triangulation failures, including signature/code regressions.
 - Rescue bar script now runs explicit gate slices with hang protection: showcase/backlog/replay, strict fuzz smoke, and triangulation bridge/smoke guardrails.
 - Reconstruction-stage telemetry now reports boundary/open-loop/unmatched/non-manifold invariants with dedicated reconstruction certificates and strict-mode reconstruction issue codes.
+- Reconstruction invariant analysis is now centralized in deterministic boundary-incidence accounting (`MeshStitcher.AnalyzeBoundaryIncidence`) and covered by deterministic conformance tests.
 
 ## M3 - Robust Triangulation and Patch Extraction
 

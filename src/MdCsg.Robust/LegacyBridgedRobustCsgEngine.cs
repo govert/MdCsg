@@ -740,78 +740,15 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
 
     private static ReconstructionInvariantSnapshot AnalyzeReconstructionTopology(HalfEdgeMesh mesh)
     {
-        int boundaryHalfEdges = MeshValidator.CountBoundaryEdges(mesh);
-        int openBoundaryLoops = CountOpenBoundaryLoops(mesh);
+        var incidence = MeshStitcher.AnalyzeBoundaryIncidence(mesh);
         bool consistentlyOriented = MeshValidator.IsConsistentlyOriented(mesh);
 
-        var undirectedEdgeUse = new Dictionary<long, int>(mesh.HalfEdges.Count);
-        foreach (var he in mesh.HalfEdges)
-        {
-            int a = he.Origin.Id;
-            int b = he.Target.Id;
-            int lo = a < b ? a : b;
-            int hi = a < b ? b : a;
-            long key = ((long)lo << 32) | (uint)hi;
-            undirectedEdgeUse.TryGetValue(key, out int count);
-            undirectedEdgeUse[key] = count + 1;
-        }
-
-        int unmatched = 0;
-        int nonManifold = 0;
-        foreach (int useCount in undirectedEdgeUse.Values)
-        {
-            if (useCount == 1)
-                unmatched++;
-            else if (useCount > 2)
-                nonManifold++;
-        }
-
         return new ReconstructionInvariantSnapshot(
-            boundaryHalfEdges,
-            openBoundaryLoops,
-            unmatched,
-            nonManifold,
+            incidence.BoundaryHalfEdgeCount,
+            incidence.OpenBoundaryVertexCount,
+            incidence.UnmatchedUndirectedEdgeCount,
+            incidence.NonManifoldUndirectedEdgeCount,
             consistentlyOriented);
-    }
-
-    private static int CountOpenBoundaryLoops(HalfEdgeMesh mesh)
-    {
-        var boundaryEdges = new List<HalfEdge>();
-        foreach (var he in mesh.HalfEdges)
-        {
-            if (he.Twin == null)
-                boundaryEdges.Add(he);
-        }
-
-        if (boundaryEdges.Count == 0)
-            return 0;
-
-        var outgoing = new Dictionary<int, int>();
-        var incoming = new Dictionary<int, int>();
-        foreach (var he in boundaryEdges)
-        {
-            int origin = he.Origin.Id;
-            int target = he.Target.Id;
-            outgoing.TryGetValue(origin, out int outCount);
-            outgoing[origin] = outCount + 1;
-            incoming.TryGetValue(target, out int inCount);
-            incoming[target] = inCount + 1;
-        }
-
-        int openEndpointCount = 0;
-        var vertices = new HashSet<int>(outgoing.Keys);
-        foreach (int v in incoming.Keys)
-            vertices.Add(v);
-
-        foreach (int v in vertices)
-        {
-            outgoing.TryGetValue(v, out int outCount);
-            incoming.TryGetValue(v, out int inCount);
-            if (outCount != inCount)
-                openEndpointCount++;
-        }
-
-        return openEndpointCount;
     }
 
     private readonly record struct ReconstructionInvariantSnapshot(

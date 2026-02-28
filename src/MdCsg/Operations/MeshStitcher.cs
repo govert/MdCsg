@@ -9,6 +9,19 @@ namespace MdCsg.Operations;
 public static class MeshStitcher
 {
     /// <summary>
+    /// Boundary/incidence summary for a stitched mesh.
+    /// </summary>
+    /// <param name="BoundaryHalfEdgeCount">Number of half-edges with no twin.</param>
+    /// <param name="OpenBoundaryVertexCount">Number of boundary vertices where in-degree != out-degree.</param>
+    /// <param name="UnmatchedUndirectedEdgeCount">Number of undirected edges referenced exactly once.</param>
+    /// <param name="NonManifoldUndirectedEdgeCount">Number of undirected edges referenced more than twice.</param>
+    public readonly record struct BoundaryIncidenceSummary(
+        int BoundaryHalfEdgeCount,
+        int OpenBoundaryVertexCount,
+        int UnmatchedUndirectedEdgeCount,
+        int NonManifoldUndirectedEdgeCount);
+
+    /// <summary>
     /// Creates a HalfEdgeMesh from a list of triangles.
     /// </summary>
     public static HalfEdgeMesh Stitch(IReadOnlyList<Triangle3> triangles, double weldTolerance = 1e-8)
@@ -101,7 +114,7 @@ public static class MeshStitcher
             // No merges needed, but there may be boundary half-edges with
             // matching vertex IDs that just need twin linking (e.g., from
             // non-manifold duplicate edges in MeshBuilder.LinkTwins).
-            RelinkBoundaryTwins(boundary);
+            RelinkBoundaryTwinsDeterministic(mesh);
             return;
         }
 
@@ -130,7 +143,7 @@ public static class MeshStitcher
         }
 
         // Phase 5: Re-link twins for previously-boundary half-edges
-        RelinkBoundaryTwins(boundary);
+        RelinkBoundaryTwinsDeterministic(mesh);
     }
 
     /// <summary>
@@ -247,70 +260,129 @@ public static class MeshStitcher
             }
         }
 
-        // Phase 4: Link twins for new + existing boundary half-edges.
-        // Build a map of all untwinned half-edges and pair them.
-        var untwinned = new List<HalfEdge>();
+        // Phase 4: deterministically relink twins for new + existing boundary half-edges.
+        RelinkBoundaryTwinsDeterministic(mesh);
+    }
+
+    /// <summary>
+    /// Deterministically links untwinned half-edges that have matching (reverse) vertex pairs.
+    /// Returns the number of twin links created.
+    /// </summary>
+    public static int RelinkBoundaryTwinsDeterministic(HalfEdgeMesh mesh)
+    {
+        var boundary = new List<HalfEdge>();
         foreach (var he in mesh.HalfEdges)
         {
-            if (he.Twin == null)
-                untwinned.Add(he);
+            if (he.Twin != null)
+                continue;
+            boundary.Add(he);
         }
 
+        if (boundary.Count < 2)
+            return 0;
+
+        boundary.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+
         var edgeMap = new Dictionary<(int, int), List<HalfEdge>>();
-        foreach (var he in untwinned)
+        foreach (var he in boundary)
         {
             var key = (he.Origin.Id, he.Target.Id);
             if (!edgeMap.TryGetValue(key, out var list))
             {
-                list = new List<HalfEdge>(1);
+                list = [];
                 edgeMap[key] = list;
             }
             list.Add(he);
         }
 
-        foreach (var he in untwinned)
+        foreach (var list in edgeMap.Values)
+            list.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+
+        int linked = 0;
+        foreach (var he in boundary)
         {
-            if (he.Twin != null) continue;
+            if (he.Twin != null)
+                continue;
+
             var twinKey = (he.Target.Id, he.Origin.Id);
-            if (edgeMap.TryGetValue(twinKey, out var candidates))
+            if (!edgeMap.TryGetValue(twinKey, out var candidates))
+                continue;
+
+            for (int i = 0; i < candidates.Count; i++)
             {
-                for (int i = 0; i < candidates.Count; i++)
-                {
-                    var twin = candidates[i];
-                    if (twin.Twin == null && twin != he)
-                    {
-                        he.Twin = twin;
-                        twin.Twin = he;
-                        break;
-                    }
-                }
+                var twin = candidates[i];
+                if (twin == he || twin.Twin != null)
+                    continue;
+
+                he.Twin = twin;
+                twin.Twin = he;
+                linked++;
+                break;
             }
         }
+
+        return linked;
     }
 
     /// <summary>
-    /// Links untwinned half-edges that have matching (reverse) vertex pairs.
+    /// Computes deterministic boundary/incidence metrics for the current mesh topology.
     /// </summary>
-    private static void RelinkBoundaryTwins(List<HalfEdge> boundary)
+    /// <param name="mesh">Mesh to analyze.</param>
+    /// <returns>Boundary and undirected-edge incidence summary.</returns>
+    public static BoundaryIncidenceSummary AnalyzeBoundaryIncidence(HalfEdgeMesh mesh)
     {
-        var edgeMap = new Dictionary<(int, int), HalfEdge>();
-        foreach (var he in boundary)
-        {
-            if (he.Twin != null) continue;
-            var key = (he.Origin.Id, he.Target.Id);
-            if (!edgeMap.ContainsKey(key))
-                edgeMap[key] = he;
-        }
+        int boundaryHalfEdges = 0;
+        var outgoing = new Dictionary<int, int>();
+        var incoming = new Dictionary<int, int>();
+        var undirectedEdgeUse = new Dictionary<long, int>(mesh.HalfEdges.Count);
 
-        foreach (var he in boundary)
+        foreach (var he in mesh.HalfEdges)
         {
-            if (he.Twin != null) continue;
-            var twinKey = (he.Target.Id, he.Origin.Id);
-            if (edgeMap.TryGetValue(twinKey, out var twin) && twin != he && twin.Twin == null)
+            int a = he.Origin.Id;
+            int b = he.Target.Id;
+            int lo = a < b ? a : b;
+            int hi = a < b ? b : a;
+            long key = ((long)lo << 32) | (uint)hi;
+            undirectedEdgeUse.TryGetValue(key, out int use);
+            undirectedEdgeUse[key] = use + 1;
+
+            if (he.Twin == null)
             {
-                he.Twin = twin;
-                twin.Twin = he;
+                boundaryHalfEdges++;
+                outgoing.TryGetValue(a, out int outCount);
+                outgoing[a] = outCount + 1;
+                incoming.TryGetValue(b, out int inCount);
+                incoming[b] = inCount + 1;
             }
         }
+
+        int openBoundaryVertices = 0;
+        var boundaryVertices = new HashSet<int>(outgoing.Keys);
+        foreach (int v in incoming.Keys)
+            boundaryVertices.Add(v);
+
+        foreach (int v in boundaryVertices)
+        {
+            outgoing.TryGetValue(v, out int outCount);
+            incoming.TryGetValue(v, out int inCount);
+            if (outCount != inCount)
+                openBoundaryVertices++;
+        }
+
+        int unmatchedUndirected = 0;
+        int nonManifoldUndirected = 0;
+        foreach (int useCount in undirectedEdgeUse.Values)
+        {
+            if (useCount == 1)
+                unmatchedUndirected++;
+            else if (useCount > 2)
+                nonManifoldUndirected++;
+        }
+
+        return new BoundaryIncidenceSummary(
+            boundaryHalfEdges,
+            openBoundaryVertices,
+            unmatchedUndirected,
+            nonManifoldUndirected);
     }
 }
