@@ -123,6 +123,7 @@ Current status:
 - Native triangulation now supports deterministic constrained-work budget overrides for reproducible fail-closed diagnostics (for example forcing `face-point-set/work-budget-exceeded` paths in conformance).
 - Checked-in triangulation replay corpus now lives under `tests/MdCsg.Robust.Conformance/ReplayCorpus/triangulation` with manifest-backed deterministic outcome/failure-code assertions.
 - Strict showcase/backlog/smoke conformance assertions now reject both legacy fallback and native triangulation failures, including signature/code regressions.
+- Rescue bar script now runs explicit gate slices with hang protection: showcase/backlog/replay, strict fuzz smoke, and triangulation bridge/smoke guardrails.
 
 ## M3 - Robust Triangulation and Patch Extraction
 
