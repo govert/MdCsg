@@ -117,6 +117,7 @@ Current status:
 - Deterministic replay harness is available for arrangement-stage cases (`Diagnostics/Replay` with capture/serialize/replay + conformance tests).
 - Checked-in arrangement replay corpus now lives under `tests/MdCsg.Robust.Conformance/ReplayCorpus/arrangement` with manifest-backed signature assertions.
 - Strict robust execution now fail-closes native constrained triangulation failures without implicit legacy triangulation fallback.
+- Stage invariant certificates (`input`, `arrangement`, `triangulation`, `output`) are now emitted in diagnostics, with explicit `StageInvariantViolation` issues in strict mode when gates fail.
 
 ## M3 - Robust Triangulation and Patch Extraction
 

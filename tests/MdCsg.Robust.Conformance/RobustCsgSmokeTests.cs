@@ -73,6 +73,10 @@ public class RobustCsgSmokeTests
             + result.Diagnostics.TriangulationFallbackPartitionFailureCount
             + result.Diagnostics.TriangulationFallbackConstrainedEarFailureCount
             + result.Diagnostics.TriangulationFallbackWorkBudgetExceededCount);
+        Assert.NotEmpty(result.Diagnostics.StageInvariantCertificates);
+        Assert.Contains(result.Diagnostics.StageInvariantCertificates, c => c.StartsWith("input:pass;", StringComparison.Ordinal));
+        Assert.Contains(result.Diagnostics.StageInvariantCertificates, c => c.StartsWith("triangulation:pass;", StringComparison.Ordinal));
+        Assert.Contains(result.Diagnostics.StageInvariantCertificates, c => c.StartsWith("output:pass;", StringComparison.Ordinal));
         if (result.Diagnostics.TriangulationLegacyFallbackCount > 0)
             Assert.NotEmpty(result.Diagnostics.TriangulationFallbackSignatures);
     }
@@ -125,6 +129,7 @@ public class RobustCsgSmokeTests
         Assert.False(result.Succeeded);
         Assert.Null(result.Result);
         Assert.Contains(result.Issues, i => i.Code == RobustIssueCode.InputMeshNotClosed);
+        Assert.Contains(result.Issues, i => i.Code == RobustIssueCode.StageInvariantViolation);
     }
 
     private static string BuildFallbackMessage(RobustDiagnostics diagnostics)

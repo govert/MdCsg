@@ -60,5 +60,7 @@ public sealed class RobustDiagnostics
 
     public IReadOnlyList<string> TriangulationNativeFailureSignatures { get; init; } = Array.Empty<string>();
 
+    public IReadOnlyList<string> StageInvariantCertificates { get; init; } = Array.Empty<string>();
+
     public int ClassificationFallbackCount { get; init; }
 }

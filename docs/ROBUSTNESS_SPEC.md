@@ -153,6 +153,7 @@ A candidate robust engine is production-ready only if:
 Every operation must expose structured diagnostics:
 
 - stage timings,
+- stage invariant certificates (`input`, `arrangement`, `triangulation`, `output`),
 - escalation counts (double -> expansion -> exact),
 - fallback triggers,
 - detected degeneracy counters,

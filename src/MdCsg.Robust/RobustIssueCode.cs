@@ -9,6 +9,7 @@ public enum RobustIssueCode
     InputIntersectionContainsCoplanarPairs,
     InputIntersectionContainsOpposingCoplanarPairs,
     InputArrangementHasOpenEndpoints,
+    StageInvariantViolation,
     TriangulationNativeFailure,
     TriangulationInvalidOrCrossingConstraints,
     TriangulationPartitioningFailed,

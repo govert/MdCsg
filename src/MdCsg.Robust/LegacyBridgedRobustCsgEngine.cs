@@ -46,12 +46,36 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int triangulationNativeFailureWorkBudgetExceededCount = 0;
         var triangulationFallbackSignatureCounts = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
         var triangulationNativeFailureSignatureCounts = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
+        var stageCertificates = new List<string>();
+        MeshInvariantSnapshot inputAInvariant = default;
+        MeshInvariantSnapshot inputBInvariant = default;
+        MeshInvariantSnapshot outputInvariant = default;
         var totalSw = Stopwatch.StartNew();
 
         if (opts.ValidateInput)
         {
-            ValidateInput(a, "A", opts.Mode, issues, predicateTelemetry);
-            ValidateInput(b, "B", opts.Mode, issues, predicateTelemetry);
+            inputAInvariant = ValidateInput(a, "A", opts.Mode, issues, predicateTelemetry);
+            inputBInvariant = ValidateInput(b, "B", opts.Mode, issues, predicateTelemetry);
+
+            bool inputStagePass = inputAInvariant.IsValid && inputBInvariant.IsValid;
+            stageCertificates.Add(
+                $"input:{(inputStagePass ? "pass" : "fail")};"
+                + $"A[finite={(inputAInvariant.HasFiniteVertices ? 1 : 0)},boundary={inputAInvariant.BoundaryEdgeCount},manifold={(inputAInvariant.IsEdgeManifold ? 1 : 0)},deg={inputAInvariant.DegenerateFaceCount}];"
+                + $"B[finite={(inputBInvariant.HasFiniteVertices ? 1 : 0)},boundary={inputBInvariant.BoundaryEdgeCount},manifold={(inputBInvariant.IsEdgeManifold ? 1 : 0)},deg={inputBInvariant.DegenerateFaceCount}]");
+
+            if (opts.Mode == RobustMode.Strict && !inputStagePass)
+            {
+                AddIssue(
+                    issues,
+                    opts.Mode,
+                    RobustIssueCode.StageInvariantViolation,
+                    "Input stage invariant gate failed (non-finite/open/non-manifold/degenerate input).",
+                    RobustIssueSeverity.Error);
+            }
+        }
+        else
+        {
+            stageCertificates.Add("input:skipped");
         }
 
         if (opts.AnalyzeInputIntersection)
@@ -96,6 +120,29 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     $"Input arrangement has open endpoints ({arrangementAnalysis.EndpointVertexCount}).",
                     severity);
             }
+
+            bool arrangementTopologyClosed = arrangementAnalysis.EndpointVertexCount == 0;
+            bool arrangementStagePass = arrangementTopologyClosed || !opts.TreatOpenArrangementAsError;
+            stageCertificates.Add(
+                $"arrangement:{(arrangementStagePass ? "pass" : "fail")};"
+                + $"vertices={arrangement.Vertices.Count};edges={arrangement.Edges.Count};"
+                + $"endpoints={arrangementAnalysis.EndpointVertexCount};components={arrangementAnalysis.ConnectedComponentCount};"
+                + $"coplanarOppose={arrangement.CoplanarPairNormalsOpposeCount};"
+                + $"gateOpenEndpoints={(opts.TreatOpenArrangementAsError ? 1 : 0)}");
+
+            if (opts.Mode == RobustMode.Strict && !arrangementStagePass)
+            {
+                AddIssue(
+                    issues,
+                    opts.Mode,
+                    RobustIssueCode.StageInvariantViolation,
+                    $"Arrangement stage invariant gate failed (open endpoints: {arrangementAnalysis.EndpointVertexCount}).",
+                    RobustIssueSeverity.Error);
+            }
+        }
+        else
+        {
+            stageCertificates.Add("arrangement:skipped");
         }
 
         if (opts.FailOnValidationError && issues.Any(i => i.Severity == RobustIssueSeverity.Error))
@@ -124,7 +171,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     triangulationNativeFailurePartitionFailureCount,
                     triangulationNativeFailureConstrainedEarFailureCount,
                     triangulationNativeFailureWorkBudgetExceededCount,
-                    SummarizeFallbackSignatures(triangulationNativeFailureSignatureCounts)));
+                    SummarizeFallbackSignatures(triangulationNativeFailureSignatureCounts),
+                    stageCertificates.ToArray()));
         }
 
         var robustTriangulator = new RobustConstrainedTriangulator();
@@ -239,6 +287,36 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         RepairOutputTopology(result.Mesh, csgOptions.WeldTolerance);
         result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
 
+        bool triangulationAccountingPass =
+            triangulationInvocationCount
+            == triangulationNativeCount
+                + triangulationLegacyFallbackCount
+                + triangulationNativeFailureCount;
+        bool triangulationNoLegacyInStrictPass =
+            opts.Mode != RobustMode.Strict
+            || triangulationLegacyFallbackCount == 0;
+        bool triangulationNoNativeFailurePass = triangulationNativeFailureCount == 0;
+        bool triangulationStagePass =
+            triangulationAccountingPass
+            && triangulationNoLegacyInStrictPass
+            && triangulationNoNativeFailurePass;
+
+        stageCertificates.Add(
+            $"triangulation:{(triangulationStagePass ? "pass" : "fail")};"
+            + $"invocations={triangulationInvocationCount};native={triangulationNativeCount};"
+            + $"legacy={triangulationLegacyFallbackCount};nativeFail={triangulationNativeFailureCount};"
+            + $"accounting={(triangulationAccountingPass ? 1 : 0)};strictNoLegacy={(triangulationNoLegacyInStrictPass ? 1 : 0)}");
+
+        if (opts.Mode == RobustMode.Strict && !triangulationStagePass)
+        {
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.StageInvariantViolation,
+                "Triangulation stage invariant gate failed (native/legacy accounting or fail-closed policy violation).",
+                RobustIssueSeverity.Error);
+        }
+
         if (triangulationNativeFailureInvalidOrCrossingConstraintCount > 0)
         {
             AddIssue(
@@ -301,7 +379,28 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
 
         if (opts.ValidateOutput)
         {
-            ValidateOutput(result.Mesh, opts.Mode, issues, predicateTelemetry);
+            outputInvariant = ValidateOutput(result.Mesh, opts.Mode, issues, predicateTelemetry);
+            bool outputStagePass = outputInvariant.IsValid;
+            stageCertificates.Add(
+                $"output:{(outputStagePass ? "pass" : "fail")};"
+                + $"finite={(outputInvariant.HasFiniteVertices ? 1 : 0)};"
+                + $"boundary={outputInvariant.BoundaryEdgeCount};"
+                + $"manifold={(outputInvariant.IsEdgeManifold ? 1 : 0)};"
+                + $"deg={outputInvariant.DegenerateFaceCount}");
+
+            if (opts.Mode == RobustMode.Strict && !outputStagePass)
+            {
+                AddIssue(
+                    issues,
+                    opts.Mode,
+                    RobustIssueCode.StageInvariantViolation,
+                    "Output stage invariant gate failed (non-finite/open/non-manifold/degenerate output).",
+                    RobustIssueSeverity.Error);
+            }
+        }
+        else
+        {
+            stageCertificates.Add("output:skipped");
         }
 
         totalSw.Stop();
@@ -332,17 +431,19 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 triangulationNativeFailurePartitionFailureCount,
                 triangulationNativeFailureConstrainedEarFailureCount,
                 triangulationNativeFailureWorkBudgetExceededCount,
-                SummarizeFallbackSignatures(triangulationNativeFailureSignatureCounts)));
+                SummarizeFallbackSignatures(triangulationNativeFailureSignatureCounts),
+                stageCertificates.ToArray()));
     }
 
-    private static void ValidateInput(
+    private static MeshInvariantSnapshot ValidateInput(
         Solid solid,
         string label,
         RobustMode mode,
         List<RobustIssue> issues,
         PredicateTelemetryCounter predicateTelemetry)
     {
-        if (!HasFiniteVertices(solid.Mesh))
+        bool hasFinite = HasFiniteVertices(solid.Mesh);
+        if (!hasFinite)
         {
             AddIssue(
                 issues,
@@ -361,7 +462,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 $"{label}: input mesh is not closed (boundary edges: {boundary}).");
         }
 
-        if (!MeshValidator.IsEdgeManifold(solid.Mesh))
+        bool isEdgeManifold = MeshValidator.IsEdgeManifold(solid.Mesh);
+        if (!isEdgeManifold)
         {
             AddIssue(
                 issues,
@@ -379,14 +481,21 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 RobustIssueCode.InputMeshHasDegenerateFaces,
                 $"{label}: input mesh has degenerate faces ({degenerateFaces}).");
         }
+
+        return new MeshInvariantSnapshot(
+            hasFinite,
+            boundary,
+            isEdgeManifold,
+            degenerateFaces);
     }
 
-    private static void ValidateOutput(
+    private static MeshInvariantSnapshot ValidateOutput(
         HalfEdgeMesh mesh,
         RobustMode mode,
         List<RobustIssue> issues,
         PredicateTelemetryCounter predicateTelemetry)
     {
+        bool hasFinite = HasFiniteVertices(mesh);
         int boundary = MeshValidator.CountBoundaryEdges(mesh);
         if (boundary > 0)
         {
@@ -397,7 +506,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 $"Output mesh is not closed (boundary edges: {boundary}).");
         }
 
-        if (!MeshValidator.IsEdgeManifold(mesh))
+        bool isEdgeManifold = MeshValidator.IsEdgeManifold(mesh);
+        if (!isEdgeManifold)
         {
             AddIssue(
                 issues,
@@ -415,6 +525,25 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 RobustIssueCode.OutputMeshHasDegenerateFaces,
                 $"Output mesh has degenerate faces ({degenerateFaces}).");
         }
+
+        return new MeshInvariantSnapshot(
+            hasFinite,
+            boundary,
+            isEdgeManifold,
+            degenerateFaces);
+    }
+
+    private readonly record struct MeshInvariantSnapshot(
+        bool HasFiniteVertices,
+        int BoundaryEdgeCount,
+        bool IsEdgeManifold,
+        int DegenerateFaceCount)
+    {
+        public bool IsValid =>
+            HasFiniteVertices
+            && BoundaryEdgeCount == 0
+            && IsEdgeManifold
+            && DegenerateFaceCount == 0;
     }
 
     private static CsgResult PruneDegenerateOutputFaces(
@@ -569,7 +698,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int triangulationNativeFailurePartitionFailureCount,
         int triangulationNativeFailureConstrainedEarFailureCount,
         int triangulationNativeFailureWorkBudgetExceededCount,
-        IReadOnlyList<string> triangulationNativeFailureSignatures)
+        IReadOnlyList<string> triangulationNativeFailureSignatures,
+        IReadOnlyList<string> stageInvariantCertificates)
     {
         return new RobustDiagnostics
         {
@@ -602,6 +732,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             TriangulationNativeFailureConstrainedEarFailureCount = triangulationNativeFailureConstrainedEarFailureCount,
             TriangulationNativeFailureWorkBudgetExceededCount = triangulationNativeFailureWorkBudgetExceededCount,
             TriangulationNativeFailureSignatures = triangulationNativeFailureSignatures,
+            StageInvariantCertificates = stageInvariantCertificates,
             ClassificationFallbackCount = 0
         };
     }
