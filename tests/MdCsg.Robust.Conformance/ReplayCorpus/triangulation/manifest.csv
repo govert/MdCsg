@@ -1,0 +1,4 @@
+case_file,expect_success,expect_used_legacy,expect_failure_reason,expect_failure_stage,expect_failure_code,constraint_budget_override,expected_triangles,required_edges
+simple-diagonal-square.json,true,false,None,None,, ,2,0-2
+crossing-square.json,false,false,InvalidOrCrossingConstraints,ConstraintValidation,constraint-validation/invalid-or-crossing,,0,
+budget-exhausted-crossing-dodecagon.json,false,false,WorkBudgetExceeded,FacePointSet,face-point-set/work-budget-exceeded,0,0,

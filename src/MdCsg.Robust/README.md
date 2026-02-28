@@ -39,6 +39,7 @@ Initial scaffold now exists:
   - constrained work-budget override (`RobustTriangulationOptions.ConstraintWorkBudgetOverride`) is available for deterministic fail-closed repro/diagnostics coverage
 - `Diagnostics/Replay` arrangement replay capture/serialize/replay harness
 - Checked-in replay corpus fixtures and manifest assertions under `tests/MdCsg.Robust.Conformance/ReplayCorpus/arrangement`
+- Checked-in triangulation replay corpus fixtures and manifest assertions under `tests/MdCsg.Robust.Conformance/ReplayCorpus/triangulation`
 - `Validation/DegenerateFaceInspector` using certified predicate checks
 - `RobustOperationOptions.TreatCoplanarIntersectionAsError` guardrail toggle for strict conformance runs
 - `RobustOperationOptions.TreatOpposingCoplanarPairsAsError` guardrail toggle for strict conformance runs
