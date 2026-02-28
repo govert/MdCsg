@@ -44,6 +44,8 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         bool useLegacyKernel = false;
         bool triangulationFailed = false;
         var fallbackReason = RobustTriangulationFallbackReason.None;
+        var failureStage = RobustTriangulationFailureStage.None;
+        string? failureCode = null;
         string? fallbackSignature = null;
         List<(int A, int B, int C)> rawTriangles;
         if (normalizedConstraints.Count == 0)
@@ -54,17 +56,21 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             vertices2D,
             normalizedConstraints,
             out var constrainedTriangles,
-            out var nativeFailureReason))
+            out var nativeFailureReason,
+            out var nativeFailureStage,
+            out var nativeFailureCode))
         {
             rawTriangles = constrainedTriangles;
         }
         else
         {
             fallbackReason = nativeFailureReason;
+            failureStage = nativeFailureStage;
+            failureCode = nativeFailureCode;
             var signature = BuildConstraintSignature(vertices2D, normalizedConstraints);
-            fallbackSignature = fallbackReason == RobustTriangulationFallbackReason.WorkBudgetExceeded
-                ? $"work-budget-exceeded:{signature}"
-                : signature;
+            fallbackSignature = string.IsNullOrWhiteSpace(failureCode)
+                ? signature
+                : $"{failureCode}:{signature}";
 
             if (opts.AllowLegacyFallback)
             {
@@ -132,6 +138,10 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             FailureReason = triangulationFailed
                 ? fallbackReason
                 : RobustTriangulationFallbackReason.None,
+            FailureStage = triangulationFailed
+                ? failureStage
+                : RobustTriangulationFailureStage.None,
+            FailureCode = triangulationFailed ? failureCode : null,
             FailureSignature = triangulationFailed ? fallbackSignature : null,
             LegacyFallbackReason = useLegacyKernel
                 ? fallbackReason
@@ -169,7 +179,9 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         Vec2[] vertices2D,
         IReadOnlyList<(int Start, int End)> constraints,
         out List<(int A, int B, int C)> triangles,
-        out RobustTriangulationFallbackReason failureReason)
+        out RobustTriangulationFallbackReason failureReason,
+        out RobustTriangulationFailureStage failureStage,
+        out string? failureCode)
     {
         bool sawWorkBudgetExceeded = false;
         if (ShouldPreferFacePointSet(vertices2D, constraints))
@@ -181,6 +193,8 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
                 out var facePointSetFailure))
             {
                 failureReason = RobustTriangulationFallbackReason.None;
+                failureStage = RobustTriangulationFailureStage.None;
+                failureCode = null;
                 return true;
             }
 
@@ -195,28 +209,50 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             out var partitionFailure))
         {
             failureReason = RobustTriangulationFallbackReason.None;
+            failureStage = RobustTriangulationFailureStage.None;
+            failureCode = null;
             return true;
         }
 
         if (TryTriangulateConstrainedByEarConstraints(vertices2D, constraints, out triangles))
         {
             failureReason = RobustTriangulationFallbackReason.None;
+            failureStage = RobustTriangulationFailureStage.None;
+            failureCode = null;
             return true;
         }
 
         if (sawWorkBudgetExceeded)
         {
             failureReason = RobustTriangulationFallbackReason.WorkBudgetExceeded;
+            failureStage = RobustTriangulationFailureStage.FacePointSet;
+            failureCode = "face-point-set/work-budget-exceeded";
             return false;
         }
 
-        failureReason = partitionFailure switch
+        switch (partitionFailure)
         {
-            PartitionFailureKind.InvalidOrCrossingConstraints => RobustTriangulationFallbackReason.InvalidOrCrossingConstraints,
-            PartitionFailureKind.ConstraintSplitFailure => RobustTriangulationFallbackReason.PartitioningFailed,
-            PartitionFailureKind.ConstraintEdgeMissingAfterPartition => RobustTriangulationFallbackReason.PartitioningFailed,
-            _ => RobustTriangulationFallbackReason.ConstrainedEarFailed
-        };
+            case PartitionFailureKind.InvalidOrCrossingConstraints:
+                failureReason = RobustTriangulationFallbackReason.InvalidOrCrossingConstraints;
+                failureStage = RobustTriangulationFailureStage.ConstraintValidation;
+                failureCode = "constraint-validation/invalid-or-crossing";
+                break;
+            case PartitionFailureKind.ConstraintSplitFailure:
+                failureReason = RobustTriangulationFallbackReason.PartitioningFailed;
+                failureStage = RobustTriangulationFailureStage.Partition;
+                failureCode = "partition/split-failure";
+                break;
+            case PartitionFailureKind.ConstraintEdgeMissingAfterPartition:
+                failureReason = RobustTriangulationFallbackReason.PartitioningFailed;
+                failureStage = RobustTriangulationFailureStage.Partition;
+                failureCode = "partition/constraint-edge-missing";
+                break;
+            default:
+                failureReason = RobustTriangulationFallbackReason.ConstrainedEarFailed;
+                failureStage = RobustTriangulationFailureStage.ConstrainedEar;
+                failureCode = "constrained-ear/failed";
+                break;
+        }
 
         return false;
     }

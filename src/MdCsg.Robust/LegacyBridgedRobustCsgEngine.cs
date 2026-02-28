@@ -46,6 +46,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int triangulationNativeFailureWorkBudgetExceededCount = 0;
         var triangulationFallbackSignatureCounts = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
         var triangulationNativeFailureSignatureCounts = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
+        var triangulationNativeFailureCodeCounts = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
         var stageCertificates = new List<string>();
         MeshInvariantSnapshot inputAInvariant = default;
         MeshInvariantSnapshot inputBInvariant = default;
@@ -172,6 +173,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     triangulationNativeFailureConstrainedEarFailureCount,
                     triangulationNativeFailureWorkBudgetExceededCount,
                     SummarizeFallbackSignatures(triangulationNativeFailureSignatureCounts),
+                    SummarizeFallbackSignatures(triangulationNativeFailureCodeCounts),
                     stageCertificates.ToArray()));
         }
 
@@ -218,6 +220,14 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     {
                         triangulationNativeFailureSignatureCounts.AddOrUpdate(
                             triResult.FailureSignature!,
+                            1,
+                            static (_, current) => current + 1);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(triResult.FailureCode))
+                    {
+                        triangulationNativeFailureCodeCounts.AddOrUpdate(
+                            triResult.FailureCode!,
                             1,
                             static (_, current) => current + 1);
                     }
@@ -432,6 +442,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 triangulationNativeFailureConstrainedEarFailureCount,
                 triangulationNativeFailureWorkBudgetExceededCount,
                 SummarizeFallbackSignatures(triangulationNativeFailureSignatureCounts),
+                SummarizeFallbackSignatures(triangulationNativeFailureCodeCounts),
                 stageCertificates.ToArray()));
     }
 
@@ -699,6 +710,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int triangulationNativeFailureConstrainedEarFailureCount,
         int triangulationNativeFailureWorkBudgetExceededCount,
         IReadOnlyList<string> triangulationNativeFailureSignatures,
+        IReadOnlyList<string> triangulationNativeFailureCodes,
         IReadOnlyList<string> stageInvariantCertificates)
     {
         return new RobustDiagnostics
@@ -732,6 +744,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             TriangulationNativeFailureConstrainedEarFailureCount = triangulationNativeFailureConstrainedEarFailureCount,
             TriangulationNativeFailureWorkBudgetExceededCount = triangulationNativeFailureWorkBudgetExceededCount,
             TriangulationNativeFailureSignatures = triangulationNativeFailureSignatures,
+            TriangulationNativeFailureCodes = triangulationNativeFailureCodes,
             StageInvariantCertificates = stageInvariantCertificates,
             ClassificationFallbackCount = 0
         };

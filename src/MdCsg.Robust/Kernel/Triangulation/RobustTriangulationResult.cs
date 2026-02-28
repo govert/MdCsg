@@ -10,6 +10,11 @@ public sealed record RobustTriangulationResult(
     public RobustTriangulationFallbackReason FailureReason { get; init; } =
         RobustTriangulationFallbackReason.None;
 
+    public RobustTriangulationFailureStage FailureStage { get; init; } =
+        RobustTriangulationFailureStage.None;
+
+    public string? FailureCode { get; init; }
+
     public string? FailureSignature { get; init; }
 
     public RobustTriangulationFallbackReason LegacyFallbackReason { get; init; } =

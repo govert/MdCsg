@@ -95,6 +95,8 @@ public class RobustTriangulationBridgeTests
         Assert.False(result.Succeeded);
         Assert.False(result.UsedLegacyKernel);
         Assert.Equal(RobustTriangulationFallbackReason.InvalidOrCrossingConstraints, result.FailureReason);
+        Assert.Equal(RobustTriangulationFailureStage.ConstraintValidation, result.FailureStage);
+        Assert.Equal("constraint-validation/invalid-or-crossing", result.FailureCode);
         Assert.NotNull(result.FailureSignature);
         Assert.Empty(result.Triangles);
     }
