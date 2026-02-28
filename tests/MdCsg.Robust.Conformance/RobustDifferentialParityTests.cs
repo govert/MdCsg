@@ -30,6 +30,12 @@ public class RobustDifferentialParityTests
             Primitives.Sphere(Vec3.Zero, 1.2, 3),
             Primitives.Cube(new Vec3(0.6, 0, 0), 1.5)
         ];
+        yield return
+        [
+            "cube-cube-diagonal-overlap",
+            Primitives.Cube(Vec3.Zero, 2.0),
+            Primitives.Cube(new Vec3(0.6, 0.6, 0.2), 2.0)
+        ];
     }
 
     [Theory]
@@ -74,6 +80,13 @@ public class RobustDifferentialParityTests
         Assert.True(robust.Succeeded, $"{caseName}:{op} robust failed.");
         Assert.NotNull(robust.Result);
         RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(robust.Diagnostics);
+        Assert.Contains(
+            robust.Diagnostics.StageInvariantCertificates,
+            static c => c.StartsWith("patch-extraction:mode=", StringComparison.Ordinal));
+        Assert.Contains(
+            robust.Diagnostics.StageInvariantCertificates,
+            c => c.StartsWith("reconstruction-policy:", StringComparison.Ordinal)
+                && c.Contains("pass=1", StringComparison.Ordinal));
 
         int robustBoundary = MeshValidator.CountBoundaryEdges(robust.Result!.Mesh);
         int legacyBoundary = MeshValidator.CountBoundaryEdges(legacy.Mesh);
