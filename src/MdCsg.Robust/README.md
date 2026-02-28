@@ -28,6 +28,7 @@ Initial scaffold now exists:
   - emits triangulation telemetry (invocation/native/fallback/dropped-degenerate counts, fallback reason buckets, fallback signature samples)
   - emits reconstruction telemetry (boundary/open-loop/unmatched/non-manifold counts + reconstruction certificates)
   - reconstruction metrics are computed via deterministic boundary-incidence accounting in `MeshStitcher.AnalyzeBoundaryIncidence`
+  - strict bridge path uses a deterministic constructive reconstruction pass (relink, balanced-loop fill, invalid-component pruning)
   - emits stage invariant certificates (`input`, `arrangement`, `triangulation`, `reconstruction`, `output`) and strict-mode `StageInvariantViolation` issues when gates fail
   - applies deterministic post-op degenerate-face pruning and topology repair before strict output validation
 - `Kernel/Predicates/CertifiedPredicates` with precision-tier telemetry

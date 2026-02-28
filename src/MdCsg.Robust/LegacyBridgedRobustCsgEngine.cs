@@ -306,7 +306,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         opSw.Stop();
 
         result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
-        RepairOutputTopology(result.Mesh, csgOptions.WeldTolerance);
+        result = ReconstructOutputTopology(result, csgOptions.WeldTolerance, out reconstructionDroppedComponentCount);
         result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
         var reconstructionInvariant = AnalyzeReconstructionTopology(result.Mesh);
         reconstructionBoundaryHalfEdgeCount = reconstructionInvariant.BoundaryHalfEdgeCount;
@@ -707,12 +707,15 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         return CertifiedPredicates.Orient2D(pa, pb, pc);
     }
 
-    private static void RepairOutputTopology(HalfEdgeMesh mesh, double weldTolerance)
+    private static CsgResult ReconstructOutputTopology(
+        CsgResult result,
+        double weldTolerance,
+        out int droppedComponentCount)
     {
-        int boundary = MeshValidator.CountBoundaryEdges(mesh);
-        bool manifold = MeshValidator.IsEdgeManifold(mesh);
-        if (boundary == 0 && manifold)
-            return;
+        droppedComponentCount = 0;
+        var mesh = result.Mesh;
+        if (mesh.Faces.Count == 0)
+            return result;
 
         var bounds = mesh.GetBounds();
         double sceneScale = System.Math.Max(1.0, bounds.Size.Length);
@@ -720,22 +723,180 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             System.Math.Max(weldTolerance * 4.0, sceneScale * 1e-8),
             1e-6);
 
-        for (int pass = 0; pass < 3; pass++)
+        for (int pass = 0; pass < 4; pass++)
         {
+            if (IsMeshClosedOrientedAndManifold(mesh))
+                return result;
+
             double tol = baseTolerance * (1 << pass);
             MeshStitcher.RepairBoundary(mesh, tol);
+            MeshStitcher.RelinkBoundaryTwinsDeterministic(mesh);
 
-            if (MeshValidator.CountBoundaryEdges(mesh) > 0)
+            var incidence = MeshStitcher.AnalyzeBoundaryIncidence(mesh);
+            if (incidence.BoundaryHalfEdgeCount > 0 && incidence.OpenBoundaryVertexCount == 0)
                 MeshStitcher.CloseBoundaryLoops(mesh);
 
             // A second relink pass after loop fill catches new near-equal endpoints.
             MeshStitcher.RepairBoundary(mesh, tol * 2.0);
+            MeshStitcher.RelinkBoundaryTwinsDeterministic(mesh);
 
-            boundary = MeshValidator.CountBoundaryEdges(mesh);
-            manifold = MeshValidator.IsEdgeManifold(mesh);
-            if (boundary == 0 && manifold)
-                return;
+            if (TryPruneInvalidComponents(mesh, weldTolerance, out var pruned, out int dropped))
+            {
+                droppedComponentCount += dropped;
+                mesh = pruned;
+                result = WithMesh(result, mesh);
+            }
         }
+
+        return result;
+    }
+
+    private static bool IsMeshClosedOrientedAndManifold(HalfEdgeMesh mesh)
+    {
+        if (MeshValidator.CountBoundaryEdges(mesh) != 0)
+            return false;
+        if (!MeshValidator.IsEdgeManifold(mesh))
+            return false;
+        return MeshValidator.IsConsistentlyOriented(mesh);
+    }
+
+    private static bool TryPruneInvalidComponents(
+        HalfEdgeMesh mesh,
+        double weldTolerance,
+        out HalfEdgeMesh pruned,
+        out int droppedComponentCount)
+    {
+        pruned = mesh;
+        droppedComponentCount = 0;
+
+        var components = MeshQueries.ConnectedComponents(mesh);
+        if (components.Count <= 1)
+            return false;
+
+        var keep = new bool[components.Count];
+        int keepCount = 0;
+        int largestFaces = 0;
+        int largestIdx = -1;
+        for (int ci = 0; ci < components.Count; ci++)
+        {
+            var comp = components[ci];
+            int faceCount = comp.Count;
+            var edgeStats = GetComponentEdgeStats(mesh, comp);
+            bool valid = faceCount >= 4
+                && edgeStats.BoundaryEdgeCount == 0
+                && edgeStats.NonManifoldEdgeCount == 0;
+            keep[ci] = valid;
+            if (valid)
+            {
+                keepCount++;
+                if (faceCount > largestFaces)
+                {
+                    largestFaces = faceCount;
+                    largestIdx = ci;
+                }
+            }
+        }
+
+        if (keepCount == 0)
+        {
+            for (int ci = 0; ci < components.Count; ci++)
+            {
+                int faceCount = components[ci].Count;
+                if (faceCount > largestFaces)
+                {
+                    largestFaces = faceCount;
+                    largestIdx = ci;
+                }
+            }
+
+            if (largestIdx >= 0)
+            {
+                keep[largestIdx] = true;
+                keepCount = 1;
+            }
+        }
+
+        if (keepCount == components.Count || keepCount == 0)
+            return false;
+
+        var positions = new List<Vec3>(mesh.Vertices.Count);
+        foreach (var v in mesh.Vertices)
+            positions.Add(v.Position);
+
+        var triangles = new List<(int I0, int I1, int I2)>();
+        for (int ci = 0; ci < components.Count; ci++)
+        {
+            if (!keep[ci])
+                continue;
+
+            foreach (int faceIdx in components[ci])
+            {
+                var verts = mesh.Faces[faceIdx].GetVertices();
+                triangles.Add((verts[0].Id, verts[1].Id, verts[2].Id));
+            }
+        }
+
+        var rebuilt = new MeshBuilder(weldTolerance).Build(positions, triangles);
+        rebuilt.IsComplemented = mesh.IsComplemented;
+
+        pruned = rebuilt;
+        droppedComponentCount = components.Count - keepCount;
+        return droppedComponentCount > 0;
+    }
+
+    private readonly struct ComponentEdgeStats
+    {
+        public int BoundaryEdgeCount { get; }
+        public int NonManifoldEdgeCount { get; }
+
+        public ComponentEdgeStats(int boundaryEdgeCount, int nonManifoldEdgeCount)
+        {
+            BoundaryEdgeCount = boundaryEdgeCount;
+            NonManifoldEdgeCount = nonManifoldEdgeCount;
+        }
+    }
+
+    private static ComponentEdgeStats GetComponentEdgeStats(HalfEdgeMesh mesh, IReadOnlyList<int> componentFaces)
+    {
+        var edgeUse = new Dictionary<long, int>(componentFaces.Count * 3);
+        foreach (int faceIdx in componentFaces)
+        {
+            var verts = mesh.Faces[faceIdx].GetVertices();
+            CountUndirectedEdge(edgeUse, verts[0].Id, verts[1].Id);
+            CountUndirectedEdge(edgeUse, verts[1].Id, verts[2].Id);
+            CountUndirectedEdge(edgeUse, verts[2].Id, verts[0].Id);
+        }
+
+        int boundary = 0;
+        int nonManifold = 0;
+        foreach (int count in edgeUse.Values)
+        {
+            if (count == 1) boundary++;
+            else if (count > 2) nonManifold++;
+        }
+
+        return new ComponentEdgeStats(boundary, nonManifold);
+    }
+
+    private static void CountUndirectedEdge(Dictionary<long, int> edgeUse, int i0, int i1)
+    {
+        int lo = i0 < i1 ? i0 : i1;
+        int hi = i0 < i1 ? i1 : i0;
+        long key = ((long)lo << 32) | (uint)hi;
+        edgeUse.TryGetValue(key, out int count);
+        edgeUse[key] = count + 1;
+    }
+
+    private static CsgResult WithMesh(CsgResult source, HalfEdgeMesh mesh)
+    {
+        return new CsgResult
+        {
+            Mesh = mesh,
+            PatchCountA = source.PatchCountA,
+            PatchCountB = source.PatchCountB,
+            DegenerateCount = source.DegenerateCount,
+            IntersectionSegmentCount = source.IntersectionSegmentCount
+        };
     }
 
     private static ReconstructionInvariantSnapshot AnalyzeReconstructionTopology(HalfEdgeMesh mesh)
