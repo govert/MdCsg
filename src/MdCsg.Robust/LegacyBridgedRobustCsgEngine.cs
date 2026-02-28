@@ -341,6 +341,24 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             $"classification:pass;certified={classifiedCertifiedCount};"
             + $"fallback={classificationFallbackCount};policy=margin>errorBound");
 
+        var policySnapshot = EvaluateReconstructionPolicySnapshot(operation, result);
+        stageCertificates.Add(
+            $"reconstruction-policy:op={operation};"
+            + $"fromA={policySnapshot.FromA};"
+            + $"fromB={policySnapshot.FromB};"
+            + $"flipB={policySnapshot.FlippedFromB};"
+            + $"pass={(policySnapshot.IsValid ? 1 : 0)};"
+            + $"rule={policySnapshot.Rule}");
+        if (opts.Mode == RobustMode.Strict && !policySnapshot.IsValid)
+        {
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.StageInvariantViolation,
+                $"Reconstruction policy invariant failed for {operation}: fromA={policySnapshot.FromA}, fromB={policySnapshot.FromB}, flipB={policySnapshot.FlippedFromB}.",
+                RobustIssueSeverity.Error);
+        }
+
         result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
         result = ReconstructOutputTopology(
             result,
@@ -740,6 +758,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             SelectedPatchExtractionIsEdgeManifold = result.SelectedPatchExtractionIsEdgeManifold,
             SelectedPatchExtractionConnectedComponentCount = result.SelectedPatchExtractionConnectedComponentCount,
             SelectedPatchBoundaryAuthority = result.SelectedPatchBoundaryAuthority,
+            SelectedAssemblyTrianglesFromA = result.SelectedAssemblyTrianglesFromA,
+            SelectedAssemblyTrianglesFromB = result.SelectedAssemblyTrianglesFromB,
+            SelectedAssemblyFlippedTrianglesFromB = result.SelectedAssemblyFlippedTrianglesFromB,
             PatchExtractionCandidateSignatures = result.PatchExtractionCandidateSignatures
         };
     }
@@ -1142,6 +1163,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             SelectedPatchExtractionIsEdgeManifold = source.SelectedPatchExtractionIsEdgeManifold,
             SelectedPatchExtractionConnectedComponentCount = source.SelectedPatchExtractionConnectedComponentCount,
             SelectedPatchBoundaryAuthority = source.SelectedPatchBoundaryAuthority,
+            SelectedAssemblyTrianglesFromA = source.SelectedAssemblyTrianglesFromA,
+            SelectedAssemblyTrianglesFromB = source.SelectedAssemblyTrianglesFromB,
+            SelectedAssemblyFlippedTrianglesFromB = source.SelectedAssemblyFlippedTrianglesFromB,
             PatchExtractionCandidateSignatures = source.PatchExtractionCandidateSignatures
         };
     }
@@ -1172,6 +1196,45 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             && UnmatchedUndirectedEdgeCount == 0
             && IsConsistentlyOriented;
     }
+
+    private static ReconstructionPolicySnapshot EvaluateReconstructionPolicySnapshot(
+        RobustCsgOperation operation,
+        CsgResult result)
+    {
+        int fromA = result.SelectedAssemblyTrianglesFromA.GetValueOrDefault(0);
+        int fromB = result.SelectedAssemblyTrianglesFromB.GetValueOrDefault(0);
+        int flippedFromB = result.SelectedAssemblyFlippedTrianglesFromB.GetValueOrDefault(0);
+
+        bool valid = operation switch
+        {
+            RobustCsgOperation.Union => flippedFromB == 0,
+            RobustCsgOperation.Intersection => flippedFromB == 0,
+            RobustCsgOperation.Difference => flippedFromB >= 0 && flippedFromB <= fromB,
+            _ => true
+        };
+
+        string rule = operation switch
+        {
+            RobustCsgOperation.Union => "union:no-flip-b",
+            RobustCsgOperation.Intersection => "intersection:no-flip-b",
+            RobustCsgOperation.Difference => "difference:0<=flipB<=fromB",
+            _ => "unknown"
+        };
+
+        return new ReconstructionPolicySnapshot(
+            FromA: fromA,
+            FromB: fromB,
+            FlippedFromB: flippedFromB,
+            IsValid: valid,
+            Rule: rule);
+    }
+
+    private readonly record struct ReconstructionPolicySnapshot(
+        int FromA,
+        int FromB,
+        int FlippedFromB,
+        bool IsValid,
+        string Rule);
 
     private static ReconstructionComponentSnapshot AnalyzeComponentTopology(HalfEdgeMesh mesh)
     {

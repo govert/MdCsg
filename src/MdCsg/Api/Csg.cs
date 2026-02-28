@@ -233,6 +233,9 @@ public static class Csg
             SelectedPatchExtractionIsEdgeManifold = chosen.TopologyQuality.IsEdgeManifold,
             SelectedPatchExtractionConnectedComponentCount = chosen.TopologyQuality.ConnectedComponentCount,
             SelectedPatchBoundaryAuthority = GetBoundaryAuthorityForMode(chosen.ExtractionMode),
+            SelectedAssemblyTrianglesFromA = chosen.Assembly.TrianglesFromMeshA,
+            SelectedAssemblyTrianglesFromB = chosen.Assembly.TrianglesFromMeshB,
+            SelectedAssemblyFlippedTrianglesFromB = chosen.Assembly.FlippedTrianglesFromMeshB,
             PatchExtractionCandidateSignatures = candidateSignatures
         };
     }

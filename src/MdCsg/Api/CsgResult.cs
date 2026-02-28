@@ -48,6 +48,15 @@ public class CsgResult
     /// </summary>
     public PatchBoundaryAuthority? SelectedPatchBoundaryAuthority { get; init; }
 
+    /// <summary>Number of assembled triangles sourced from mesh A for the selected candidate.</summary>
+    public int? SelectedAssemblyTrianglesFromA { get; init; }
+
+    /// <summary>Number of assembled triangles sourced from mesh B for the selected candidate.</summary>
+    public int? SelectedAssemblyTrianglesFromB { get; init; }
+
+    /// <summary>Number of mesh-B triangles emitted with flipped orientation for the selected candidate.</summary>
+    public int? SelectedAssemblyFlippedTrianglesFromB { get; init; }
+
     /// <summary>
     /// Deterministic candidate signatures considered by the patch-extraction selector.
     /// </summary>

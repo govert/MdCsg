@@ -1,6 +1,7 @@
 using MdCsg.Api;
 using MdCsg.Math;
 using MdCsg.Mesh;
+using System.Linq;
 
 namespace MdCsg.Robust.Conformance;
 
@@ -77,6 +78,30 @@ public class RobustAlgebraicConformanceTests
         Assert.Contains(difference.Diagnostics.StageInvariantCertificates, c => c.StartsWith("classification:pass;", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void StrictBooleanOps_EmitReconstructionPolicyCertificates()
+    {
+        var a = Primitives.Sphere(Vec3.Zero, 1.2, 3);
+        var b = Primitives.Cube(new Vec3(0.6, 0, 0), 1.5);
+
+        var union = RobustCsg.Union(a, b, StrictOpts);
+        var intersection = RobustCsg.Intersect(a, b, StrictOpts);
+        var difference = RobustCsg.Difference(a, b, StrictOpts);
+
+        AssertRobustClosedWithoutFallback(union);
+        AssertRobustClosedWithoutFallback(intersection);
+        AssertRobustClosedWithoutFallback(difference);
+
+        Assert.Contains("pass=1", GetPolicyCert(union), StringComparison.Ordinal);
+        Assert.Contains("pass=1", GetPolicyCert(intersection), StringComparison.Ordinal);
+
+        string diffCert = GetPolicyCert(difference);
+        Assert.Contains("pass=1", diffCert, StringComparison.Ordinal);
+        int fromB = ParseIntTag(diffCert, "fromB");
+        int flipB = ParseIntTag(diffCert, "flipB");
+        Assert.InRange(flipB, 0, fromB);
+    }
+
     private static void AssertRobustClosedWithoutFallback(RobustCsgResult result)
     {
         Assert.True(result.Succeeded);
@@ -84,5 +109,24 @@ public class RobustAlgebraicConformanceTests
         Assert.Equal(0, MeshValidator.CountBoundaryEdges(result.Result!.Mesh));
         RobustDiagnosticsAssertions.AssertHasPatchExtractionCertificate(result.Diagnostics);
         RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(result.Diagnostics);
+    }
+
+    private static string GetPolicyCert(RobustCsgResult result)
+    {
+        string? cert = result.Diagnostics.StageInvariantCertificates
+            .LastOrDefault(static c => c.StartsWith("reconstruction-policy:", StringComparison.Ordinal));
+        Assert.False(string.IsNullOrWhiteSpace(cert));
+        return cert!;
+    }
+
+    private static int ParseIntTag(string cert, string tag)
+    {
+        var parts = cert.Split(';', StringSplitOptions.RemoveEmptyEntries);
+        string prefix = tag + "=";
+        string value = parts.FirstOrDefault(p => p.StartsWith(prefix, StringComparison.Ordinal)) ?? string.Empty;
+        Assert.False(string.IsNullOrWhiteSpace(value));
+        string text = value[prefix.Length..];
+        Assert.True(int.TryParse(text, out int parsed), $"Invalid integer tag '{tag}' in certificate '{cert}'.");
+        return parsed;
     }
 }

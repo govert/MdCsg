@@ -16,7 +16,15 @@ public static class PatchAssembler
     /// </summary>
     /// <param name="Triangles">Selected triangles.</param>
     /// <param name="FlipNormals">Whether normals should be flipped for each triangle.</param>
-    public record AssemblyResult(List<Triangle3> Triangles, List<bool> FlipNormals);
+    /// <param name="TrianglesFromMeshA">Number of selected triangles sourced from mesh A.</param>
+    /// <param name="TrianglesFromMeshB">Number of selected triangles sourced from mesh B.</param>
+    /// <param name="FlippedTrianglesFromMeshB">Number of mesh-B triangles emitted with flipped orientation.</param>
+    public record AssemblyResult(
+        List<Triangle3> Triangles,
+        List<bool> FlipNormals,
+        int TrianglesFromMeshA,
+        int TrianglesFromMeshB,
+        int FlippedTrianglesFromMeshB);
 
     /// <summary>
     /// Selects patches from both meshes based on the CSG operation.
@@ -35,6 +43,9 @@ public static class PatchAssembler
     {
         var triangles = new List<Triangle3>();
         var flipNormals = new List<bool>();
+        int fromA = 0;
+        int fromB = 0;
+        int flippedFromB = 0;
 
         // Select patches from mesh A
         foreach (var patch in patchesA)
@@ -64,6 +75,7 @@ public static class PatchAssembler
                 else
                     triangles.Add(new Triangle3(st.A, st.B, st.C));
                 flipNormals.Add(flip);
+                fromA++;
             }
         }
 
@@ -83,10 +95,14 @@ public static class PatchAssembler
                 {
                     var st = subTrianglesB[triIdx];
                     if (decision.FlipNormals)
+                    {
                         triangles.Add(new Triangle3(st.A, st.C, st.B));
+                        flippedFromB++;
+                    }
                     else
                         triangles.Add(new Triangle3(st.A, st.B, st.C));
                     flipNormals.Add(decision.FlipNormals);
+                    fromB++;
                 }
 
                 continue;
@@ -100,14 +116,18 @@ public static class PatchAssembler
             {
                 var st = subTrianglesB[triIdx];
                 if (flip)
+                {
                     triangles.Add(new Triangle3(st.A, st.C, st.B)); // reversed winding = flipped normal
+                    flippedFromB++;
+                }
                 else
                     triangles.Add(new Triangle3(st.A, st.B, st.C));
                 flipNormals.Add(flip);
+                fromB++;
             }
         }
 
-        return new AssemblyResult(triangles, flipNormals);
+        return new AssemblyResult(triangles, flipNormals, fromA, fromB, flippedFromB);
     }
 
     /// <summary>
