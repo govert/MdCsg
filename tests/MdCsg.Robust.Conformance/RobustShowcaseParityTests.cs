@@ -66,6 +66,7 @@ public class RobustShowcaseParityTests
         Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.ReconstructionInvariantViolation);
         Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);
         Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotEdgeManifold);
+        RobustDiagnosticsAssertions.AssertHasPatchExtractionCertificate(step3.Diagnostics);
         Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction:fail;", StringComparison.Ordinal));
         RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(step3.Diagnostics);
     }
@@ -75,6 +76,7 @@ public class RobustShowcaseParityTests
         Assert.True(result.Succeeded, BuildIssueMessage(result));
         Assert.NotNull(result.Result);
         Assert.Equal(0, MeshValidator.CountBoundaryEdges(result.Result!.Mesh));
+        RobustDiagnosticsAssertions.AssertHasPatchExtractionCertificate(result.Diagnostics);
         RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(result.Diagnostics);
     }
 

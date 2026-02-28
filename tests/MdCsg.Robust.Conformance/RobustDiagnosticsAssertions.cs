@@ -2,6 +2,13 @@ namespace MdCsg.Robust.Conformance;
 
 internal static class RobustDiagnosticsAssertions
 {
+    public static void AssertHasPatchExtractionCertificate(RobustDiagnostics diagnostics)
+    {
+        Assert.Contains(
+            diagnostics.StageInvariantCertificates,
+            static c => c.StartsWith("patch-extraction:mode=", StringComparison.Ordinal));
+    }
+
     public static void AssertNoTriangulationDegradation(RobustDiagnostics diagnostics)
     {
         Assert.True(
