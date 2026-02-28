@@ -20,5 +20,11 @@ public enum PatchExtractionMode
     /// <summary>
     /// Flood-fills patches globally across sub-triangle adjacency.
     /// </summary>
-    Global = 2
+    Global = 2,
+
+    /// <summary>
+    /// Flood-fills globally while using arrangement-segment ownership as the
+    /// authoritative patch boundary classifier.
+    /// </summary>
+    Arrangement = 3
 }

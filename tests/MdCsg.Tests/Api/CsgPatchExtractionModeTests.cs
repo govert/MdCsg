@@ -74,6 +74,22 @@ public class CsgPatchExtractionModeTests
         Assert.Equal(expected.SelectedPatchExtractionConnectedComponentCount, auto.SelectedPatchExtractionConnectedComponentCount);
     }
 
+    [Fact]
+    public void ExplicitArrangementMode_ReportsArrangementSelection()
+    {
+        var a = Primitives.Cube(Vec3.Zero, 2.0);
+        var b = Primitives.Cube(new Vec3(0.5, 0.3, 0), 2.0);
+
+        var result = Csg.Intersect(a, b, new CsgOptions
+        {
+            PatchExtractionMode = PatchExtractionMode.Arrangement,
+            Parallel = false
+        });
+
+        Assert.True(result.IntersectionSegmentCount > 0);
+        Assert.Equal(PatchExtractionMode.Arrangement, result.SelectedPatchExtractionMode);
+    }
+
     private static bool IsBetter(CsgResult a, CsgResult b)
     {
         Assert.NotNull(a.SelectedPatchExtractionBoundaryEdgeCount);

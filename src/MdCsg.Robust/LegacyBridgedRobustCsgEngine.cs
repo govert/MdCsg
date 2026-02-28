@@ -681,7 +681,11 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             PatchCountA = result.PatchCountA,
             PatchCountB = result.PatchCountB,
             DegenerateCount = result.DegenerateCount,
-            IntersectionSegmentCount = result.IntersectionSegmentCount
+            IntersectionSegmentCount = result.IntersectionSegmentCount,
+            SelectedPatchExtractionMode = result.SelectedPatchExtractionMode,
+            SelectedPatchExtractionBoundaryEdgeCount = result.SelectedPatchExtractionBoundaryEdgeCount,
+            SelectedPatchExtractionIsEdgeManifold = result.SelectedPatchExtractionIsEdgeManifold,
+            SelectedPatchExtractionConnectedComponentCount = result.SelectedPatchExtractionConnectedComponentCount
         };
     }
 
@@ -906,7 +910,11 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             PatchCountA = source.PatchCountA,
             PatchCountB = source.PatchCountB,
             DegenerateCount = source.DegenerateCount,
-            IntersectionSegmentCount = source.IntersectionSegmentCount
+            IntersectionSegmentCount = source.IntersectionSegmentCount,
+            SelectedPatchExtractionMode = source.SelectedPatchExtractionMode,
+            SelectedPatchExtractionBoundaryEdgeCount = source.SelectedPatchExtractionBoundaryEdgeCount,
+            SelectedPatchExtractionIsEdgeManifold = source.SelectedPatchExtractionIsEdgeManifold,
+            SelectedPatchExtractionConnectedComponentCount = source.SelectedPatchExtractionConnectedComponentCount
         };
     }
 

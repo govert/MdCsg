@@ -131,6 +131,7 @@ Current status:
 - Chained showcase step-3 remains an active reconstruction blocker, but is now pinned as a strict fail-closed repro requiring `reconstruction:fail` certification with zero triangulation fallback.
 - Upstream CSG now supports deterministic patch extraction policy control (`Auto`, `IntraFace`, `Global`) and strict-mode topology-preserving arbitration in `Auto` mode.
 - CSG operation results now emit selected patch-extraction telemetry (mode, stitched boundary count, manifold flag, connected components), and strict robust diagnostics mirror this as `patch-extraction:*` stage certificates.
+- Strict robust bridge now includes arrangement-owned boundary classification as a third patch-extraction candidate (alongside intra-face/global) in deterministic topology-preserving selection.
 
 ## M3 - Robust Triangulation and Patch Extraction
 

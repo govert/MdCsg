@@ -164,10 +164,24 @@ public static class Csg
                 b,
                 operation,
                 options);
+            var arrangement = BuildAssemblyCandidate(
+                PatchExtractionMode.Arrangement,
+                classifier,
+                cutA,
+                cutB,
+                adjA,
+                adjB,
+                intersections,
+                a,
+                b,
+                operation,
+                options);
 
-            chosen = IsBetterTopologyQuality(global.TopologyQuality, intra.TopologyQuality)
-                ? global
-                : intra;
+            chosen = intra;
+            if (IsBetterTopologyQuality(global.TopologyQuality, chosen.TopologyQuality))
+                chosen = global;
+            if (IsBetterTopologyQuality(arrangement.TopologyQuality, chosen.TopologyQuality))
+                chosen = arrangement;
         }
         else
         {
@@ -466,6 +480,16 @@ public static class Csg
             case PatchExtractionMode.Global:
                 patchesA = PatchExtractor.Extract(cutA.SubTriangles, adjA);
                 patchesB = PatchExtractor.Extract(cutB.SubTriangles, adjB);
+                break;
+            case PatchExtractionMode.Arrangement:
+                patchesA = ArrangementPatchExtractor.Extract(
+                    cutA.SubTriangles,
+                    intersections.FaceSegmentsA,
+                    options.GridSize);
+                patchesB = ArrangementPatchExtractor.Extract(
+                    cutB.SubTriangles,
+                    intersections.FaceSegmentsB,
+                    options.GridSize);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(extractionMode), extractionMode, null);

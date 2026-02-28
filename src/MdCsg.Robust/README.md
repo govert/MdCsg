@@ -29,7 +29,7 @@ Initial scaffold now exists:
   - emits reconstruction telemetry (boundary/open-loop/unmatched/non-manifold counts + reconstruction certificates)
   - reconstruction metrics are computed via deterministic boundary-incidence accounting in `MeshStitcher.AnalyzeBoundaryIncidence`
   - strict bridge path uses a deterministic constructive reconstruction pass (relink, balanced-loop fill, invalid-component pruning)
-  - strict bridge path enables topology-preserving patch extraction arbitration (`Auto` mode compares intra-face vs global extraction and chooses the better stitched topology)
+  - strict bridge path now evaluates intra-face, global, and arrangement-driven patch extraction candidates and deterministically selects the best stitched topology
   - emits stage invariant certificates (`input`, `arrangement`, `patch-extraction`, `triangulation`, `reconstruction`, `output`) and strict-mode `StageInvariantViolation` issues when gates fail
   - applies deterministic post-op degenerate-face pruning and topology repair before strict output validation
 - `Kernel/Predicates/CertifiedPredicates` with precision-tier telemetry

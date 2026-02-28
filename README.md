@@ -55,7 +55,7 @@ var options = new CsgOptions
     GridSize = 1e-8,                                  // snap rounding grid resolution
     UseWindingNumber = true,                          // winding number classifier (vs ray-casting)
     WeldTolerance = 1e-8,                             // vertex welding distance
-    PatchExtractionMode = PatchExtractionMode.Auto,   // Auto | IntraFace | Global
+    PatchExtractionMode = PatchExtractionMode.Auto,   // Auto | IntraFace | Global | Arrangement
     PreferTopologyPreservingPatchExtraction = true,   // in Auto mode, evaluate both and pick better topology
 };
 var result = Csg.Union(a, b, options);

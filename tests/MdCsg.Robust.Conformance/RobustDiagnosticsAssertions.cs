@@ -1,3 +1,6 @@
+using MdCsg.Api;
+using System.Linq;
+
 namespace MdCsg.Robust.Conformance;
 
 internal static class RobustDiagnosticsAssertions
@@ -7,6 +10,15 @@ internal static class RobustDiagnosticsAssertions
         Assert.Contains(
             diagnostics.StageInvariantCertificates,
             static c => c.StartsWith("patch-extraction:mode=", StringComparison.Ordinal));
+    }
+
+    public static void AssertPatchExtractionMode(RobustDiagnostics diagnostics, PatchExtractionMode expected)
+    {
+        string cert = diagnostics.StageInvariantCertificates
+            .LastOrDefault(static c => c.StartsWith("patch-extraction:mode=", StringComparison.Ordinal))
+            ?? string.Empty;
+        Assert.False(string.IsNullOrWhiteSpace(cert));
+        Assert.StartsWith($"patch-extraction:mode={expected};", cert, StringComparison.Ordinal);
     }
 
     public static void AssertNoTriangulationDegradation(RobustDiagnostics diagnostics)

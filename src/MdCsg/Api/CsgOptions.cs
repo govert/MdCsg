@@ -47,6 +47,8 @@ public class CsgOptions
 
     /// <summary>
     /// Patch extraction strategy after face cutting.
+    /// <see cref="PatchExtractionMode.Arrangement"/> uses arrangement segment ownership
+    /// as boundary authority during flood fill.
     /// </summary>
     public PatchExtractionMode PatchExtractionMode { get; set; } = PatchExtractionMode.Auto;
 
