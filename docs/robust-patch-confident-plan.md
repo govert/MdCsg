@@ -118,6 +118,7 @@ Current status:
 - Checked-in arrangement replay corpus now lives under `tests/MdCsg.Robust.Conformance/ReplayCorpus/arrangement` with manifest-backed signature assertions.
 - Strict robust execution now fail-closes native constrained triangulation failures without implicit legacy triangulation fallback.
 - Stage invariant certificates (`input`, `arrangement`, `triangulation`, `output`) are now emitted in diagnostics, with explicit `StageInvariantViolation` issues in strict mode when gates fail.
+- Seeded strict fuzz smoke conformance (`RobustFuzzSmokeTests`) now runs in the rescue bar gate and treats only structured fail-closed outcomes as acceptable unresolved-case handling.
 
 ## M3 - Robust Triangulation and Patch Extraction
 
