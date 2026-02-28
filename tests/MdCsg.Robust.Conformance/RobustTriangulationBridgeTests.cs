@@ -132,6 +132,36 @@ public class RobustTriangulationBridgeTests
     }
 
     [Fact]
+    public void CrossingConstraints_WithBudgetOverride_CanReportWorkBudgetExceeded()
+    {
+        var triangulator = new RobustConstrainedTriangulator();
+        var verts = CreateConvexPolygon(12, radiusBase: 3.0, new Random(20260302));
+        var constraints = new (int Start, int End)[]
+        {
+            (0, 6),
+            (3, 9)
+        };
+
+        var result = triangulator.Triangulate(
+            verts,
+            constraints,
+            Vec3.UnitZ,
+            new RobustTriangulationOptions
+            {
+                ConstraintWorkBudgetOverride = 0
+            });
+
+        Assert.False(result.Succeeded);
+        Assert.False(result.UsedLegacyKernel);
+        Assert.Equal(RobustTriangulationFallbackReason.WorkBudgetExceeded, result.FailureReason);
+        Assert.Equal(RobustTriangulationFailureStage.FacePointSet, result.FailureStage);
+        Assert.Equal("face-point-set/work-budget-exceeded", result.FailureCode);
+        Assert.NotNull(result.FailureSignature);
+        Assert.StartsWith("face-point-set/work-budget-exceeded:", result.FailureSignature, StringComparison.Ordinal);
+        Assert.Empty(result.Triangles);
+    }
+
+    [Fact]
     public void ConstrainedInput_RepeatedRuns_AreDeterministic()
     {
         var triangulator = new RobustConstrainedTriangulator();

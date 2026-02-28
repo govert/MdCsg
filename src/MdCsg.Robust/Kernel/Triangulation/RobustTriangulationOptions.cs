@@ -14,4 +14,8 @@ public sealed class RobustTriangulationOptions
     public bool DropDegenerateTriangles { get; init; } = true;
 
     public double DegenerateAreaTolerance { get; init; } = MathUtil.Epsilon;
+
+    // Optional deterministic test/diagnostic hook for constrained solving.
+    // Null keeps adaptive budget scaling; non-null overrides it directly.
+    public int? ConstraintWorkBudgetOverride { get; init; }
 }

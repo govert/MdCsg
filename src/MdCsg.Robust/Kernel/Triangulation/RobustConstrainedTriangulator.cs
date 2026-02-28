@@ -55,6 +55,7 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         else if (TryTriangulateConstrained(
             vertices2D,
             normalizedConstraints,
+            opts,
             out var constrainedTriangles,
             out var nativeFailureReason,
             out var nativeFailureStage,
@@ -178,6 +179,7 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
     private static bool TryTriangulateConstrained(
         Vec2[] vertices2D,
         IReadOnlyList<(int Start, int End)> constraints,
+        RobustTriangulationOptions options,
         out List<(int A, int B, int C)> triangles,
         out RobustTriangulationFallbackReason failureReason,
         out RobustTriangulationFailureStage failureStage,
@@ -189,6 +191,7 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             if (TryTriangulateFacePointSet(
                 vertices2D,
                 constraints,
+                options,
                 out triangles,
                 out var facePointSetFailure))
             {
@@ -366,6 +369,7 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
     private static bool TryTriangulateFacePointSet(
         Vec2[] vertices2D,
         IReadOnlyList<(int Start, int End)> constraints,
+        RobustTriangulationOptions options,
         out List<(int A, int B, int C)> triangles,
         out FacePointSetFailureKind failureKind)
     {
@@ -400,7 +404,10 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             if (start < 0 || end < 0 || start >= vertices2D.Length || end >= vertices2D.Length || start == end)
                 return false;
 
-            int constraintWorkBudget = ComputeConstraintWorkBudget(vertices2D.Length, tris.Count);
+            int constraintWorkBudget = ComputeConstraintWorkBudget(
+                vertices2D.Length,
+                tris.Count,
+                options.ConstraintWorkBudgetOverride);
             EnforceConstraintInTriangulation(
                 tris,
                 vertices2D,
@@ -1501,8 +1508,14 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         return $"v={vertexCount};m={constraints.Count};u={unique.Count};inv={invalid};deg={degenerate};dup={duplicates};cross={crossing};maxDeg={maxDegree};edgeSample={edgeSample};edgeHash={edgeHash:x16}";
     }
 
-    private static int ComputeConstraintWorkBudget(int vertexCount, int triangleCount)
+    private static int ComputeConstraintWorkBudget(
+        int vertexCount,
+        int triangleCount,
+        int? budgetOverride)
     {
+        if (budgetOverride is int fixedBudget)
+            return System.Math.Max(0, fixedBudget);
+
         // Segment enforcement scans/updates local cavities repeatedly.
         // Budget scales with mesh complexity so large valid inputs do not
         // trip fail-closed guards prematurely.
