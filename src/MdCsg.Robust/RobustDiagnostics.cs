@@ -72,6 +72,8 @@ public sealed class RobustDiagnostics
 
     public int ReconstructionDroppedComponentCount { get; init; }
 
+    public int ReconstructionArrangementSnapCount { get; init; }
+
     public IReadOnlyList<string> ReconstructionInvariantCertificates { get; init; } = Array.Empty<string>();
 
     public IReadOnlyList<string> StageInvariantCertificates { get; init; } = Array.Empty<string>();

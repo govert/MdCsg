@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Collections.Concurrent;
+using System.Linq;
 using MdCsg.Api;
 using MdCsg.Cutting;
 using MdCsg.Math;
@@ -52,6 +53,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int reconstructionUnmatchedUndirectedEdgeCount = 0;
         int reconstructionNonManifoldUndirectedEdgeCount = 0;
         int reconstructionDroppedComponentCount = 0;
+        int reconstructionArrangementSnapCount = 0;
         int classificationFallbackCount = 0;
         var reconstructionCertificates = new List<string>();
         var stageCertificates = new List<string>();
@@ -187,6 +189,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     reconstructionUnmatchedUndirectedEdgeCount,
                     reconstructionNonManifoldUndirectedEdgeCount,
                     reconstructionDroppedComponentCount,
+                    reconstructionArrangementSnapCount,
                     reconstructionCertificates.ToArray(),
                     stageCertificates.ToArray()));
         }
@@ -326,7 +329,12 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"fallback={classificationFallbackCount};policy=margin>errorBound");
 
         result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
-        result = ReconstructOutputTopology(result, csgOptions.WeldTolerance, out reconstructionDroppedComponentCount);
+        result = ReconstructOutputTopology(
+            result,
+            csgOptions.WeldTolerance,
+            arrangement,
+            out reconstructionDroppedComponentCount,
+            out reconstructionArrangementSnapCount);
         result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
         var reconstructionInvariant = AnalyzeReconstructionTopology(result.Mesh);
         reconstructionBoundaryHalfEdgeCount = reconstructionInvariant.BoundaryHalfEdgeCount;
@@ -432,7 +440,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"unmatched={reconstructionInvariant.UnmatchedUndirectedEdgeCount};"
             + $"nonManifold={reconstructionInvariant.NonManifoldUndirectedEdgeCount};"
             + $"oriented={(reconstructionInvariant.IsConsistentlyOriented ? 1 : 0)};"
-            + $"dropped={reconstructionDroppedComponentCount}";
+            + $"dropped={reconstructionDroppedComponentCount};"
+            + $"arrSnap={reconstructionArrangementSnapCount}";
         reconstructionCertificates.Add(reconstructionCertificate);
         stageCertificates.Add(reconstructionCertificate);
 
@@ -539,6 +548,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 reconstructionUnmatchedUndirectedEdgeCount,
                 reconstructionNonManifoldUndirectedEdgeCount,
                 reconstructionDroppedComponentCount,
+                reconstructionArrangementSnapCount,
                 reconstructionCertificates.ToArray(),
                 stageCertificates.ToArray()));
     }
@@ -735,9 +745,12 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
     private static CsgResult ReconstructOutputTopology(
         CsgResult result,
         double weldTolerance,
-        out int droppedComponentCount)
+        ArrangementGraph? arrangement,
+        out int droppedComponentCount,
+        out int arrangementSnapCount)
     {
         droppedComponentCount = 0;
+        arrangementSnapCount = 0;
         var mesh = result.Mesh;
         if (mesh.Faces.Count == 0)
             return result;
@@ -754,6 +767,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 return result;
 
             double tol = baseTolerance * (1 << pass);
+            if (arrangement != null && arrangement.Vertices.Count > 0)
+                arrangementSnapCount += SnapBoundaryVerticesToArrangement(mesh, arrangement, tol);
             MeshStitcher.RepairBoundary(mesh, tol);
             MeshStitcher.RelinkBoundaryTwinsDeterministic(mesh);
 
@@ -774,6 +789,65 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         }
 
         return result;
+    }
+
+    private static int SnapBoundaryVerticesToArrangement(
+        HalfEdgeMesh mesh,
+        ArrangementGraph arrangement,
+        double tolerance)
+    {
+        if (tolerance <= 0 || arrangement.Vertices.Count == 0)
+            return 0;
+
+        var boundaryVertices = new Dictionary<int, Vertex>();
+        foreach (var he in mesh.HalfEdges)
+        {
+            if (he.Twin != null)
+                continue;
+
+            boundaryVertices[he.Origin.Id] = he.Origin;
+            boundaryVertices[he.Target.Id] = he.Target;
+        }
+
+        if (boundaryVertices.Count == 0)
+            return 0;
+
+        var arrangementPositions = arrangement.Vertices
+            .OrderBy(static v => v.Id)
+            .Select(static v => v.Position)
+            .ToArray();
+        if (arrangementPositions.Length == 0)
+            return 0;
+
+        double tolSq = tolerance * tolerance;
+        int snapped = 0;
+
+        foreach (var vertex in boundaryVertices.Values.OrderBy(static v => v.Id))
+        {
+            int bestIndex = -1;
+            double bestDistSq = tolSq;
+
+            for (int i = 0; i < arrangementPositions.Length; i++)
+            {
+                double distSq = Vec3.DistanceSquared(vertex.Position, arrangementPositions[i]);
+                if (distSq > bestDistSq)
+                    continue;
+
+                if (distSq < bestDistSq || (distSq == bestDistSq && (bestIndex < 0 || i < bestIndex)))
+                {
+                    bestDistSq = distSq;
+                    bestIndex = i;
+                }
+            }
+
+            if (bestIndex < 0 || bestDistSq == 0)
+                continue;
+
+            vertex.Position = arrangementPositions[bestIndex];
+            snapped++;
+        }
+
+        return snapped;
     }
 
     private static bool IsMeshClosedOrientedAndManifold(HalfEdgeMesh mesh)
@@ -1010,6 +1084,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int reconstructionUnmatchedUndirectedEdgeCount,
         int reconstructionNonManifoldUndirectedEdgeCount,
         int reconstructionDroppedComponentCount,
+        int reconstructionArrangementSnapCount,
         IReadOnlyList<string> reconstructionInvariantCertificates,
         IReadOnlyList<string> stageInvariantCertificates)
     {
@@ -1050,6 +1125,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             ReconstructionUnmatchedUndirectedEdgeCount = reconstructionUnmatchedUndirectedEdgeCount,
             ReconstructionNonManifoldUndirectedEdgeCount = reconstructionNonManifoldUndirectedEdgeCount,
             ReconstructionDroppedComponentCount = reconstructionDroppedComponentCount,
+            ReconstructionArrangementSnapCount = reconstructionArrangementSnapCount,
             ReconstructionInvariantCertificates = reconstructionInvariantCertificates,
             StageInvariantCertificates = stageInvariantCertificates,
             ClassificationFallbackCount = classificationFallbackCount

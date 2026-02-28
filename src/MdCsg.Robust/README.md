@@ -28,6 +28,7 @@ Initial scaffold now exists:
   - emits triangulation telemetry (invocation/native/fallback/dropped-degenerate counts, fallback reason buckets, fallback signature samples)
   - emits classification certification telemetry (certified vs exact-fallback patch counts) via `classification:*` stage certificates and diagnostics fallback counters
   - emits reconstruction telemetry (boundary/open-loop/unmatched/non-manifold counts + reconstruction certificates)
+  - reconstruction pass now performs arrangement-guided boundary vertex snapping before boundary repair and records snap counts in diagnostics/certificates
   - reconstruction metrics are computed via deterministic boundary-incidence accounting in `MeshStitcher.AnalyzeBoundaryIncidence`
   - strict bridge path uses a deterministic constructive reconstruction pass (relink, balanced-loop fill, invalid-component pruning)
   - strict bridge path now evaluates intra-face, global, and arrangement-driven patch extraction candidates and deterministically selects the best stitched topology

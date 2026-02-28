@@ -32,7 +32,9 @@ public class ReconstructionIncidenceTests
 
         var baseline = RobustCsg.Union(a, b, opts);
         Assert.True(baseline.Succeeded);
+        Assert.True(baseline.Diagnostics.ReconstructionArrangementSnapCount >= 0);
         string baselineCert = GetReconstructionCert(baseline);
+        Assert.Contains("arrSnap=", baselineCert, StringComparison.Ordinal);
 
         for (int i = 0; i < 5; i++)
         {
