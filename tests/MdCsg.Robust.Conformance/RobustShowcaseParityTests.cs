@@ -87,6 +87,8 @@ public class RobustShowcaseParityTests
             Assert.Contains("tri=", signature, StringComparison.Ordinal);
         }
         Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction:fail;", StringComparison.Ordinal));
+        Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction-pre:", StringComparison.Ordinal));
+        Assert.Contains("nonWorse=", GetStageCertificate(step3, "reconstruction:"), StringComparison.Ordinal);
         Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("output:fail;", StringComparison.Ordinal));
         RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(step3.Diagnostics);
     }

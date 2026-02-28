@@ -359,6 +359,18 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 RobustIssueSeverity.Error);
         }
 
+        var preReconstructionInvariant = AnalyzeReconstructionTopology(result.Mesh);
+        var preComponentInvariant = AnalyzeComponentTopology(result.Mesh);
+        stageCertificates.Add(
+            "reconstruction-pre:"
+            + $"boundary={preReconstructionInvariant.BoundaryHalfEdgeCount};"
+            + $"openLoops={preReconstructionInvariant.OpenBoundaryLoopCount};"
+            + $"unmatched={preReconstructionInvariant.UnmatchedUndirectedEdgeCount};"
+            + $"nonManifold={preReconstructionInvariant.NonManifoldUndirectedEdgeCount};"
+            + $"oriented={(preReconstructionInvariant.IsConsistentlyOriented ? 1 : 0)};"
+            + $"components={preComponentInvariant.ComponentCount};"
+            + $"invalidComponents={preComponentInvariant.InvalidComponentCount}");
+
         result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
         result = ReconstructOutputTopology(
             result,
@@ -376,6 +388,12 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         var componentInvariant = AnalyzeComponentTopology(result.Mesh);
         reconstructionComponentCount = componentInvariant.ComponentCount;
         reconstructionInvalidComponentCount = componentInvariant.InvalidComponentCount;
+        bool reconstructionNonWorseningPass =
+            reconstructionInvariant.BoundaryHalfEdgeCount <= preReconstructionInvariant.BoundaryHalfEdgeCount
+            && reconstructionInvariant.OpenBoundaryLoopCount <= preReconstructionInvariant.OpenBoundaryLoopCount
+            && reconstructionInvariant.UnmatchedUndirectedEdgeCount <= preReconstructionInvariant.UnmatchedUndirectedEdgeCount
+            && reconstructionInvariant.NonManifoldUndirectedEdgeCount <= preReconstructionInvariant.NonManifoldUndirectedEdgeCount
+            && reconstructionInvalidComponentCount <= preComponentInvariant.InvalidComponentCount;
 
         bool triangulationAccountingPass =
             triangulationInvocationCount
@@ -479,9 +497,20 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"arrSnap={reconstructionArrangementSnapCount};"
             + $"arrEdgeSnap={reconstructionArrangementEdgeSnapCount};"
             + $"components={reconstructionComponentCount};"
-            + $"invalidComponents={reconstructionInvalidComponentCount}";
+            + $"invalidComponents={reconstructionInvalidComponentCount};"
+            + $"nonWorse={(reconstructionNonWorseningPass ? 1 : 0)}";
         reconstructionCertificates.Add(reconstructionCertificate);
         stageCertificates.Add(reconstructionCertificate);
+
+        if (opts.Mode == RobustMode.Strict && !reconstructionNonWorseningPass)
+        {
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.StageInvariantViolation,
+                "Reconstruction contract violated: post-reconstruction topology worsened relative to pre-reconstruction state.",
+                RobustIssueSeverity.Error);
+        }
 
         if (opts.Mode == RobustMode.Strict && !reconstructionStagePass)
         {

@@ -38,10 +38,13 @@ public class ReconstructionIncidenceTests
         Assert.True(baseline.Diagnostics.ReconstructionComponentCount > 0);
         Assert.Equal(0, baseline.Diagnostics.ReconstructionInvalidComponentCount);
         string baselineCert = GetReconstructionCert(baseline);
+        string baselinePreCert = GetStageCert(baseline, "reconstruction-pre:");
         Assert.Contains("arrSnap=", baselineCert, StringComparison.Ordinal);
         Assert.Contains("arrEdgeSnap=", baselineCert, StringComparison.Ordinal);
         Assert.Contains("components=", baselineCert, StringComparison.Ordinal);
         Assert.Contains("invalidComponents=", baselineCert, StringComparison.Ordinal);
+        Assert.Contains("nonWorse=1", baselineCert, StringComparison.Ordinal);
+        Assert.Contains("invalidComponents=", baselinePreCert, StringComparison.Ordinal);
 
         for (int i = 0; i < 5; i++)
         {
@@ -52,6 +55,7 @@ public class ReconstructionIncidenceTests
                 next.Diagnostics.ReconstructionArrangementEdgeSnapCount);
             Assert.Equal(baseline.Diagnostics.ReconstructionComponentCount, next.Diagnostics.ReconstructionComponentCount);
             Assert.Equal(baseline.Diagnostics.ReconstructionInvalidComponentCount, next.Diagnostics.ReconstructionInvalidComponentCount);
+            Assert.Equal(baselinePreCert, GetStageCert(next, "reconstruction-pre:"));
             Assert.Equal(baselineCert, GetReconstructionCert(next));
         }
     }
