@@ -68,6 +68,7 @@ Current conformance snapshot:
   - gate slices: showcase/backlog/replay, strict fuzz smoke, triangulation+smoke+reconstruction+algebraic guardrails (with hang-timeout protection)
 - Stable-overlap and smoke union zero-fallback checks are active and passing.
 - Seeded strict fuzz smoke tests are active and passing with deterministic seeds.
+- Stable-case differential parity tests are active (`RobustDifferentialParityTests`) and assert robust boundary dominance against legacy plus bounded relative-volume drift for legacy-closed outputs.
 - Showcase parity:
   - `CsgOperations` strict mode is closed + zero-fallback,
   - `ChainedCsg` step-2 strict mode is closed + zero-fallback,

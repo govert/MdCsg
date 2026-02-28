@@ -144,6 +144,7 @@ Current status:
 - Added explicit conformance coverage for the formerly failing `partition/split-failure` triangulation signature class, now expected to succeed natively with preserved constraint edges.
 - Reconstruction now applies arrangement-edge-guided boundary snapping (`arrEdgeSnap`) in addition to arrangement-vertex snapping before boundary repair.
 - Strict robust diagnostics now emit reconstruction policy certificates (`reconstruction-policy:*`) with operation-aware truth-table checks on source/flip accounting.
+- Added stable-case differential parity conformance (`RobustDifferentialParityTests`) comparing strict robust vs legacy outputs with robust boundary dominance checks and bounded relative volume drift on legacy-closed outputs.
 
 ## M3 - Robust Triangulation and Patch Extraction
 
