@@ -61,6 +61,11 @@ public class CsgPatchExtractionModeTests
             Parallel = false,
             PatchExtractionMode = PatchExtractionMode.Global
         });
+        var arrangement = Csg.Difference(step2Solid, cylY, new CsgOptions
+        {
+            Parallel = false,
+            PatchExtractionMode = PatchExtractionMode.Arrangement
+        });
         var auto = Csg.Difference(step2Solid, cylY, new CsgOptions
         {
             Parallel = false,
@@ -68,7 +73,11 @@ public class CsgPatchExtractionModeTests
             PreferTopologyPreservingPatchExtraction = true
         });
 
-        var expected = IsBetter(global, intra) ? global : intra;
+        var expected = intra;
+        if (IsBetter(global, expected))
+            expected = global;
+        if (IsBetter(arrangement, expected))
+            expected = arrangement;
         Assert.Equal(expected.SelectedPatchExtractionMode, auto.SelectedPatchExtractionMode);
         Assert.Equal(expected.SelectedPatchExtractionBoundaryEdgeCount, auto.SelectedPatchExtractionBoundaryEdgeCount);
         Assert.Equal(expected.SelectedPatchExtractionIsEdgeManifold, auto.SelectedPatchExtractionIsEdgeManifold);

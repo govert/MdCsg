@@ -13,6 +13,11 @@ namespace MdCsg.Classification;
 /// </summary>
 public static class ConfidentPoint
 {
+    // Classification cost can explode on very large patches when scanning every
+    // centroid candidate. Deterministic sub-sampling keeps runtime bounded while
+    // preserving fail-closed behavior (low margins still trigger exact fallback).
+    private const int MaxCentroidSamplesPerPatch = 64;
+
     /// <summary>
     /// Finds the confident point for a patch by selecting the sub-triangle centroid
     /// with the largest distance to the nearest face of the other solid.
@@ -29,7 +34,7 @@ public static class ConfidentPoint
         Vec3 bestPoint = Vec3.Zero;
         double bestMargin = -1;
 
-        foreach (int triIdx in patch.SubTriangleIndices)
+        foreach (int triIdx in EnumerateCandidateSubTriangles(patch))
         {
             var tri = subTriangles[triIdx];
             var centroid = (tri.A + tri.B + tri.C) / 3.0;
@@ -58,7 +63,7 @@ public static class ConfidentPoint
         Vec3 bestPoint = Vec3.Zero;
         double bestMargin = -1;
 
-        foreach (int triIdx in patch.SubTriangleIndices)
+        foreach (int triIdx in EnumerateCandidateSubTriangles(patch))
         {
             var tri = subTriangles[triIdx];
             var centroid = (tri.A + tri.B + tri.C) / 3.0;
@@ -73,6 +78,35 @@ public static class ConfidentPoint
         }
 
         return (bestPoint, bestMargin);
+    }
+
+    private static IEnumerable<int> EnumerateCandidateSubTriangles(Patch patch)
+    {
+        int count = patch.SubTriangleIndices.Count;
+        if (count <= MaxCentroidSamplesPerPatch)
+        {
+            for (int i = 0; i < count; i++)
+                yield return patch.SubTriangleIndices[i];
+            yield break;
+        }
+
+        double step = (double)count / MaxCentroidSamplesPerPatch;
+        int lastSelected = -1;
+
+        for (int sample = 0; sample < MaxCentroidSamplesPerPatch; sample++)
+        {
+            int idxInPatch = (int)System.Math.Floor(sample * step);
+            if (idxInPatch >= count)
+                idxInPatch = count - 1;
+            if (idxInPatch == lastSelected)
+                continue;
+
+            lastSelected = idxInPatch;
+            yield return patch.SubTriangleIndices[idxInPatch];
+        }
+
+        if (lastSelected != count - 1)
+            yield return patch.SubTriangleIndices[count - 1];
     }
 
     /// <summary>
