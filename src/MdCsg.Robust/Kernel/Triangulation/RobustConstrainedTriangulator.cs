@@ -22,6 +22,12 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         ConstraintEdgeMissingAfterPartition = 3
     }
 
+    private enum FacePointSetFailureKind
+    {
+        None = 0,
+        WorkBudgetExceeded = 1
+    }
+
     public RobustTriangulationResult Triangulate(
         IReadOnlyList<Vec3> vertices3D,
         IReadOnlyList<(int Start, int End)> constraints,
@@ -56,7 +62,10 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             rawTriangles = ConstrainedTriangulator.Triangulate(vertices3D, normalizedConstraints, faceNormal);
             useLegacyKernel = true;
             fallbackReason = nativeFailureReason;
-            fallbackSignature = BuildConstraintSignature(vertices2D, normalizedConstraints);
+            var signature = BuildConstraintSignature(vertices2D, normalizedConstraints);
+            fallbackSignature = fallbackReason == RobustTriangulationFallbackReason.WorkBudgetExceeded
+                ? $"work-budget-exceeded:{signature}"
+                : signature;
         }
 
         var normalizedTriangles = new List<(int A, int B, int C)>(rawTriangles.Count);
@@ -145,11 +154,21 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         out List<(int A, int B, int C)> triangles,
         out RobustTriangulationFallbackReason failureReason)
     {
-        if (ShouldPreferFacePointSet(vertices2D, constraints)
-            && TryTriangulateFacePointSet(vertices2D, constraints, out triangles))
+        bool sawWorkBudgetExceeded = false;
+        if (ShouldPreferFacePointSet(vertices2D, constraints))
         {
-            failureReason = RobustTriangulationFallbackReason.None;
-            return true;
+            if (TryTriangulateFacePointSet(
+                vertices2D,
+                constraints,
+                out triangles,
+                out var facePointSetFailure))
+            {
+                failureReason = RobustTriangulationFallbackReason.None;
+                return true;
+            }
+
+            if (facePointSetFailure == FacePointSetFailureKind.WorkBudgetExceeded)
+                sawWorkBudgetExceeded = true;
         }
 
         if (TryTriangulateConstrainedByPartition(
@@ -166,6 +185,12 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         {
             failureReason = RobustTriangulationFallbackReason.None;
             return true;
+        }
+
+        if (sawWorkBudgetExceeded)
+        {
+            failureReason = RobustTriangulationFallbackReason.WorkBudgetExceeded;
+            return false;
         }
 
         failureReason = partitionFailure switch
@@ -288,9 +313,11 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
     private static bool TryTriangulateFacePointSet(
         Vec2[] vertices2D,
         IReadOnlyList<(int Start, int End)> constraints,
-        out List<(int A, int B, int C)> triangles)
+        out List<(int A, int B, int C)> triangles,
+        out FacePointSetFailureKind failureKind)
     {
         triangles = [];
+        failureKind = FacePointSetFailureKind.None;
         if (vertices2D.Length < 3)
             return false;
 
@@ -315,12 +342,12 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             InsertVertexIntoTriangulation(tris, vertices2D, v);
         }
 
-        int constraintWorkBudget = System.Math.Max(50_000, constraints.Count * 200);
         foreach (var (start, end) in constraints)
         {
             if (start < 0 || end < 0 || start >= vertices2D.Length || end >= vertices2D.Length || start == end)
                 return false;
 
+            int constraintWorkBudget = ComputeConstraintWorkBudget(vertices2D.Length, tris.Count);
             EnforceConstraintInTriangulation(
                 tris,
                 vertices2D,
@@ -328,6 +355,13 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
                 end,
                 recursionDepth: 0,
                 ref constraintWorkBudget);
+
+            if (constraintWorkBudget <= 0)
+            {
+                triangles = [];
+                failureKind = FacePointSetFailureKind.WorkBudgetExceeded;
+                return false;
+            }
         }
 
         for (int i = tris.Count - 1; i >= 0; i--)
@@ -1068,13 +1102,12 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             return;
 
         if (recursionDepth > 64)
+        {
+            workBudget = 0;
             return;
+        }
 
-        int triangleBudget = System.Math.Min(8192, System.Math.Max(1024, pts.Length * 16));
-        if (tris.Count > triangleBudget)
-            return;
-
-        int callCost = 16 + tris.Count;
+        int callCost = 8 + System.Math.Max(1, tris.Count / 8);
         if (callCost > workBudget)
         {
             workBudget = 0;
@@ -1201,7 +1234,10 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             return;
 
         if (recursionDepth > 64)
+        {
+            workBudget = 0;
             return;
+        }
 
         double dx = pts[end].X - pts[start].X;
         double dy = pts[end].Y - pts[start].Y;
@@ -1235,8 +1271,6 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             return;
 
         collinear.Sort((a, b) => a.T.CompareTo(b.T));
-        if (collinear.Count > 256)
-            return;
 
         int prev = start;
         foreach (var (v, _) in collinear)
@@ -1390,14 +1424,39 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
 
         var edgeList = new List<long>(unique);
         edgeList.Sort();
-        string edgePattern = string.Join(",", edgeList.Select(static e =>
+        const int edgeSampleCount = 64;
+        string edgeSample = string.Join(",", edgeList.Take(edgeSampleCount).Select(static e =>
         {
             int a = (int)(e >> 32);
             int b = (int)(uint)e;
             return $"{a}-{b}";
         }));
+        if (edgeList.Count > edgeSampleCount)
+            edgeSample += ",...";
 
-        return $"v={vertexCount};m={constraints.Count};u={unique.Count};inv={invalid};deg={degenerate};dup={duplicates};cross={crossing};maxDeg={maxDegree};edges={edgePattern}";
+        ulong edgeHash = 1469598103934665603UL;
+        foreach (long edge in edgeList)
+        {
+            uint hi = (uint)(edge >> 32);
+            uint lo = (uint)edge;
+            edgeHash ^= hi;
+            edgeHash *= 1099511628211UL;
+            edgeHash ^= lo;
+            edgeHash *= 1099511628211UL;
+        }
+
+        return $"v={vertexCount};m={constraints.Count};u={unique.Count};inv={invalid};deg={degenerate};dup={duplicates};cross={crossing};maxDeg={maxDegree};edgeSample={edgeSample};edgeHash={edgeHash:x16}";
+    }
+
+    private static int ComputeConstraintWorkBudget(int vertexCount, int triangleCount)
+    {
+        // Segment enforcement scans/updates local cavities repeatedly.
+        // Budget scales with mesh complexity so large valid inputs do not
+        // trip fail-closed guards prematurely.
+        long n = System.Math.Max(3, vertexCount);
+        long t = System.Math.Max(1, triangleCount);
+        long budget = System.Math.Max(200_000L, (n * n * 8L) + (t * 64L));
+        return budget > int.MaxValue ? int.MaxValue : (int)budget;
     }
 
     private static IReadOnlyList<(int Start, int End)> NormalizeConstraints(

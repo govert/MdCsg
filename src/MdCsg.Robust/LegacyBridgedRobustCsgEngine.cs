@@ -38,6 +38,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int triangulationFallbackInvalidOrCrossingConstraintCount = 0;
         int triangulationFallbackPartitionFailureCount = 0;
         int triangulationFallbackConstrainedEarFailureCount = 0;
+        int triangulationFallbackWorkBudgetExceededCount = 0;
         var triangulationFallbackSignatureCounts = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
         var totalSw = Stopwatch.StartNew();
 
@@ -110,6 +111,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     triangulationFallbackInvalidOrCrossingConstraintCount,
                     triangulationFallbackPartitionFailureCount,
                     triangulationFallbackConstrainedEarFailureCount,
+                    triangulationFallbackWorkBudgetExceededCount,
                     SummarizeFallbackSignatures(triangulationFallbackSignatureCounts)));
         }
 
@@ -145,6 +147,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                             break;
                         case RobustTriangulationFallbackReason.ConstrainedEarFailed:
                             System.Threading.Interlocked.Increment(ref triangulationFallbackConstrainedEarFailureCount);
+                            break;
+                        case RobustTriangulationFallbackReason.WorkBudgetExceeded:
+                            System.Threading.Interlocked.Increment(ref triangulationFallbackWorkBudgetExceededCount);
                             break;
                     }
 
@@ -190,6 +195,16 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         RepairOutputTopology(result.Mesh, csgOptions.WeldTolerance);
         result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
 
+        if (triangulationFallbackWorkBudgetExceededCount > 0)
+        {
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.TriangulationWorkBudgetExceeded,
+                $"Triangulation work budget was exceeded ({triangulationFallbackWorkBudgetExceededCount}); fail-closed behavior is required for strict mode.",
+                RobustIssueSeverity.Error);
+        }
+
         if (opts.ValidateOutput)
         {
             ValidateOutput(result.Mesh, opts.Mode, issues, predicateTelemetry);
@@ -216,6 +231,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 triangulationFallbackInvalidOrCrossingConstraintCount,
                 triangulationFallbackPartitionFailureCount,
                 triangulationFallbackConstrainedEarFailureCount,
+                triangulationFallbackWorkBudgetExceededCount,
                 SummarizeFallbackSignatures(triangulationFallbackSignatureCounts)));
     }
 
@@ -446,6 +462,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int triangulationFallbackInvalidOrCrossingConstraintCount,
         int triangulationFallbackPartitionFailureCount,
         int triangulationFallbackConstrainedEarFailureCount,
+        int triangulationFallbackWorkBudgetExceededCount,
         IReadOnlyList<string> triangulationFallbackSignatures)
     {
         return new RobustDiagnostics
@@ -471,6 +488,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             TriangulationFallbackInvalidOrCrossingConstraintCount = triangulationFallbackInvalidOrCrossingConstraintCount,
             TriangulationFallbackPartitionFailureCount = triangulationFallbackPartitionFailureCount,
             TriangulationFallbackConstrainedEarFailureCount = triangulationFallbackConstrainedEarFailureCount,
+            TriangulationFallbackWorkBudgetExceededCount = triangulationFallbackWorkBudgetExceededCount,
             TriangulationFallbackSignatures = triangulationFallbackSignatures,
             ClassificationFallbackCount = 0
         };

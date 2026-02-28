@@ -80,6 +80,18 @@ Examples of certified decisions:
 
 Heuristic epsilon-only classification is forbidden in correctness-critical paths.
 
+## 6.1. Implementation Discipline (Non-Negotiable)
+
+Robust geometry work must be fail-closed and certificate-driven. Experimental one-off fixes are not acceptable as a final state.
+
+- Use exact predicates and exact constructions for every topology-changing decision/intersection.
+- Enforce topology-first invariants (closedness, manifoldness, consistent orientation) at every stage boundary.
+- Constrained triangulation must either:
+  - succeed with all constraints satisfied, or
+  - return a structured failure reason; partial/silent acceptance is forbidden.
+- No silent degradation paths (including hidden fallbacks or budget exhaustion paths without explicit failure signaling).
+- Maintain adversarial conformance coverage with staged invariants and deterministic replay seeds for every discovered failure class.
+
 ## 7. Patch-Confident Constraints
 
 Patch-confident classification may be used only when:
@@ -151,4 +163,3 @@ The robust engine is accepted when:
 
 - It satisfies Sections 3-11 for the defined scope.
 - Existing non-robust path can remain as legacy/fast mode, but robust mode is default for correctness-critical usage.
-

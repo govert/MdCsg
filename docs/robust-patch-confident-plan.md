@@ -30,6 +30,14 @@ Principles:
 - Deterministic behavior by construction.
 - Legacy engine retained for comparison/benchmarking only.
 
+Non-negotiable execution rules:
+
+- Fail-closed behavior: uncertain/over-budget stages must emit structured failure, never silent partial success.
+- Exact predicates plus exact constructions on topology-changing operations.
+- Stage-by-stage topology invariants (closed/manifold/oriented) are mandatory gates.
+- Constrained triangulation must prove all constraints are satisfied or return structured failure.
+- Every new failure class must be captured by deterministic replay/conformance tests before closure.
+
 ## 2. Proposed Architecture
 
 Planned package: `src/MdCsg.Robust/`

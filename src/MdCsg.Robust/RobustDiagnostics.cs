@@ -44,6 +44,8 @@ public sealed class RobustDiagnostics
 
     public int TriangulationFallbackConstrainedEarFailureCount { get; init; }
 
+    public int TriangulationFallbackWorkBudgetExceededCount { get; init; }
+
     public IReadOnlyList<string> TriangulationFallbackSignatures { get; init; } = Array.Empty<string>();
 
     public int ClassificationFallbackCount { get; init; }

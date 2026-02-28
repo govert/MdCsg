@@ -83,6 +83,7 @@ public class RobustConformanceBacklogTests
         Assert.Equal(0, result.Diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount);
         Assert.Equal(0, result.Diagnostics.TriangulationFallbackPartitionFailureCount);
         Assert.Equal(0, result.Diagnostics.TriangulationFallbackConstrainedEarFailureCount);
+        Assert.Equal(0, result.Diagnostics.TriangulationFallbackWorkBudgetExceededCount);
         Assert.Empty(result.Diagnostics.TriangulationFallbackSignatures);
     }
 
@@ -104,6 +105,7 @@ public class RobustConformanceBacklogTests
         Assert.Equal(0, robust.Diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount);
         Assert.Equal(0, robust.Diagnostics.TriangulationFallbackPartitionFailureCount);
         Assert.Equal(0, robust.Diagnostics.TriangulationFallbackConstrainedEarFailureCount);
+        Assert.Equal(0, robust.Diagnostics.TriangulationFallbackWorkBudgetExceededCount);
         Assert.Empty(robust.Diagnostics.TriangulationFallbackSignatures);
     }
 
@@ -135,6 +137,7 @@ public class RobustConformanceBacklogTests
             + $"InvalidOrCrossing={diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount}, "
             + $"Partition={diagnostics.TriangulationFallbackPartitionFailureCount}, "
             + $"ConstrainedEar={diagnostics.TriangulationFallbackConstrainedEarFailureCount}, "
+            + $"WorkBudgetExceeded={diagnostics.TriangulationFallbackWorkBudgetExceededCount}, "
             + $"Signatures={top}";
     }
 }

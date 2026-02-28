@@ -71,7 +71,8 @@ public class RobustCsgSmokeTests
             result.Diagnostics.TriangulationLegacyFallbackCount,
             result.Diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount
             + result.Diagnostics.TriangulationFallbackPartitionFailureCount
-            + result.Diagnostics.TriangulationFallbackConstrainedEarFailureCount);
+            + result.Diagnostics.TriangulationFallbackConstrainedEarFailureCount
+            + result.Diagnostics.TriangulationFallbackWorkBudgetExceededCount);
         if (result.Diagnostics.TriangulationLegacyFallbackCount > 0)
             Assert.NotEmpty(result.Diagnostics.TriangulationFallbackSignatures);
     }
@@ -97,6 +98,7 @@ public class RobustCsgSmokeTests
         Assert.Equal(0, result.Diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount);
         Assert.Equal(0, result.Diagnostics.TriangulationFallbackPartitionFailureCount);
         Assert.Equal(0, result.Diagnostics.TriangulationFallbackConstrainedEarFailureCount);
+        Assert.Equal(0, result.Diagnostics.TriangulationFallbackWorkBudgetExceededCount);
         Assert.Empty(result.Diagnostics.TriangulationFallbackSignatures);
     }
 
@@ -134,6 +136,7 @@ public class RobustCsgSmokeTests
             + $"InvalidOrCrossing={diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount}, "
             + $"Partition={diagnostics.TriangulationFallbackPartitionFailureCount}, "
             + $"ConstrainedEar={diagnostics.TriangulationFallbackConstrainedEarFailureCount}, "
+            + $"WorkBudgetExceeded={diagnostics.TriangulationFallbackWorkBudgetExceededCount}, "
             + $"Signatures={top}";
     }
 }
