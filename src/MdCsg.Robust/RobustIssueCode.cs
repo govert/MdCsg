@@ -15,6 +15,9 @@ public enum RobustIssueCode
     TriangulationPartitioningFailed,
     TriangulationConstrainedEarFailed,
     TriangulationWorkBudgetExceeded,
+    ReconstructionInvariantViolation,
+    ReconstructionPatchSelectionFailed,
+    ReconstructionStitchingFailed,
     OutputMeshNotClosed,
     OutputMeshNotEdgeManifold,
     OutputMeshHasDegenerateFaces

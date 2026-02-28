@@ -100,6 +100,9 @@ public class RobustFuzzSmokeTests
                     || i.Code == RobustIssueCode.TriangulationPartitioningFailed
                     || i.Code == RobustIssueCode.TriangulationConstrainedEarFailed
                     || i.Code == RobustIssueCode.TriangulationWorkBudgetExceeded
+                    || i.Code == RobustIssueCode.ReconstructionInvariantViolation
+                    || i.Code == RobustIssueCode.ReconstructionPatchSelectionFailed
+                    || i.Code == RobustIssueCode.ReconstructionStitchingFailed
                     || i.Code == RobustIssueCode.StageInvariantViolation);
                 if (hasFailClosedCause)
                 {

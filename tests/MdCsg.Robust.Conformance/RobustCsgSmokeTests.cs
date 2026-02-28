@@ -70,7 +70,10 @@ public class RobustCsgSmokeTests
         Assert.NotEmpty(result.Diagnostics.StageInvariantCertificates);
         Assert.Contains(result.Diagnostics.StageInvariantCertificates, c => c.StartsWith("input:pass;", StringComparison.Ordinal));
         Assert.Contains(result.Diagnostics.StageInvariantCertificates, c => c.StartsWith("triangulation:pass;", StringComparison.Ordinal));
+        Assert.Contains(result.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction:pass;", StringComparison.Ordinal));
         Assert.Contains(result.Diagnostics.StageInvariantCertificates, c => c.StartsWith("output:pass;", StringComparison.Ordinal));
+        Assert.NotEmpty(result.Diagnostics.ReconstructionInvariantCertificates);
+        Assert.Contains(result.Diagnostics.ReconstructionInvariantCertificates, c => c.StartsWith("reconstruction:pass;", StringComparison.Ordinal));
     }
 
     [Fact]

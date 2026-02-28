@@ -26,7 +26,8 @@ Initial scaffold now exists:
 - `LegacyBridgedRobustCsgEngine` (transitional bridge + validation diagnostics)
   - can route face-cut triangulation through `Kernel/Triangulation/RobustConstrainedTriangulator` via `CsgOptions.TriangulationKernel`
   - emits triangulation telemetry (invocation/native/fallback/dropped-degenerate counts, fallback reason buckets, fallback signature samples)
-  - emits stage invariant certificates (`input`, `arrangement`, `triangulation`, `output`) and strict-mode `StageInvariantViolation` issues when gates fail
+  - emits reconstruction telemetry (boundary/open-loop/unmatched/non-manifold counts + reconstruction certificates)
+  - emits stage invariant certificates (`input`, `arrangement`, `triangulation`, `reconstruction`, `output`) and strict-mode `StageInvariantViolation` issues when gates fail
   - applies deterministic post-op degenerate-face pruning and topology repair before strict output validation
 - `Kernel/Predicates/CertifiedPredicates` with precision-tier telemetry
 - `Kernel/Arrangement/ArrangementBuilder` native BVH+tri-tri arrangement builder

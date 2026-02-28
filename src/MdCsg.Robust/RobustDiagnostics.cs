@@ -62,6 +62,18 @@ public sealed class RobustDiagnostics
 
     public IReadOnlyList<string> TriangulationNativeFailureCodes { get; init; } = Array.Empty<string>();
 
+    public int ReconstructionBoundaryHalfEdgeCount { get; init; }
+
+    public int ReconstructionOpenBoundaryLoopCount { get; init; }
+
+    public int ReconstructionUnmatchedUndirectedEdgeCount { get; init; }
+
+    public int ReconstructionNonManifoldUndirectedEdgeCount { get; init; }
+
+    public int ReconstructionDroppedComponentCount { get; init; }
+
+    public IReadOnlyList<string> ReconstructionInvariantCertificates { get; init; } = Array.Empty<string>();
+
     public IReadOnlyList<string> StageInvariantCertificates { get; init; } = Array.Empty<string>();
 
     public int ClassificationFallbackCount { get; init; }

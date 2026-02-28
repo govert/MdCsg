@@ -47,6 +47,12 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         var triangulationFallbackSignatureCounts = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
         var triangulationNativeFailureSignatureCounts = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
         var triangulationNativeFailureCodeCounts = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
+        int reconstructionBoundaryHalfEdgeCount = 0;
+        int reconstructionOpenBoundaryLoopCount = 0;
+        int reconstructionUnmatchedUndirectedEdgeCount = 0;
+        int reconstructionNonManifoldUndirectedEdgeCount = 0;
+        int reconstructionDroppedComponentCount = 0;
+        var reconstructionCertificates = new List<string>();
         var stageCertificates = new List<string>();
         MeshInvariantSnapshot inputAInvariant = default;
         MeshInvariantSnapshot inputBInvariant = default;
@@ -174,6 +180,12 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     triangulationNativeFailureWorkBudgetExceededCount,
                     SummarizeFallbackSignatures(triangulationNativeFailureSignatureCounts),
                     SummarizeFallbackSignatures(triangulationNativeFailureCodeCounts),
+                    reconstructionBoundaryHalfEdgeCount,
+                    reconstructionOpenBoundaryLoopCount,
+                    reconstructionUnmatchedUndirectedEdgeCount,
+                    reconstructionNonManifoldUndirectedEdgeCount,
+                    reconstructionDroppedComponentCount,
+                    reconstructionCertificates.ToArray(),
                     stageCertificates.ToArray()));
         }
 
@@ -296,6 +308,11 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
         RepairOutputTopology(result.Mesh, csgOptions.WeldTolerance);
         result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
+        var reconstructionInvariant = AnalyzeReconstructionTopology(result.Mesh);
+        reconstructionBoundaryHalfEdgeCount = reconstructionInvariant.BoundaryHalfEdgeCount;
+        reconstructionOpenBoundaryLoopCount = reconstructionInvariant.OpenBoundaryLoopCount;
+        reconstructionUnmatchedUndirectedEdgeCount = reconstructionInvariant.UnmatchedUndirectedEdgeCount;
+        reconstructionNonManifoldUndirectedEdgeCount = reconstructionInvariant.NonManifoldUndirectedEdgeCount;
 
         bool triangulationAccountingPass =
             triangulationInvocationCount
@@ -387,6 +404,59 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 RobustIssueSeverity.Error);
         }
 
+        bool reconstructionStagePass = reconstructionInvariant.IsValid;
+        string reconstructionCertificate =
+            $"reconstruction:{(reconstructionStagePass ? "pass" : "fail")};"
+            + $"boundary={reconstructionInvariant.BoundaryHalfEdgeCount};"
+            + $"openLoops={reconstructionInvariant.OpenBoundaryLoopCount};"
+            + $"unmatched={reconstructionInvariant.UnmatchedUndirectedEdgeCount};"
+            + $"nonManifold={reconstructionInvariant.NonManifoldUndirectedEdgeCount};"
+            + $"oriented={(reconstructionInvariant.IsConsistentlyOriented ? 1 : 0)};"
+            + $"dropped={reconstructionDroppedComponentCount}";
+        reconstructionCertificates.Add(reconstructionCertificate);
+        stageCertificates.Add(reconstructionCertificate);
+
+        if (opts.Mode == RobustMode.Strict && !reconstructionStagePass)
+        {
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.StageInvariantViolation,
+                "Reconstruction stage invariant gate failed (open/non-manifold/unoriented output).",
+                RobustIssueSeverity.Error);
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.ReconstructionInvariantViolation,
+                $"Reconstruction invariants failed: boundary={reconstructionInvariant.BoundaryHalfEdgeCount}, "
+                + $"openLoops={reconstructionInvariant.OpenBoundaryLoopCount}, "
+                + $"unmatched={reconstructionInvariant.UnmatchedUndirectedEdgeCount}, "
+                + $"nonManifold={reconstructionInvariant.NonManifoldUndirectedEdgeCount}, "
+                + $"oriented={(reconstructionInvariant.IsConsistentlyOriented ? 1 : 0)}.",
+                RobustIssueSeverity.Error);
+        }
+
+        if (reconstructionInvariant.UnmatchedUndirectedEdgeCount > 0)
+        {
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.ReconstructionPatchSelectionFailed,
+                $"Reconstruction produced unmatched edges ({reconstructionInvariant.UnmatchedUndirectedEdgeCount}).",
+                RobustIssueSeverity.Error);
+        }
+
+        if (reconstructionInvariant.BoundaryHalfEdgeCount > 0
+            || reconstructionInvariant.OpenBoundaryLoopCount > 0)
+        {
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.ReconstructionStitchingFailed,
+                $"Reconstruction stitching left open boundary topology (boundary={reconstructionInvariant.BoundaryHalfEdgeCount}, openLoops={reconstructionInvariant.OpenBoundaryLoopCount}).",
+                RobustIssueSeverity.Error);
+        }
+
         if (opts.ValidateOutput)
         {
             outputInvariant = ValidateOutput(result.Mesh, opts.Mode, issues, predicateTelemetry);
@@ -443,6 +513,12 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 triangulationNativeFailureWorkBudgetExceededCount,
                 SummarizeFallbackSignatures(triangulationNativeFailureSignatureCounts),
                 SummarizeFallbackSignatures(triangulationNativeFailureCodeCounts),
+                reconstructionBoundaryHalfEdgeCount,
+                reconstructionOpenBoundaryLoopCount,
+                reconstructionUnmatchedUndirectedEdgeCount,
+                reconstructionNonManifoldUndirectedEdgeCount,
+                reconstructionDroppedComponentCount,
+                reconstructionCertificates.ToArray(),
                 stageCertificates.ToArray()));
     }
 
@@ -662,6 +738,96 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         }
     }
 
+    private static ReconstructionInvariantSnapshot AnalyzeReconstructionTopology(HalfEdgeMesh mesh)
+    {
+        int boundaryHalfEdges = MeshValidator.CountBoundaryEdges(mesh);
+        int openBoundaryLoops = CountOpenBoundaryLoops(mesh);
+        bool consistentlyOriented = MeshValidator.IsConsistentlyOriented(mesh);
+
+        var undirectedEdgeUse = new Dictionary<long, int>(mesh.HalfEdges.Count);
+        foreach (var he in mesh.HalfEdges)
+        {
+            int a = he.Origin.Id;
+            int b = he.Target.Id;
+            int lo = a < b ? a : b;
+            int hi = a < b ? b : a;
+            long key = ((long)lo << 32) | (uint)hi;
+            undirectedEdgeUse.TryGetValue(key, out int count);
+            undirectedEdgeUse[key] = count + 1;
+        }
+
+        int unmatched = 0;
+        int nonManifold = 0;
+        foreach (int useCount in undirectedEdgeUse.Values)
+        {
+            if (useCount == 1)
+                unmatched++;
+            else if (useCount > 2)
+                nonManifold++;
+        }
+
+        return new ReconstructionInvariantSnapshot(
+            boundaryHalfEdges,
+            openBoundaryLoops,
+            unmatched,
+            nonManifold,
+            consistentlyOriented);
+    }
+
+    private static int CountOpenBoundaryLoops(HalfEdgeMesh mesh)
+    {
+        var boundaryEdges = new List<HalfEdge>();
+        foreach (var he in mesh.HalfEdges)
+        {
+            if (he.Twin == null)
+                boundaryEdges.Add(he);
+        }
+
+        if (boundaryEdges.Count == 0)
+            return 0;
+
+        var outgoing = new Dictionary<int, int>();
+        var incoming = new Dictionary<int, int>();
+        foreach (var he in boundaryEdges)
+        {
+            int origin = he.Origin.Id;
+            int target = he.Target.Id;
+            outgoing.TryGetValue(origin, out int outCount);
+            outgoing[origin] = outCount + 1;
+            incoming.TryGetValue(target, out int inCount);
+            incoming[target] = inCount + 1;
+        }
+
+        int openEndpointCount = 0;
+        var vertices = new HashSet<int>(outgoing.Keys);
+        foreach (int v in incoming.Keys)
+            vertices.Add(v);
+
+        foreach (int v in vertices)
+        {
+            outgoing.TryGetValue(v, out int outCount);
+            incoming.TryGetValue(v, out int inCount);
+            if (outCount != inCount)
+                openEndpointCount++;
+        }
+
+        return openEndpointCount;
+    }
+
+    private readonly record struct ReconstructionInvariantSnapshot(
+        int BoundaryHalfEdgeCount,
+        int OpenBoundaryLoopCount,
+        int UnmatchedUndirectedEdgeCount,
+        int NonManifoldUndirectedEdgeCount,
+        bool IsConsistentlyOriented)
+    {
+        public bool IsValid =>
+            BoundaryHalfEdgeCount == 0
+            && OpenBoundaryLoopCount == 0
+            && UnmatchedUndirectedEdgeCount == 0
+            && IsConsistentlyOriented;
+    }
+
     private static bool HasFiniteVertices(HalfEdgeMesh mesh)
     {
         foreach (var vertex in mesh.Vertices)
@@ -711,6 +877,12 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int triangulationNativeFailureWorkBudgetExceededCount,
         IReadOnlyList<string> triangulationNativeFailureSignatures,
         IReadOnlyList<string> triangulationNativeFailureCodes,
+        int reconstructionBoundaryHalfEdgeCount,
+        int reconstructionOpenBoundaryLoopCount,
+        int reconstructionUnmatchedUndirectedEdgeCount,
+        int reconstructionNonManifoldUndirectedEdgeCount,
+        int reconstructionDroppedComponentCount,
+        IReadOnlyList<string> reconstructionInvariantCertificates,
         IReadOnlyList<string> stageInvariantCertificates)
     {
         return new RobustDiagnostics
@@ -745,6 +917,12 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             TriangulationNativeFailureWorkBudgetExceededCount = triangulationNativeFailureWorkBudgetExceededCount,
             TriangulationNativeFailureSignatures = triangulationNativeFailureSignatures,
             TriangulationNativeFailureCodes = triangulationNativeFailureCodes,
+            ReconstructionBoundaryHalfEdgeCount = reconstructionBoundaryHalfEdgeCount,
+            ReconstructionOpenBoundaryLoopCount = reconstructionOpenBoundaryLoopCount,
+            ReconstructionUnmatchedUndirectedEdgeCount = reconstructionUnmatchedUndirectedEdgeCount,
+            ReconstructionNonManifoldUndirectedEdgeCount = reconstructionNonManifoldUndirectedEdgeCount,
+            ReconstructionDroppedComponentCount = reconstructionDroppedComponentCount,
+            ReconstructionInvariantCertificates = reconstructionInvariantCertificates,
             StageInvariantCertificates = stageInvariantCertificates,
             ClassificationFallbackCount = 0
         };
