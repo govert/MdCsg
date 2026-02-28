@@ -128,6 +128,7 @@ Current status:
 - Reconstruction invariant analysis is now centralized in deterministic boundary-incidence accounting (`MeshStitcher.AnalyzeBoundaryIncidence`) and covered by deterministic conformance tests.
 - Coplanar reconstruction selection is now routed through an explicit per-operation/source truth table in `PatchAssembler` (documented in `ROBUSTNESS_SPEC.md`).
 - Robust bridge reconstruction now runs a deterministic constructive topology pass (relink, loop closure on balanced boundaries, invalid-component pruning) with explicit dropped-component telemetry.
+- Chained showcase step-3 remains an active reconstruction blocker, but is now pinned as a strict fail-closed repro requiring `reconstruction:fail` certification with zero triangulation fallback.
 
 ## M3 - Robust Triangulation and Patch Extraction
 

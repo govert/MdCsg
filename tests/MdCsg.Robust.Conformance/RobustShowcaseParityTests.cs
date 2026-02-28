@@ -63,8 +63,10 @@ public class RobustShowcaseParityTests
 
         var step3 = RobustCsg.Difference(step2Solid, cylY, StrictRobustOpts);
         Assert.False(step3.Succeeded);
+        Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.ReconstructionInvariantViolation);
         Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);
         Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotEdgeManifold);
+        Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction:fail;", StringComparison.Ordinal));
         RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(step3.Diagnostics);
     }
 

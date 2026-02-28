@@ -60,4 +60,4 @@ Current conformance snapshot:
 - Showcase parity:
   - `CsgOperations` strict mode is closed + zero-fallback,
   - `ChainedCsg` step-2 strict mode is closed + zero-fallback,
-  - `ChainedCsg` step-3 strict mode currently has an active repro asserting topology failure with zero triangulation fallback.
+  - `ChainedCsg` step-3 strict mode currently has an active fail-closed repro asserting reconstruction/output invariant failure with zero triangulation fallback.
