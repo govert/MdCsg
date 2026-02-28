@@ -233,6 +233,38 @@ public class RobustTriangulationBridgeTests
     }
 
     [Fact]
+    public void PartitionSplitFailureSignatureCase_UsesNativePath()
+    {
+        var triangulator = new RobustConstrainedTriangulator();
+        var verts = new[]
+        {
+            new Vec3(0, 0, 0),
+            new Vec3(2, 0, 0),
+            new Vec3(4, 0, 0),
+            new Vec3(1, 1, 0),
+            new Vec3(2, 1, 0),
+            new Vec3(3, 1, 0),
+            new Vec3(2, 2, 0)
+        };
+        var constraints = new (int Start, int End)[]
+        {
+            (0, 3),
+            (1, 5),
+            (3, 4),
+            (3, 6),
+            (4, 5),
+            (5, 6)
+        };
+
+        var result = triangulator.Triangulate(verts, constraints, Vec3.UnitZ);
+
+        Assert.True(result.Succeeded, $"reason={result.FailureReason};code={result.FailureCode}");
+        Assert.False(result.UsedLegacyKernel);
+        Assert.Contains(result.Triangles, t => HasEdge(t, 0, 3));
+        Assert.Contains(result.Triangles, t => HasEdge(t, 3, 6));
+    }
+
+    [Fact]
     public void DegenerateTolerance_CanDropAllTriangles()
     {
         var triangulator = new RobustConstrainedTriangulator();
