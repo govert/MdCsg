@@ -134,6 +134,7 @@ Current status:
 - Strict robust bridge now includes arrangement-owned boundary classification as a third patch-extraction candidate (alongside intra-face/global) in deterministic topology-preserving selection.
 - Patch classification now records explicit certification telemetry (`classification:pass;certified=...;fallback=...`) and surfaces exact-fallback counts in robust diagnostics.
 - Reconstruction now includes arrangement-guided boundary vertex snapping before repair/loop-closure passes, with `arrSnap` telemetry in reconstruction certificates and diagnostics.
+- Added strict algebraic/chain conformance coverage for commutativity/idempotency/mixed-chain closure and certificate emission (`classification:*`, `patch-extraction:*`).
 
 ## M3 - Robust Triangulation and Patch Extraction
 

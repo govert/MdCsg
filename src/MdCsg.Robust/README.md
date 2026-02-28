@@ -55,7 +55,7 @@ Initial scaffold now exists:
 
 Current conformance snapshot:
 
-- `tests/MdCsg.Robust.Conformance` currently runs 47/47 passing (no skipped tests).
+- `tests/MdCsg.Robust.Conformance` currently runs 51/51 passing (no skipped tests).
 - CI rescue bar entrypoint is `tools/ci/run-robustness-gate.ps1` (wired to `.github/workflows/robustness-gate.yml`).
   - gate slices: showcase/backlog/replay, strict fuzz smoke, triangulation bridge/smoke guardrails (with hang-timeout protection)
 - Stable-overlap and smoke union zero-fallback checks are active and passing.
