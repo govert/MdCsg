@@ -209,7 +209,76 @@ Parallel streams:
 3. Move patch extraction in the robust path from legacy mesh-adjacency flood fill toward arrangement-boundary-native extraction with stable patch IDs.
 4. Add replay corpus files for remaining step-3 artifact signatures and enforce deterministic conformance expectations in CI.
 
-## 6. Risks and Mitigations
+## 6. Stage Batch Draft (38-42)
+
+Planning-only draft. No implementation is started by this section.
+
+## Stage 38 - Robust Kernel API Freeze
+
+Deliverables:
+
+- Freeze internal robust kernel contracts across arrangement, patch extraction, triangulation, classification, and reconstruction.
+- Remove transitional coupling points where robust stages leak legacy bridge types.
+- Add compile-time ownership boundaries (interfaces/types) that prevent new legacy dependencies from entering strict robust stages.
+
+Exit criteria:
+
+- Robust kernel modules compile and run conformance suites without introducing new legacy references.
+- Interface changes require explicit plan/doc updates before merge.
+
+## Stage 39 - Default-Mode Shadow Rollout
+
+Deliverables:
+
+- Add shadow execution mode in conformance/showcase harnesses that runs robust strict and legacy in parallel for the same inputs.
+- Produce deterministic differential reports (topology invariants, boundary edges, component counts, and volume deltas).
+- Fail CI on unclassified divergences; allow only explicitly approved divergence classes tracked in docs/tests.
+
+Exit criteria:
+
+- Shadow mode runs on gate corpus with deterministic outputs.
+- Every divergence is either resolved or mapped to a checked-in, versioned exception class.
+
+## Stage 40 - Performance Floor and Deterministic Budgets
+
+Deliverables:
+
+- Add repeatable performance baselines for robust stages (arrangement, triangulation, reconstruction).
+- Define deterministic stage budgets and budget-exceeded fail-closed behavior.
+- Add CI trend checks to catch major regressions while preserving correctness-first policy.
+
+Exit criteria:
+
+- Robust gate includes budget assertions with deterministic tolerances.
+- Budget overruns surface structured diagnostics and never bypass invariants.
+
+## Stage 41 - Strict-by-Default Switch Preparation
+
+Deliverables:
+
+- Flip API/harness defaults to robust strict mode with explicit opt-out path for legacy comparison.
+- Update docs/showcase/scripts so default user flows reflect robust-first execution.
+- Add migration notes for downstream callers that currently rely on legacy-specific behavior.
+
+Exit criteria:
+
+- Default invocation paths use robust strict mode end-to-end.
+- Legacy path remains available only behind explicit configuration.
+
+## Stage 42 - Legacy Critical Path Decommission
+
+Deliverables:
+
+- Remove legacy engine from production boolean-operation execution path.
+- Retain a reduced legacy reference harness only for differential/regression analysis.
+- Finalize rescue acceptance checklist and sign-off artifacts (correctness, determinism, diagnostics, CI gating).
+
+Exit criteria:
+
+- Production path has no runtime dependency on legacy boolean assembly.
+- Differential harness remains green and usable as long-term regression protection.
+
+## 7. Risks and Mitigations
 
 - Risk: complexity growth in exact fallback paths.
   - Mitigation: isolate exact logic behind small kernel interfaces.
