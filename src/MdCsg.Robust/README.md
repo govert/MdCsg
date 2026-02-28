@@ -29,7 +29,8 @@ Initial scaffold now exists:
   - emits reconstruction telemetry (boundary/open-loop/unmatched/non-manifold counts + reconstruction certificates)
   - reconstruction metrics are computed via deterministic boundary-incidence accounting in `MeshStitcher.AnalyzeBoundaryIncidence`
   - strict bridge path uses a deterministic constructive reconstruction pass (relink, balanced-loop fill, invalid-component pruning)
-  - emits stage invariant certificates (`input`, `arrangement`, `triangulation`, `reconstruction`, `output`) and strict-mode `StageInvariantViolation` issues when gates fail
+  - strict bridge path enables topology-preserving patch extraction arbitration (`Auto` mode compares intra-face vs global extraction and chooses the better stitched topology)
+  - emits stage invariant certificates (`input`, `arrangement`, `patch-extraction`, `triangulation`, `reconstruction`, `output`) and strict-mode `StageInvariantViolation` issues when gates fail
   - applies deterministic post-op degenerate-face pruning and topology repair before strict output validation
 - `Kernel/Predicates/CertifiedPredicates` with precision-tier telemetry
 - `Kernel/Arrangement/ArrangementBuilder` native BVH+tri-tri arrangement builder
@@ -52,7 +53,7 @@ Initial scaffold now exists:
 
 Current conformance snapshot:
 
-- `tests/MdCsg.Robust.Conformance` currently runs 45/45 passing (no skipped tests).
+- `tests/MdCsg.Robust.Conformance` currently runs 47/47 passing (no skipped tests).
 - CI rescue bar entrypoint is `tools/ci/run-robustness-gate.ps1` (wired to `.github/workflows/robustness-gate.yml`).
   - gate slices: showcase/backlog/replay, strict fuzz smoke, triangulation bridge/smoke guardrails (with hang-timeout protection)
 - Stable-overlap and smoke union zero-fallback checks are active and passing.

@@ -69,6 +69,7 @@ public class RobustCsgSmokeTests
         Assert.Equal(0, result.Diagnostics.TriangulationNativeFailureCount);
         Assert.NotEmpty(result.Diagnostics.StageInvariantCertificates);
         Assert.Contains(result.Diagnostics.StageInvariantCertificates, c => c.StartsWith("input:pass;", StringComparison.Ordinal));
+        Assert.Contains(result.Diagnostics.StageInvariantCertificates, c => c.StartsWith("patch-extraction:mode=", StringComparison.Ordinal));
         Assert.Contains(result.Diagnostics.StageInvariantCertificates, c => c.StartsWith("triangulation:pass;", StringComparison.Ordinal));
         Assert.Contains(result.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction:pass;", StringComparison.Ordinal));
         Assert.Contains(result.Diagnostics.StageInvariantCertificates, c => c.StartsWith("output:pass;", StringComparison.Ordinal));

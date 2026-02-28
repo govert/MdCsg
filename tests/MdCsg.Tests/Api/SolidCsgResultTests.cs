@@ -152,6 +152,8 @@ public class SolidCsgResultTests
         Assert.Equal(1e-8, opts.WeldTolerance);
         Assert.False(opts.UseWindingNumber);
         Assert.Null(opts.ClassificationStrategy);
+        Assert.Equal(PatchExtractionMode.Auto, opts.PatchExtractionMode);
+        Assert.False(opts.PreferTopologyPreservingPatchExtraction);
     }
 
     [Fact]
@@ -163,8 +165,12 @@ public class SolidCsgResultTests
         {
             GridSize = 1e-6,
             WeldTolerance = 1e-6,
-            UseWindingNumber = true
+            UseWindingNumber = true,
+            PatchExtractionMode = PatchExtractionMode.Global,
+            PreferTopologyPreservingPatchExtraction = true
         };
+        Assert.Equal(PatchExtractionMode.Global, opts.PatchExtractionMode);
+        Assert.True(opts.PreferTopologyPreservingPatchExtraction);
         var r = Csg.Union(a, b, opts);
         Assert.True(r.FaceCount > 0);
     }

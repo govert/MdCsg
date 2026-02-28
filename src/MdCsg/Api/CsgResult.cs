@@ -22,6 +22,26 @@ public class CsgResult
     /// <summary>The number of intersection segments found.</summary>
     public int IntersectionSegmentCount { get; init; }
 
+    /// <summary>
+    /// The patch extraction mode used by the operation when available.
+    /// </summary>
+    public PatchExtractionMode? SelectedPatchExtractionMode { get; init; }
+
+    /// <summary>
+    /// Boundary edge count of the stitched assembly candidate selected before final post-processing.
+    /// </summary>
+    public int? SelectedPatchExtractionBoundaryEdgeCount { get; init; }
+
+    /// <summary>
+    /// Whether the stitched assembly candidate selected before final post-processing is edge-manifold.
+    /// </summary>
+    public bool? SelectedPatchExtractionIsEdgeManifold { get; init; }
+
+    /// <summary>
+    /// Connected component count of the stitched assembly candidate selected before final post-processing.
+    /// </summary>
+    public int? SelectedPatchExtractionConnectedComponentCount { get; init; }
+
     /// <summary>Total number of faces in the result.</summary>
     public int FaceCount => Mesh.Faces.Count;
 

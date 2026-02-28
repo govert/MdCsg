@@ -44,4 +44,16 @@ public class CsgOptions
     /// When null, the default triangulator is used.
     /// </summary>
     public ConstrainedTriangulationKernel? TriangulationKernel { get; set; }
+
+    /// <summary>
+    /// Patch extraction strategy after face cutting.
+    /// </summary>
+    public PatchExtractionMode PatchExtractionMode { get; set; } = PatchExtractionMode.Auto;
+
+    /// <summary>
+    /// When enabled with <see cref="PatchExtractionMode.Auto"/>, evaluates both
+    /// intra-face and global patch extraction and deterministically selects the
+    /// candidate with better stitched topology quality.
+    /// </summary>
+    public bool PreferTopologyPreservingPatchExtraction { get; set; } = false;
 }

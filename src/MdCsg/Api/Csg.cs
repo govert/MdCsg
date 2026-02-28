@@ -128,41 +128,65 @@ public static class Csg
             useEdgeSplitConstraints: true,
             triangulationKernel: options.TriangulationKernel);
 
-        // Step 3: Build adjacency and extract patches.
-        // For intersecting meshes, intra-face extraction is more robust when
-        // intersection chains are not perfectly closed across face boundaries.
+        // Step 3: Build adjacency
         var adjA = SubTriangleAdjacency.Build(cutA.SubTriangles);
         var adjB = SubTriangleAdjacency.Build(cutB.SubTriangles);
-        List<Patch> patchesA;
-        List<Patch> patchesB;
-        if (intersections.Segments.Count > 0)
+        // Step 4: Build extraction candidate(s), classify, and assemble.
+        var classifier = options.ClassificationStrategy ?? new CpuPatchClassificationStrategy(options.Parallel);
+        var extractionMode = ResolveExtractionMode(options.PatchExtractionMode, intersections.Segments.Count > 0);
+
+        AssemblyCandidate chosen;
+        if (options.PatchExtractionMode == PatchExtractionMode.Auto
+            && options.PreferTopologyPreservingPatchExtraction
+            && intersections.Segments.Count > 0)
         {
-            patchesA = IntraFacePatchExtractor.Extract(cutA.SubTriangles);
-            patchesB = IntraFacePatchExtractor.Extract(cutB.SubTriangles);
+            var intra = BuildAssemblyCandidate(
+                PatchExtractionMode.IntraFace,
+                classifier,
+                cutA,
+                cutB,
+                adjA,
+                adjB,
+                intersections,
+                a,
+                b,
+                operation,
+                options);
+            var global = BuildAssemblyCandidate(
+                PatchExtractionMode.Global,
+                classifier,
+                cutA,
+                cutB,
+                adjA,
+                adjB,
+                intersections,
+                a,
+                b,
+                operation,
+                options);
+
+            chosen = IsBetterTopologyQuality(global.TopologyQuality, intra.TopologyQuality)
+                ? global
+                : intra;
         }
         else
         {
-            patchesA = PatchExtractor.Extract(cutA.SubTriangles, adjA);
-            patchesB = PatchExtractor.Extract(cutB.SubTriangles, adjB);
+            chosen = BuildAssemblyCandidate(
+                extractionMode,
+                classifier,
+                cutA,
+                cutB,
+                adjA,
+                adjB,
+                intersections,
+                a,
+                b,
+                operation,
+                options);
         }
 
-        // Step 3b: Mark coplanar patches
-        MarkCoplanarPatches(patchesA, cutA.SubTriangles, intersections.CoplanarFacesA);
-        MarkCoplanarPatches(patchesB, cutB.SubTriangles, intersections.CoplanarFacesB);
-
-        // Step 4: Classify patches (the novel part — uses max-margin confident points)
-        var classifier = options.ClassificationStrategy ?? new CpuPatchClassificationStrategy(options.Parallel);
-        int degA = classifier.ClassifyAll(patchesA, cutA.SubTriangles, b.Bvh, options.UseWindingNumber);
-        int degB = classifier.ClassifyAll(patchesB, cutB.SubTriangles, a.Bvh, options.UseWindingNumber);
-
-        // Step 5: Assemble result by selecting appropriate patches
-        var assembly = PatchAssembler.Assemble(
-            patchesA, patchesB,
-            cutA.SubTriangles, cutB.SubTriangles,
-            operation);
-
         // Step 6: Stitch into output mesh
-        var resultMesh = MeshStitcher.Stitch(assembly.Triangles, options.WeldTolerance);
+        var resultMesh = MeshStitcher.Stitch(chosen.Assembly.Triangles, options.WeldTolerance);
         if (intersections.Segments.Count > 0)
         {
             if (MeshValidator.CountBoundaryEdges(resultMesh) > 0)
@@ -180,10 +204,14 @@ public static class Csg
         return new CsgResult
         {
             Mesh = resultMesh,
-            PatchCountA = patchesA.Count,
-            PatchCountB = patchesB.Count,
-            DegenerateCount = degA + degB,
-            IntersectionSegmentCount = intersections.Segments.Count
+            PatchCountA = chosen.PatchCountA,
+            PatchCountB = chosen.PatchCountB,
+            DegenerateCount = chosen.DegenerateCountA + chosen.DegenerateCountB,
+            IntersectionSegmentCount = intersections.Segments.Count,
+            SelectedPatchExtractionMode = chosen.ExtractionMode,
+            SelectedPatchExtractionBoundaryEdgeCount = chosen.TopologyQuality.BoundaryEdgeCount,
+            SelectedPatchExtractionIsEdgeManifold = chosen.TopologyQuality.IsEdgeManifold,
+            SelectedPatchExtractionConnectedComponentCount = chosen.TopologyQuality.ConnectedComponentCount
         };
     }
 
@@ -385,6 +413,120 @@ public static class Csg
                 }
             }
         }
+    }
+
+    private static PatchExtractionMode ResolveExtractionMode(PatchExtractionMode configured, bool hasIntersections)
+    {
+        if (configured != PatchExtractionMode.Auto)
+            return configured;
+
+        return hasIntersections
+            ? PatchExtractionMode.IntraFace
+            : PatchExtractionMode.Global;
+    }
+
+    private readonly record struct AssemblyCandidate(
+        PatchExtractionMode ExtractionMode,
+        PatchAssembler.AssemblyResult Assembly,
+        int PatchCountA,
+        int PatchCountB,
+        int DegenerateCountA,
+        int DegenerateCountB,
+        AssemblyTopologyQuality TopologyQuality);
+
+    private readonly record struct AssemblyTopologyQuality(
+        int BoundaryEdgeCount,
+        bool IsEdgeManifold,
+        int ConnectedComponentCount)
+    {
+        public bool IsClosedManifold => BoundaryEdgeCount == 0 && IsEdgeManifold;
+    }
+
+    private static AssemblyCandidate BuildAssemblyCandidate(
+        PatchExtractionMode extractionMode,
+        IPatchClassificationStrategy classifier,
+        MeshCutter.CutResult cutA,
+        MeshCutter.CutResult cutB,
+        SubTriangleAdjacency adjA,
+        SubTriangleAdjacency adjB,
+        IntersectionGraph intersections,
+        Solid a,
+        Solid b,
+        CsgOperation operation,
+        CsgOptions options)
+    {
+        List<Patch> patchesA;
+        List<Patch> patchesB;
+        switch (extractionMode)
+        {
+            case PatchExtractionMode.IntraFace:
+                patchesA = IntraFacePatchExtractor.Extract(cutA.SubTriangles);
+                patchesB = IntraFacePatchExtractor.Extract(cutB.SubTriangles);
+                break;
+            case PatchExtractionMode.Global:
+                patchesA = PatchExtractor.Extract(cutA.SubTriangles, adjA);
+                patchesB = PatchExtractor.Extract(cutB.SubTriangles, adjB);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(extractionMode), extractionMode, null);
+        }
+
+        MarkCoplanarPatches(patchesA, cutA.SubTriangles, intersections.CoplanarFacesA);
+        MarkCoplanarPatches(patchesB, cutB.SubTriangles, intersections.CoplanarFacesB);
+
+        int degA = classifier.ClassifyAll(patchesA, cutA.SubTriangles, b.Bvh, options.UseWindingNumber);
+        int degB = classifier.ClassifyAll(patchesB, cutB.SubTriangles, a.Bvh, options.UseWindingNumber);
+
+        var assembly = PatchAssembler.Assemble(
+            patchesA,
+            patchesB,
+            cutA.SubTriangles,
+            cutB.SubTriangles,
+            operation);
+
+        var quality = EvaluateAssemblyTopologyQuality(assembly, options.WeldTolerance);
+        return new AssemblyCandidate(
+            extractionMode,
+            assembly,
+            patchesA.Count,
+            patchesB.Count,
+            degA,
+            degB,
+            quality);
+    }
+
+    private static AssemblyTopologyQuality EvaluateAssemblyTopologyQuality(
+        PatchAssembler.AssemblyResult assembly,
+        double weldTolerance)
+    {
+        if (assembly.Triangles.Count == 0)
+            return new AssemblyTopologyQuality(
+                BoundaryEdgeCount: 0,
+                IsEdgeManifold: true,
+                ConnectedComponentCount: 0);
+
+        var mesh = MeshStitcher.Stitch(assembly.Triangles, weldTolerance);
+        return new AssemblyTopologyQuality(
+            BoundaryEdgeCount: MeshValidator.CountBoundaryEdges(mesh),
+            IsEdgeManifold: MeshValidator.IsEdgeManifold(mesh),
+            ConnectedComponentCount: MeshQueries.ConnectedComponents(mesh).Count);
+    }
+
+    private static bool IsBetterTopologyQuality(AssemblyTopologyQuality a, AssemblyTopologyQuality b)
+    {
+        if (a.IsClosedManifold != b.IsClosedManifold)
+            return a.IsClosedManifold;
+
+        if (a.BoundaryEdgeCount != b.BoundaryEdgeCount)
+            return a.BoundaryEdgeCount < b.BoundaryEdgeCount;
+
+        if (a.IsEdgeManifold != b.IsEdgeManifold)
+            return a.IsEdgeManifold;
+
+        if (a.ConnectedComponentCount != b.ConnectedComponentCount)
+            return a.ConnectedComponentCount < b.ConnectedComponentCount;
+
+        return false;
     }
 
     private static HalfEdgeMesh PruneFragmentComponents(HalfEdgeMesh mesh, double weldTolerance)

@@ -129,6 +129,8 @@ Current status:
 - Coplanar reconstruction selection is now routed through an explicit per-operation/source truth table in `PatchAssembler` (documented in `ROBUSTNESS_SPEC.md`).
 - Robust bridge reconstruction now runs a deterministic constructive topology pass (relink, loop closure on balanced boundaries, invalid-component pruning) with explicit dropped-component telemetry.
 - Chained showcase step-3 remains an active reconstruction blocker, but is now pinned as a strict fail-closed repro requiring `reconstruction:fail` certification with zero triangulation fallback.
+- Upstream CSG now supports deterministic patch extraction policy control (`Auto`, `IntraFace`, `Global`) and strict-mode topology-preserving arbitration in `Auto` mode.
+- CSG operation results now emit selected patch-extraction telemetry (mode, stitched boundary count, manifold flag, connected components), and strict robust diagnostics mirror this as `patch-extraction:*` stage certificates.
 
 ## M3 - Robust Triangulation and Patch Extraction
 
@@ -188,10 +190,10 @@ Parallel streams:
 
 ## 5. Immediate Next Tasks
 
-1. Expand coplanar tie-break policy from guardrail detection into explicit reconstruction semantics.
+1. Use patch-extraction telemetry on the pinned `ChainedCsg` step-3 repro to quantify which topology signatures remain unresolved after arbitration.
 2. Continue replacing constrained triangulation internals under `Kernel/Triangulation` (expand native coverage and retire legacy fallback cases).
-3. Burn down the remaining `ChainedCsg` step fallback signatures (currently concentrated in a small partition-fallback class) to restore zero-fallback parity for that path.
-4. Add replay corpus files for the remaining showcase artifact/fallback signatures and run them in CI conformance.
+3. Move patch extraction in the robust path from legacy mesh-adjacency flood fill toward arrangement-boundary-native extraction with stable patch IDs.
+4. Add replay corpus files for remaining step-3 artifact signatures and enforce deterministic conformance expectations in CI.
 
 ## 6. Risks and Mitigations
 

@@ -292,7 +292,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         var csgOptions = new CsgOptions
         {
             Parallel = !opts.Deterministic,
-            TriangulationKernel = triangulationKernel
+            TriangulationKernel = triangulationKernel,
+            PatchExtractionMode = PatchExtractionMode.Auto,
+            PreferTopologyPreservingPatchExtraction = opts.Mode == RobustMode.Strict
         };
 
         var opSw = Stopwatch.StartNew();
@@ -304,6 +306,15 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null)
         };
         opSw.Stop();
+
+        if (result.SelectedPatchExtractionMode.HasValue)
+        {
+            stageCertificates.Add(
+                $"patch-extraction:mode={result.SelectedPatchExtractionMode.Value};"
+                + $"boundary={result.SelectedPatchExtractionBoundaryEdgeCount.GetValueOrDefault(-1)};"
+                + $"manifold={(result.SelectedPatchExtractionIsEdgeManifold == true ? 1 : 0)};"
+                + $"components={result.SelectedPatchExtractionConnectedComponentCount.GetValueOrDefault(-1)}");
+        }
 
         result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
         result = ReconstructOutputTopology(result, csgOptions.WeldTolerance, out reconstructionDroppedComponentCount);
