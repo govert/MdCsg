@@ -43,11 +43,13 @@ Initial scaffold now exists:
 - `Kernel/Arrangement/ArrangementAnalyzer` endpoint/component topology signals
 - `Kernel/Triangulation/RobustConstrainedTriangulator` with native robust unconstrained triangulation plus staged native constrained handling (face-point-set incremental solver, non-crossing constraint partitioning, constrained-ear path), deterministic output normalization, and legacy fallback for unsupported constrained inputs
   - face-point-set activation is selectively gated to favor dense/face-cutter style inputs while preserving constrained-polygon bridge invariants
+  - when partition/ear paths cannot satisfy required constraints, constrained triangulation now retries a native face-point-set rescue pass before reporting failure
   - strict robust execution now disables legacy fallback and reports structured native failure reasons (fail closed)
   - constrained work-budget override (`RobustTriangulationOptions.ConstraintWorkBudgetOverride`) is available for deterministic fail-closed repro/diagnostics coverage
 - `Diagnostics/Replay` arrangement replay capture/serialize/replay harness
 - Checked-in replay corpus fixtures and manifest assertions under `tests/MdCsg.Robust.Conformance/ReplayCorpus/arrangement`
 - Checked-in triangulation replay corpus fixtures and manifest assertions under `tests/MdCsg.Robust.Conformance/ReplayCorpus/triangulation`
+  - includes dense non-crossing constrained chord cases that assert native success and required-edge preservation
 - `Validation/DegenerateFaceInspector` using certified predicate checks
 - `RobustOperationOptions.TreatCoplanarIntersectionAsError` guardrail toggle for strict conformance runs
 - `RobustOperationOptions.TreatOpposingCoplanarPairsAsError` guardrail toggle for strict conformance runs

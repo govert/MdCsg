@@ -25,7 +25,8 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
     private enum FacePointSetFailureKind
     {
         None = 0,
-        WorkBudgetExceeded = 1
+        WorkBudgetExceeded = 1,
+        ConstraintNotSatisfied = 2
     }
 
     public RobustTriangulationResult Triangulate(
@@ -186,8 +187,10 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         out string? failureCode)
     {
         bool sawWorkBudgetExceeded = false;
+        bool attemptedFacePointSet = false;
         if (ShouldPreferFacePointSet(vertices2D, constraints))
         {
+            attemptedFacePointSet = true;
             if (TryTriangulateFacePointSet(
                 vertices2D,
                 constraints,
@@ -223,6 +226,29 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             failureStage = RobustTriangulationFailureStage.None;
             failureCode = null;
             return true;
+        }
+
+        // Rescue pass: for simple-boundary inputs where partition/ear handling cannot
+        // satisfy all required constraints, retry native face-point-set before failing.
+        bool allowRescueFacePointSet =
+            partitionFailure != PartitionFailureKind.InvalidOrCrossingConstraints;
+        if (!attemptedFacePointSet && allowRescueFacePointSet)
+        {
+            if (TryTriangulateFacePointSet(
+                vertices2D,
+                constraints,
+                options,
+                out triangles,
+                out var rescueFailure))
+            {
+                failureReason = RobustTriangulationFallbackReason.None;
+                failureStage = RobustTriangulationFailureStage.None;
+                failureCode = null;
+                return true;
+            }
+
+            if (rescueFailure == FacePointSetFailureKind.WorkBudgetExceeded)
+                sawWorkBudgetExceeded = true;
         }
 
         if (sawWorkBudgetExceeded)
@@ -420,6 +446,16 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             {
                 triangles = [];
                 failureKind = FacePointSetFailureKind.WorkBudgetExceeded;
+                return false;
+            }
+        }
+
+        foreach (var (start, end) in constraints)
+        {
+            if (!HasTriangleEdge(tris, EdgeKey(start, end)))
+            {
+                triangles = [];
+                failureKind = FacePointSetFailureKind.ConstraintNotSatisfied;
                 return false;
             }
         }

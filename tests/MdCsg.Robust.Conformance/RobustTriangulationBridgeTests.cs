@@ -212,6 +212,27 @@ public class RobustTriangulationBridgeTests
     }
 
     [Fact]
+    public void SeededDenseFanConstraintCorpus_UsesNativePath()
+    {
+        var triangulator = new RobustConstrainedTriangulator();
+        var rng = new Random(20260316);
+
+        for (int caseIdx = 0; caseIdx < 64; caseIdx++)
+        {
+            int vertexCount = rng.Next(8, 13);
+            var verts = CreateConvexPolygon(vertexCount, radiusBase: 2.8, rng);
+            var constraints = CreateDenseFanConstraints(vertexCount);
+
+            var result = triangulator.Triangulate(verts, constraints, Vec3.UnitZ);
+
+            Assert.True(result.Succeeded, $"case={caseIdx};reason={result.FailureReason};code={result.FailureCode}");
+            Assert.False(result.UsedLegacyKernel);
+            foreach (var (start, end) in constraints)
+                Assert.Contains(result.Triangles, t => HasEdge(t, start, end));
+        }
+    }
+
+    [Fact]
     public void DegenerateTolerance_CanDropAllTriangles()
     {
         var triangulator = new RobustConstrainedTriangulator();
@@ -271,6 +292,14 @@ public class RobustTriangulationBridgeTests
         if (constraints.Count == 0)
             constraints.Add((0, vertexCount / 2));
 
+        return constraints.ToArray();
+    }
+
+    private static (int Start, int End)[] CreateDenseFanConstraints(int vertexCount)
+    {
+        var constraints = new List<(int Start, int End)>(System.Math.Max(0, vertexCount - 3));
+        for (int i = 2; i <= vertexCount - 2; i++)
+            constraints.Add((0, i));
         return constraints.ToArray();
     }
 }

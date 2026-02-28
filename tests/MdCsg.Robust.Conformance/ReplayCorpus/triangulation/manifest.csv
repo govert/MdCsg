@@ -2,3 +2,4 @@ case_file,expect_success,expect_used_legacy,expect_failure_reason,expect_failure
 simple-diagonal-square.json,true,false,None,None,, ,2,0-2
 crossing-square.json,false,false,InvalidOrCrossingConstraints,ConstraintValidation,constraint-validation/invalid-or-crossing,,0,
 budget-exhausted-crossing-dodecagon.json,false,false,WorkBudgetExceeded,FacePointSet,face-point-set/work-budget-exceeded,0,0,
+dense-noncrossing-decagon.json,true,false,None,None,,,8,0-2;0-3;0-4;0-5;0-6;0-7;0-8

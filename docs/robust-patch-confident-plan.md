@@ -138,6 +138,7 @@ Current status:
 - CI rescue gate now includes crash-aware rerun logic for intermittent test-host aborts and conformance determinism checks for patch/classification certificates.
 - Patch-extraction diagnostics now emit deterministic candidate signatures (`patch-extraction-candidates:*`) so chained step-3 unresolved topology signatures are explicitly tracked across runs.
 - Patch extraction now assigns deterministic stable patch identity/provenance (`StableId`, source-face lineage, and boundary authority), with arrangement mode explicitly marked as arrangement-authoritative.
+- Native constrained triangulation now includes a second-chance face-point-set rescue pass (after partition/ear failure) and expanded dense non-crossing chord replay/bridge coverage.
 
 ## M3 - Robust Triangulation and Patch Extraction
 
