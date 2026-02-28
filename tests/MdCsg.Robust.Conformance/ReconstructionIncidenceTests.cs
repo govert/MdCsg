@@ -34,13 +34,19 @@ public class ReconstructionIncidenceTests
         var baseline = RobustCsg.Union(a, b, opts);
         Assert.True(baseline.Succeeded);
         Assert.True(baseline.Diagnostics.ReconstructionArrangementSnapCount >= 0);
+        Assert.True(baseline.Diagnostics.ReconstructionComponentCount > 0);
+        Assert.Equal(0, baseline.Diagnostics.ReconstructionInvalidComponentCount);
         string baselineCert = GetReconstructionCert(baseline);
         Assert.Contains("arrSnap=", baselineCert, StringComparison.Ordinal);
+        Assert.Contains("components=", baselineCert, StringComparison.Ordinal);
+        Assert.Contains("invalidComponents=", baselineCert, StringComparison.Ordinal);
 
         for (int i = 0; i < 5; i++)
         {
             var next = RobustCsg.Union(a, b, opts);
             Assert.True(next.Succeeded);
+            Assert.Equal(baseline.Diagnostics.ReconstructionComponentCount, next.Diagnostics.ReconstructionComponentCount);
+            Assert.Equal(baseline.Diagnostics.ReconstructionInvalidComponentCount, next.Diagnostics.ReconstructionInvalidComponentCount);
             Assert.Equal(baselineCert, GetReconstructionCert(next));
         }
     }

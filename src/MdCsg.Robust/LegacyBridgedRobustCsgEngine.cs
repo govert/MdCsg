@@ -54,6 +54,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int reconstructionNonManifoldUndirectedEdgeCount = 0;
         int reconstructionDroppedComponentCount = 0;
         int reconstructionArrangementSnapCount = 0;
+        int reconstructionComponentCount = 0;
+        int reconstructionInvalidComponentCount = 0;
         int classificationFallbackCount = 0;
         var reconstructionCertificates = new List<string>();
         var stageCertificates = new List<string>();
@@ -190,6 +192,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     reconstructionNonManifoldUndirectedEdgeCount,
                     reconstructionDroppedComponentCount,
                     reconstructionArrangementSnapCount,
+                    reconstructionComponentCount,
+                    reconstructionInvalidComponentCount,
                     reconstructionCertificates.ToArray(),
                     stageCertificates.ToArray()));
         }
@@ -348,6 +352,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         reconstructionOpenBoundaryLoopCount = reconstructionInvariant.OpenBoundaryLoopCount;
         reconstructionUnmatchedUndirectedEdgeCount = reconstructionInvariant.UnmatchedUndirectedEdgeCount;
         reconstructionNonManifoldUndirectedEdgeCount = reconstructionInvariant.NonManifoldUndirectedEdgeCount;
+        var componentInvariant = AnalyzeComponentTopology(result.Mesh);
+        reconstructionComponentCount = componentInvariant.ComponentCount;
+        reconstructionInvalidComponentCount = componentInvariant.InvalidComponentCount;
 
         bool triangulationAccountingPass =
             triangulationInvocationCount
@@ -448,7 +455,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"nonManifold={reconstructionInvariant.NonManifoldUndirectedEdgeCount};"
             + $"oriented={(reconstructionInvariant.IsConsistentlyOriented ? 1 : 0)};"
             + $"dropped={reconstructionDroppedComponentCount};"
-            + $"arrSnap={reconstructionArrangementSnapCount}";
+            + $"arrSnap={reconstructionArrangementSnapCount};"
+            + $"components={reconstructionComponentCount};"
+            + $"invalidComponents={reconstructionInvalidComponentCount}";
         reconstructionCertificates.Add(reconstructionCertificate);
         stageCertificates.Add(reconstructionCertificate);
 
@@ -490,6 +499,16 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 opts.Mode,
                 RobustIssueCode.ReconstructionStitchingFailed,
                 $"Reconstruction stitching left open boundary topology (boundary={reconstructionInvariant.BoundaryHalfEdgeCount}, openLoops={reconstructionInvariant.OpenBoundaryLoopCount}).",
+                RobustIssueSeverity.Error);
+        }
+
+        if (reconstructionInvalidComponentCount > 0)
+        {
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.ReconstructionPatchSelectionFailed,
+                $"Reconstruction contains invalid components ({reconstructionInvalidComponentCount}/{reconstructionComponentCount}).",
                 RobustIssueSeverity.Error);
         }
 
@@ -556,6 +575,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 reconstructionNonManifoldUndirectedEdgeCount,
                 reconstructionDroppedComponentCount,
                 reconstructionArrangementSnapCount,
+                reconstructionComponentCount,
+                reconstructionInvalidComponentCount,
                 reconstructionCertificates.ToArray(),
                 stageCertificates.ToArray()));
     }
@@ -1040,6 +1061,69 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             && IsConsistentlyOriented;
     }
 
+    private static ReconstructionComponentSnapshot AnalyzeComponentTopology(HalfEdgeMesh mesh)
+    {
+        var components = MeshQueries.ConnectedComponents(mesh);
+        if (components.Count == 0)
+            return new ReconstructionComponentSnapshot(ComponentCount: 0, InvalidComponentCount: 0);
+
+        int invalid = 0;
+        foreach (var component in components)
+        {
+            if (component.Count < 4)
+            {
+                invalid++;
+                continue;
+            }
+
+            var componentMesh = BuildComponentMesh(mesh, component);
+            if (MeshValidator.CountBoundaryEdges(componentMesh) > 0
+                || !MeshValidator.IsEdgeManifold(componentMesh))
+            {
+                invalid++;
+            }
+        }
+
+        return new ReconstructionComponentSnapshot(
+            ComponentCount: components.Count,
+            InvalidComponentCount: invalid);
+    }
+
+    private static HalfEdgeMesh BuildComponentMesh(HalfEdgeMesh mesh, IReadOnlyList<int> componentFaces)
+    {
+        var vertexMap = new Dictionary<int, int>(componentFaces.Count * 3);
+        var positions = new List<Vec3>(componentFaces.Count * 3);
+        var triangles = new List<(int I0, int I1, int I2)>(componentFaces.Count);
+
+        foreach (int faceIdx in componentFaces)
+        {
+            var verts = mesh.Faces[faceIdx].GetVertices();
+            int i0 = MapVertex(verts[0].Id, verts[0].Position);
+            int i1 = MapVertex(verts[1].Id, verts[1].Position);
+            int i2 = MapVertex(verts[2].Id, verts[2].Position);
+            triangles.Add((i0, i1, i2));
+        }
+
+        var componentMesh = new MeshBuilder(0.0).Build(positions, triangles);
+        componentMesh.IsComplemented = mesh.IsComplemented;
+        return componentMesh;
+
+        int MapVertex(int originalId, Vec3 position)
+        {
+            if (vertexMap.TryGetValue(originalId, out int mapped))
+                return mapped;
+
+            int next = positions.Count;
+            vertexMap[originalId] = next;
+            positions.Add(position);
+            return next;
+        }
+    }
+
+    private readonly record struct ReconstructionComponentSnapshot(
+        int ComponentCount,
+        int InvalidComponentCount);
+
     private static bool HasFiniteVertices(HalfEdgeMesh mesh)
     {
         foreach (var vertex in mesh.Vertices)
@@ -1096,6 +1180,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int reconstructionNonManifoldUndirectedEdgeCount,
         int reconstructionDroppedComponentCount,
         int reconstructionArrangementSnapCount,
+        int reconstructionComponentCount,
+        int reconstructionInvalidComponentCount,
         IReadOnlyList<string> reconstructionInvariantCertificates,
         IReadOnlyList<string> stageInvariantCertificates)
     {
@@ -1137,6 +1223,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             ReconstructionNonManifoldUndirectedEdgeCount = reconstructionNonManifoldUndirectedEdgeCount,
             ReconstructionDroppedComponentCount = reconstructionDroppedComponentCount,
             ReconstructionArrangementSnapCount = reconstructionArrangementSnapCount,
+            ReconstructionComponentCount = reconstructionComponentCount,
+            ReconstructionInvalidComponentCount = reconstructionInvalidComponentCount,
             ReconstructionInvariantCertificates = reconstructionInvariantCertificates,
             StageInvariantCertificates = stageInvariantCertificates,
             ClassificationFallbackCount = classificationFallbackCount

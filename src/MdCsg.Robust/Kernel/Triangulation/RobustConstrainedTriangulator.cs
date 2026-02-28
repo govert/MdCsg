@@ -186,6 +186,7 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         out RobustTriangulationFailureStage failureStage,
         out string? failureCode)
     {
+        bool simpleBoundary = IsSimpleBoundaryOrder(vertices2D);
         bool sawWorkBudgetExceeded = false;
         bool attemptedFacePointSet = false;
         if (ShouldPreferFacePointSet(vertices2D, constraints))
@@ -195,6 +196,7 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
                 vertices2D,
                 constraints,
                 options,
+                requireDirectConstraintEdges: false,
                 out triangles,
                 out var facePointSetFailure))
             {
@@ -238,6 +240,7 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
                 vertices2D,
                 constraints,
                 options,
+                requireDirectConstraintEdges: simpleBoundary,
                 out triangles,
                 out var rescueFailure))
             {
@@ -396,6 +399,7 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
         Vec2[] vertices2D,
         IReadOnlyList<(int Start, int End)> constraints,
         RobustTriangulationOptions options,
+        bool requireDirectConstraintEdges,
         out List<(int A, int B, int C)> triangles,
         out FacePointSetFailureKind failureKind)
     {
@@ -450,13 +454,16 @@ public sealed class RobustConstrainedTriangulator : IRobustConstrainedTriangulat
             }
         }
 
-        foreach (var (start, end) in constraints)
+        if (requireDirectConstraintEdges)
         {
-            if (!HasTriangleEdge(tris, EdgeKey(start, end)))
+            foreach (var (start, end) in constraints)
             {
-                triangles = [];
-                failureKind = FacePointSetFailureKind.ConstraintNotSatisfied;
-                return false;
+                if (!HasTriangleEdge(tris, EdgeKey(start, end)))
+                {
+                    triangles = [];
+                    failureKind = FacePointSetFailureKind.ConstraintNotSatisfied;
+                    return false;
+                }
             }
         }
 

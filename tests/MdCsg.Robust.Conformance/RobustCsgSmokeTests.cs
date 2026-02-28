@@ -77,6 +77,8 @@ public class RobustCsgSmokeTests
         Assert.Equal(result.Result!.DegenerateCount, result.Diagnostics.ClassificationFallbackCount);
         Assert.NotEmpty(result.Diagnostics.ReconstructionInvariantCertificates);
         Assert.Contains(result.Diagnostics.ReconstructionInvariantCertificates, c => c.StartsWith("reconstruction:pass;", StringComparison.Ordinal));
+        Assert.True(result.Diagnostics.ReconstructionComponentCount > 0);
+        Assert.Equal(0, result.Diagnostics.ReconstructionInvalidComponentCount);
     }
 
     [Fact]
