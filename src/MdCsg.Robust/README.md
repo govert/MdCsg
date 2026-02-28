@@ -57,6 +57,7 @@ Current conformance snapshot:
 
 - `tests/MdCsg.Robust.Conformance` currently runs 51/51 passing (no skipped tests).
 - CI rescue bar entrypoint is `tools/ci/run-robustness-gate.ps1` (wired to `.github/workflows/robustness-gate.yml`).
+  - gate runner now retries a slice once when test-host crash/abort markers are detected, and fails hard if the retry is not clean
   - gate slices: showcase/backlog/replay, strict fuzz smoke, triangulation bridge/smoke guardrails (with hang-timeout protection)
 - Stable-overlap and smoke union zero-fallback checks are active and passing.
 - Seeded strict fuzz smoke tests are active and passing with deterministic seeds.

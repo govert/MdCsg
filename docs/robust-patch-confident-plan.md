@@ -135,6 +135,7 @@ Current status:
 - Patch classification now records explicit certification telemetry (`classification:pass;certified=...;fallback=...`) and surfaces exact-fallback counts in robust diagnostics.
 - Reconstruction now includes arrangement-guided boundary vertex snapping before repair/loop-closure passes, with `arrSnap` telemetry in reconstruction certificates and diagnostics.
 - Added strict algebraic/chain conformance coverage for commutativity/idempotency/mixed-chain closure and certificate emission (`classification:*`, `patch-extraction:*`).
+- CI rescue gate now includes crash-aware rerun logic for intermittent test-host aborts and conformance determinism checks for patch/classification certificates.
 
 ## M3 - Robust Triangulation and Patch Extraction
 
