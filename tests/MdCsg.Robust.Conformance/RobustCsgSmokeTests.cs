@@ -61,24 +61,16 @@ public class RobustCsgSmokeTests
 
         Assert.True(result.Succeeded);
         Assert.True(result.Diagnostics.TriangulationInvocationCount > 0);
-        Assert.True(
-            result.Diagnostics.TriangulationLegacyFallbackCount == 0,
-            BuildFallbackMessage(result.Diagnostics));
+        RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(result.Diagnostics);
         Assert.Equal(
             result.Diagnostics.TriangulationInvocationCount,
             result.Diagnostics.TriangulationNativeCount + result.Diagnostics.TriangulationLegacyFallbackCount);
-        Assert.Equal(
-            result.Diagnostics.TriangulationLegacyFallbackCount,
-            result.Diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount
-            + result.Diagnostics.TriangulationFallbackPartitionFailureCount
-            + result.Diagnostics.TriangulationFallbackConstrainedEarFailureCount
-            + result.Diagnostics.TriangulationFallbackWorkBudgetExceededCount);
+        Assert.Equal(0, result.Diagnostics.TriangulationLegacyFallbackCount);
+        Assert.Equal(0, result.Diagnostics.TriangulationNativeFailureCount);
         Assert.NotEmpty(result.Diagnostics.StageInvariantCertificates);
         Assert.Contains(result.Diagnostics.StageInvariantCertificates, c => c.StartsWith("input:pass;", StringComparison.Ordinal));
         Assert.Contains(result.Diagnostics.StageInvariantCertificates, c => c.StartsWith("triangulation:pass;", StringComparison.Ordinal));
         Assert.Contains(result.Diagnostics.StageInvariantCertificates, c => c.StartsWith("output:pass;", StringComparison.Ordinal));
-        if (result.Diagnostics.TriangulationLegacyFallbackCount > 0)
-            Assert.NotEmpty(result.Diagnostics.TriangulationFallbackSignatures);
     }
 
     [Fact]
@@ -104,6 +96,13 @@ public class RobustCsgSmokeTests
         Assert.Equal(0, result.Diagnostics.TriangulationFallbackConstrainedEarFailureCount);
         Assert.Equal(0, result.Diagnostics.TriangulationFallbackWorkBudgetExceededCount);
         Assert.Empty(result.Diagnostics.TriangulationFallbackSignatures);
+        Assert.Equal(0, result.Diagnostics.TriangulationNativeFailureCount);
+        Assert.Equal(0, result.Diagnostics.TriangulationNativeFailureInvalidOrCrossingConstraintCount);
+        Assert.Equal(0, result.Diagnostics.TriangulationNativeFailurePartitionFailureCount);
+        Assert.Equal(0, result.Diagnostics.TriangulationNativeFailureConstrainedEarFailureCount);
+        Assert.Equal(0, result.Diagnostics.TriangulationNativeFailureWorkBudgetExceededCount);
+        Assert.Empty(result.Diagnostics.TriangulationNativeFailureSignatures);
+        Assert.Empty(result.Diagnostics.TriangulationNativeFailureCodes);
     }
 
     [Fact]
@@ -130,18 +129,5 @@ public class RobustCsgSmokeTests
         Assert.Null(result.Result);
         Assert.Contains(result.Issues, i => i.Code == RobustIssueCode.InputMeshNotClosed);
         Assert.Contains(result.Issues, i => i.Code == RobustIssueCode.StageInvariantViolation);
-    }
-
-    private static string BuildFallbackMessage(RobustDiagnostics diagnostics)
-    {
-        var top = diagnostics.TriangulationFallbackSignatures.Count == 0
-            ? "<none>"
-            : string.Join(" | ", diagnostics.TriangulationFallbackSignatures);
-        return $"LegacyFallback={diagnostics.TriangulationLegacyFallbackCount}, "
-            + $"InvalidOrCrossing={diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount}, "
-            + $"Partition={diagnostics.TriangulationFallbackPartitionFailureCount}, "
-            + $"ConstrainedEar={diagnostics.TriangulationFallbackConstrainedEarFailureCount}, "
-            + $"WorkBudgetExceeded={diagnostics.TriangulationFallbackWorkBudgetExceededCount}, "
-            + $"Signatures={top}";
     }
 }

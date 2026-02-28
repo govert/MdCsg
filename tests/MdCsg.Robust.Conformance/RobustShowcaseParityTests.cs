@@ -65,14 +65,7 @@ public class RobustShowcaseParityTests
         Assert.False(step3.Succeeded);
         Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);
         Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotEdgeManifold);
-        Assert.True(
-            step3.Diagnostics.TriangulationLegacyFallbackCount == 0,
-            BuildFallbackMessage(step3.Diagnostics));
-        Assert.Equal(0, step3.Diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount);
-        Assert.Equal(0, step3.Diagnostics.TriangulationFallbackPartitionFailureCount);
-        Assert.Equal(0, step3.Diagnostics.TriangulationFallbackConstrainedEarFailureCount);
-        Assert.Equal(0, step3.Diagnostics.TriangulationFallbackWorkBudgetExceededCount);
-        Assert.Empty(step3.Diagnostics.TriangulationFallbackSignatures);
+        RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(step3.Diagnostics);
     }
 
     private static void AssertRobustClosedWithoutFallback(RobustCsgResult result)
@@ -80,14 +73,7 @@ public class RobustShowcaseParityTests
         Assert.True(result.Succeeded, BuildIssueMessage(result));
         Assert.NotNull(result.Result);
         Assert.Equal(0, MeshValidator.CountBoundaryEdges(result.Result!.Mesh));
-        Assert.True(
-            result.Diagnostics.TriangulationLegacyFallbackCount == 0,
-            BuildFallbackMessage(result.Diagnostics));
-        Assert.Equal(0, result.Diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount);
-        Assert.Equal(0, result.Diagnostics.TriangulationFallbackPartitionFailureCount);
-        Assert.Equal(0, result.Diagnostics.TriangulationFallbackConstrainedEarFailureCount);
-        Assert.Equal(0, result.Diagnostics.TriangulationFallbackWorkBudgetExceededCount);
-        Assert.Empty(result.Diagnostics.TriangulationFallbackSignatures);
+        RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(result.Diagnostics);
     }
 
     private static void AssertRobustClosed(RobustCsgResult result)
@@ -97,22 +83,9 @@ public class RobustShowcaseParityTests
         Assert.Equal(0, MeshValidator.CountBoundaryEdges(result.Result!.Mesh));
     }
 
-    private static string BuildFallbackMessage(RobustDiagnostics diagnostics)
-    {
-        var top = diagnostics.TriangulationFallbackSignatures.Count == 0
-            ? "<none>"
-            : string.Join(" | ", diagnostics.TriangulationFallbackSignatures);
-        return $"LegacyFallback={diagnostics.TriangulationLegacyFallbackCount}, "
-            + $"InvalidOrCrossing={diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount}, "
-            + $"Partition={diagnostics.TriangulationFallbackPartitionFailureCount}, "
-            + $"ConstrainedEar={diagnostics.TriangulationFallbackConstrainedEarFailureCount}, "
-            + $"WorkBudgetExceeded={diagnostics.TriangulationFallbackWorkBudgetExceededCount}, "
-            + $"Signatures={top}";
-    }
-
     private static string BuildIssueMessage(RobustCsgResult result)
     {
-        var fallback = BuildFallbackMessage(result.Diagnostics);
+        var fallback = RobustDiagnosticsAssertions.BuildTriangulationDegradationMessage(result.Diagnostics);
         if (result.Issues.Count == 0)
             return $"No issues were reported. {fallback}";
 

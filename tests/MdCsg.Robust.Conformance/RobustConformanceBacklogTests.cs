@@ -79,12 +79,7 @@ public class RobustConformanceBacklogTests
         Assert.True(result.Succeeded);
         Assert.NotNull(result.Result);
         Assert.True(new Solid(result.Result!.Mesh).Volume() < 1e-6);
-        Assert.Equal(0, result.Diagnostics.TriangulationLegacyFallbackCount);
-        Assert.Equal(0, result.Diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount);
-        Assert.Equal(0, result.Diagnostics.TriangulationFallbackPartitionFailureCount);
-        Assert.Equal(0, result.Diagnostics.TriangulationFallbackConstrainedEarFailureCount);
-        Assert.Equal(0, result.Diagnostics.TriangulationFallbackWorkBudgetExceededCount);
-        Assert.Empty(result.Diagnostics.TriangulationFallbackSignatures);
+        RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(result.Diagnostics);
     }
 
     [Fact]
@@ -101,12 +96,7 @@ public class RobustConformanceBacklogTests
         Assert.True(robust.Succeeded);
         Assert.NotNull(robust.Result);
         Assert.Equal(0, MeshValidator.CountBoundaryEdges(robust.Result!.Mesh));
-        Assert.Equal(0, robust.Diagnostics.TriangulationLegacyFallbackCount);
-        Assert.Equal(0, robust.Diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount);
-        Assert.Equal(0, robust.Diagnostics.TriangulationFallbackPartitionFailureCount);
-        Assert.Equal(0, robust.Diagnostics.TriangulationFallbackConstrainedEarFailureCount);
-        Assert.Equal(0, robust.Diagnostics.TriangulationFallbackWorkBudgetExceededCount);
-        Assert.Empty(robust.Diagnostics.TriangulationFallbackSignatures);
+        RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(robust.Diagnostics);
     }
 
     [Fact]
@@ -123,21 +113,6 @@ public class RobustConformanceBacklogTests
         });
 
         Assert.True(result.Succeeded);
-        Assert.True(
-            result.Diagnostics.TriangulationLegacyFallbackCount == 0,
-            BuildFallbackMessage(result.Diagnostics));
-    }
-
-    private static string BuildFallbackMessage(RobustDiagnostics diagnostics)
-    {
-        var top = diagnostics.TriangulationFallbackSignatures.Count == 0
-            ? "<none>"
-            : string.Join(" | ", diagnostics.TriangulationFallbackSignatures);
-        return $"LegacyFallback={diagnostics.TriangulationLegacyFallbackCount}, "
-            + $"InvalidOrCrossing={diagnostics.TriangulationFallbackInvalidOrCrossingConstraintCount}, "
-            + $"Partition={diagnostics.TriangulationFallbackPartitionFailureCount}, "
-            + $"ConstrainedEar={diagnostics.TriangulationFallbackConstrainedEarFailureCount}, "
-            + $"WorkBudgetExceeded={diagnostics.TriangulationFallbackWorkBudgetExceededCount}, "
-            + $"Signatures={top}";
+        RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(result.Diagnostics);
     }
 }
