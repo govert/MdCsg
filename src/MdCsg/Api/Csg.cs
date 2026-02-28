@@ -232,6 +232,7 @@ public static class Csg
             SelectedPatchExtractionBoundaryEdgeCount = chosen.TopologyQuality.BoundaryEdgeCount,
             SelectedPatchExtractionIsEdgeManifold = chosen.TopologyQuality.IsEdgeManifold,
             SelectedPatchExtractionConnectedComponentCount = chosen.TopologyQuality.ConnectedComponentCount,
+            SelectedPatchBoundaryAuthority = GetBoundaryAuthorityForMode(chosen.ExtractionMode),
             PatchExtractionCandidateSignatures = candidateSignatures
         };
     }
@@ -578,6 +579,7 @@ public static class Csg
     {
         int degenerateTotal = candidate.DegenerateCountA + candidate.DegenerateCountB;
         return $"{candidate.ExtractionMode}:"
+            + $"authority={GetBoundaryAuthorityForMode(candidate.ExtractionMode)};"
             + $"boundary={candidate.TopologyQuality.BoundaryEdgeCount};"
             + $"manifold={(candidate.TopologyQuality.IsEdgeManifold ? 1 : 0)};"
             + $"components={candidate.TopologyQuality.ConnectedComponentCount};"
@@ -586,6 +588,11 @@ public static class Csg
             + $"deg={degenerateTotal};"
             + $"tri={candidate.Assembly.Triangles.Count}";
     }
+
+    private static PatchBoundaryAuthority GetBoundaryAuthorityForMode(PatchExtractionMode mode)
+        => mode == PatchExtractionMode.Arrangement
+            ? PatchBoundaryAuthority.Arrangement
+            : PatchBoundaryAuthority.IntersectionFlags;
 
     private static HalfEdgeMesh PruneFragmentComponents(HalfEdgeMesh mesh, double weldTolerance)
     {

@@ -19,6 +19,10 @@ internal static class RobustDiagnosticsAssertions
             ?? string.Empty;
         Assert.False(string.IsNullOrWhiteSpace(cert));
         Assert.StartsWith($"patch-extraction:mode={expected};", cert, StringComparison.Ordinal);
+        string expectedAuthority = expected == PatchExtractionMode.Arrangement
+            ? "Arrangement"
+            : "IntersectionFlags";
+        Assert.Contains($"authority={expectedAuthority}", cert, StringComparison.Ordinal);
     }
 
     public static void AssertNoTriangulationDegradation(RobustDiagnostics diagnostics)

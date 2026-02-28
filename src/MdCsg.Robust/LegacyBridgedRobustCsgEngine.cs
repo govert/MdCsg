@@ -322,7 +322,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 $"patch-extraction:mode={result.SelectedPatchExtractionMode.Value};"
                 + $"boundary={result.SelectedPatchExtractionBoundaryEdgeCount.GetValueOrDefault(-1)};"
                 + $"manifold={(result.SelectedPatchExtractionIsEdgeManifold == true ? 1 : 0)};"
-                + $"components={result.SelectedPatchExtractionConnectedComponentCount.GetValueOrDefault(-1)}");
+                + $"components={result.SelectedPatchExtractionConnectedComponentCount.GetValueOrDefault(-1)};"
+                + $"authority={result.SelectedPatchBoundaryAuthority?.ToString() ?? "Unknown"}");
         }
         if (result.PatchExtractionCandidateSignatures.Count > 0)
         {
@@ -712,6 +713,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             SelectedPatchExtractionBoundaryEdgeCount = result.SelectedPatchExtractionBoundaryEdgeCount,
             SelectedPatchExtractionIsEdgeManifold = result.SelectedPatchExtractionIsEdgeManifold,
             SelectedPatchExtractionConnectedComponentCount = result.SelectedPatchExtractionConnectedComponentCount,
+            SelectedPatchBoundaryAuthority = result.SelectedPatchBoundaryAuthority,
             PatchExtractionCandidateSignatures = result.PatchExtractionCandidateSignatures
         };
     }
@@ -1006,6 +1008,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             SelectedPatchExtractionBoundaryEdgeCount = source.SelectedPatchExtractionBoundaryEdgeCount,
             SelectedPatchExtractionIsEdgeManifold = source.SelectedPatchExtractionIsEdgeManifold,
             SelectedPatchExtractionConnectedComponentCount = source.SelectedPatchExtractionConnectedComponentCount,
+            SelectedPatchBoundaryAuthority = source.SelectedPatchBoundaryAuthority,
             PatchExtractionCandidateSignatures = source.PatchExtractionCandidateSignatures
         };
     }

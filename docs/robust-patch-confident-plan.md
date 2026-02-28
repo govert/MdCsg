@@ -137,6 +137,7 @@ Current status:
 - Added strict algebraic/chain conformance coverage for commutativity/idempotency/mixed-chain closure and certificate emission (`classification:*`, `patch-extraction:*`).
 - CI rescue gate now includes crash-aware rerun logic for intermittent test-host aborts and conformance determinism checks for patch/classification certificates.
 - Patch-extraction diagnostics now emit deterministic candidate signatures (`patch-extraction-candidates:*`) so chained step-3 unresolved topology signatures are explicitly tracked across runs.
+- Patch extraction now assigns deterministic stable patch identity/provenance (`StableId`, source-face lineage, and boundary authority), with arrangement mode explicitly marked as arrangement-authoritative.
 
 ## M3 - Robust Triangulation and Patch Extraction
 

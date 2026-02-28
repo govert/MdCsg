@@ -1,5 +1,6 @@
 using MdCsg.Api;
 using MdCsg.Math;
+using MdCsg.Patches;
 
 namespace MdCsg.Tests.Api;
 
@@ -72,6 +73,11 @@ public class CsgPatchExtractionModeTests
         Assert.Equal(expected.SelectedPatchExtractionBoundaryEdgeCount, auto.SelectedPatchExtractionBoundaryEdgeCount);
         Assert.Equal(expected.SelectedPatchExtractionIsEdgeManifold, auto.SelectedPatchExtractionIsEdgeManifold);
         Assert.Equal(expected.SelectedPatchExtractionConnectedComponentCount, auto.SelectedPatchExtractionConnectedComponentCount);
+        Assert.Equal(
+            expected.SelectedPatchExtractionMode == PatchExtractionMode.Arrangement
+                ? PatchBoundaryAuthority.Arrangement
+                : PatchBoundaryAuthority.IntersectionFlags,
+            auto.SelectedPatchBoundaryAuthority);
     }
 
     [Fact]
@@ -129,6 +135,7 @@ public class CsgPatchExtractionModeTests
 
         Assert.True(result.IntersectionSegmentCount > 0);
         Assert.Equal(PatchExtractionMode.Arrangement, result.SelectedPatchExtractionMode);
+        Assert.Equal(PatchBoundaryAuthority.Arrangement, result.SelectedPatchBoundaryAuthority);
     }
 
     private static bool IsBetter(CsgResult a, CsgResult b)

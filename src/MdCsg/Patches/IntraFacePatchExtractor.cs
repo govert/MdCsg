@@ -87,6 +87,10 @@ public static class IntraFacePatchExtractor
             }
         }
 
+        PatchIdentityAssigner.Assign(
+            patches,
+            subTriangles,
+            PatchBoundaryAuthority.IntersectionFlags);
         return patches;
     }
 

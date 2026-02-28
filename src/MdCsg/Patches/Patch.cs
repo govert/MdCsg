@@ -1,3 +1,4 @@
+using System;
 using MdCsg.Math;
 
 namespace MdCsg.Patches;
@@ -31,6 +32,15 @@ public class Patch
 
     /// <summary>Whether this patch has a valid confident point.</summary>
     public bool HasConfidentPoint { get; set; }
+
+    /// <summary>Deterministic stable identifier for this patch within an extraction run.</summary>
+    public ulong StableId { get; set; }
+
+    /// <summary>Authoritative boundary source used during extraction.</summary>
+    public PatchBoundaryAuthority BoundaryAuthority { get; set; } = PatchBoundaryAuthority.IntersectionFlags;
+
+    /// <summary>Sorted original face indices that contributed triangles to this patch.</summary>
+    public IReadOnlyList<int> SourceFaceIndices { get; set; } = Array.Empty<int>();
 
     /// <summary>The original mesh this patch belongs to (0 = mesh A, 1 = mesh B).</summary>
     public int SourceMesh { get; set; }

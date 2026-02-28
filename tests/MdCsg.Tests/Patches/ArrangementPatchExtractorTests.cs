@@ -32,6 +32,14 @@ public class ArrangementPatchExtractorTests
         var patches = ArrangementPatchExtractor.Extract(subTriangles, faceSegments);
 
         Assert.Equal(2, patches.Count);
+        Assert.All(
+            patches,
+            p =>
+            {
+                Assert.Equal(PatchBoundaryAuthority.Arrangement, p.BoundaryAuthority);
+                Assert.NotEqual(0UL, p.StableId);
+                Assert.Equal([0], p.SourceFaceIndices);
+            });
     }
 
     [Fact]
@@ -53,6 +61,9 @@ public class ArrangementPatchExtractorTests
 
         Assert.Single(patches);
         Assert.Equal(2, patches[0].SubTriangleIndices.Count);
+        Assert.Equal(PatchBoundaryAuthority.Arrangement, patches[0].BoundaryAuthority);
+        Assert.NotEqual(0UL, patches[0].StableId);
+        Assert.Equal([0], patches[0].SourceFaceIndices);
     }
 
     [Fact]
@@ -89,6 +100,9 @@ public class ArrangementPatchExtractorTests
         for (int i = 0; i < first.Count; i++)
         {
             Assert.Equal(first[i].Id, second[i].Id);
+            Assert.Equal(first[i].StableId, second[i].StableId);
+            Assert.Equal(first[i].BoundaryAuthority, second[i].BoundaryAuthority);
+            Assert.Equal(first[i].SourceFaceIndices, second[i].SourceFaceIndices);
             Assert.Equal(
                 first[i].SubTriangleIndices.OrderBy(static x => x),
                 second[i].SubTriangleIndices.OrderBy(static x => x));

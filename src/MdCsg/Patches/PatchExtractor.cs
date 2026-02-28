@@ -55,6 +55,10 @@ public static class PatchExtractor
             }
         }
 
+        PatchIdentityAssigner.Assign(
+            patches,
+            subTriangles,
+            PatchBoundaryAuthority.IntersectionFlags);
         return patches;
     }
 }

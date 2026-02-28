@@ -33,7 +33,12 @@ public static class ArrangementPatchExtractor
             return [];
 
         var adjacency = BuildArrangementAwareAdjacency(subTriangles, faceSegments, tolerance);
-        return FloodFill(adjacency);
+        var patches = FloodFill(adjacency);
+        PatchIdentityAssigner.Assign(
+            patches,
+            subTriangles,
+            PatchBoundaryAuthority.Arrangement);
+        return patches;
     }
 
     private static List<(int Neighbor, bool IsBoundary)>[] BuildArrangementAwareAdjacency(

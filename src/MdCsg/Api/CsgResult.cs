@@ -1,4 +1,5 @@
 using MdCsg.Mesh;
+using MdCsg.Patches;
 
 namespace MdCsg.Api;
 
@@ -41,6 +42,11 @@ public class CsgResult
     /// Connected component count of the stitched assembly candidate selected before final post-processing.
     /// </summary>
     public int? SelectedPatchExtractionConnectedComponentCount { get; init; }
+
+    /// <summary>
+    /// Boundary ownership authority used by the selected patch extraction mode.
+    /// </summary>
+    public PatchBoundaryAuthority? SelectedPatchBoundaryAuthority { get; init; }
 
     /// <summary>
     /// Deterministic candidate signatures considered by the patch-extraction selector.
