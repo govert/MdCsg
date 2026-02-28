@@ -52,6 +52,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int reconstructionUnmatchedUndirectedEdgeCount = 0;
         int reconstructionNonManifoldUndirectedEdgeCount = 0;
         int reconstructionDroppedComponentCount = 0;
+        int classificationFallbackCount = 0;
         var reconstructionCertificates = new List<string>();
         var stageCertificates = new List<string>();
         MeshInvariantSnapshot inputAInvariant = default;
@@ -180,6 +181,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     triangulationNativeFailureWorkBudgetExceededCount,
                     SummarizeFallbackSignatures(triangulationNativeFailureSignatureCounts),
                     SummarizeFallbackSignatures(triangulationNativeFailureCodeCounts),
+                    classificationFallbackCount,
                     reconstructionBoundaryHalfEdgeCount,
                     reconstructionOpenBoundaryLoopCount,
                     reconstructionUnmatchedUndirectedEdgeCount,
@@ -307,6 +309,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         };
         opSw.Stop();
 
+        classificationFallbackCount = result.DegenerateCount;
+        int classifiedPatchCount = result.PatchCountA + result.PatchCountB;
+        int classifiedCertifiedCount = System.Math.Max(0, classifiedPatchCount - classificationFallbackCount);
+
         if (result.SelectedPatchExtractionMode.HasValue)
         {
             stageCertificates.Add(
@@ -315,6 +321,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 + $"manifold={(result.SelectedPatchExtractionIsEdgeManifold == true ? 1 : 0)};"
                 + $"components={result.SelectedPatchExtractionConnectedComponentCount.GetValueOrDefault(-1)}");
         }
+        stageCertificates.Add(
+            $"classification:pass;certified={classifiedCertifiedCount};"
+            + $"fallback={classificationFallbackCount};policy=margin>errorBound");
 
         result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
         result = ReconstructOutputTopology(result, csgOptions.WeldTolerance, out reconstructionDroppedComponentCount);
@@ -524,6 +533,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 triangulationNativeFailureWorkBudgetExceededCount,
                 SummarizeFallbackSignatures(triangulationNativeFailureSignatureCounts),
                 SummarizeFallbackSignatures(triangulationNativeFailureCodeCounts),
+                classificationFallbackCount,
                 reconstructionBoundaryHalfEdgeCount,
                 reconstructionOpenBoundaryLoopCount,
                 reconstructionUnmatchedUndirectedEdgeCount,
@@ -994,6 +1004,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int triangulationNativeFailureWorkBudgetExceededCount,
         IReadOnlyList<string> triangulationNativeFailureSignatures,
         IReadOnlyList<string> triangulationNativeFailureCodes,
+        int classificationFallbackCount,
         int reconstructionBoundaryHalfEdgeCount,
         int reconstructionOpenBoundaryLoopCount,
         int reconstructionUnmatchedUndirectedEdgeCount,
@@ -1041,7 +1052,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             ReconstructionDroppedComponentCount = reconstructionDroppedComponentCount,
             ReconstructionInvariantCertificates = reconstructionInvariantCertificates,
             StageInvariantCertificates = stageInvariantCertificates,
-            ClassificationFallbackCount = 0
+            ClassificationFallbackCount = classificationFallbackCount
         };
     }
 

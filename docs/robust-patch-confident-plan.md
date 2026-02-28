@@ -132,6 +132,7 @@ Current status:
 - Upstream CSG now supports deterministic patch extraction policy control (`Auto`, `IntraFace`, `Global`) and strict-mode topology-preserving arbitration in `Auto` mode.
 - CSG operation results now emit selected patch-extraction telemetry (mode, stitched boundary count, manifold flag, connected components), and strict robust diagnostics mirror this as `patch-extraction:*` stage certificates.
 - Strict robust bridge now includes arrangement-owned boundary classification as a third patch-extraction candidate (alongside intra-face/global) in deterministic topology-preserving selection.
+- Patch classification now records explicit certification telemetry (`classification:pass;certified=...;fallback=...`) and surfaces exact-fallback counts in robust diagnostics.
 
 ## M3 - Robust Triangulation and Patch Extraction
 

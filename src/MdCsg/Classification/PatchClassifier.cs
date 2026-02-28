@@ -29,12 +29,16 @@ public static class PatchClassifier
         IPointClassifier classifier)
     {
         int degenerateCount = 0;
+        double errorBound = DegenerateMarginThreshold;
 
         foreach (var patch in patches)
         {
             var (confidentPoint, margin) = ConfidentPoint.FindConfidentPoint(patch, subTriangles, classifier);
             patch.ConfidentPoint = confidentPoint;
-            patch.HasConfidentPoint = margin > DegenerateMarginThreshold;
+            patch.ClassificationMargin = margin;
+            patch.ClassificationErrorBound = errorBound;
+            patch.IsClassificationCertified = margin > errorBound;
+            patch.HasConfidentPoint = patch.IsClassificationCertified;
 
             if (!patch.HasConfidentPoint)
                 degenerateCount++;
@@ -74,10 +78,11 @@ public static class PatchClassifier
         bool useWindingNumber)
     {
         int degenerateCount = 0;
+        double errorBound = ComputeCertificationErrorBound(otherBvh);
 
         foreach (var patch in patches)
         {
-            ClassifyPatch(patch, subTriangles, otherBvh, useWindingNumber);
+            ClassifyPatch(patch, subTriangles, otherBvh, useWindingNumber, errorBound);
             if (!patch.HasConfidentPoint)
                 degenerateCount++;
         }
@@ -92,11 +97,12 @@ public static class PatchClassifier
         bool useWindingNumber)
     {
         int degenerateCount = 0;
+        double errorBound = ComputeCertificationErrorBound(otherBvh);
 
         System.Threading.Tasks.Parallel.For(0, patches.Count, () => 0, (i, _, localDeg) =>
         {
             var patch = patches[i];
-            ClassifyPatch(patch, subTriangles, otherBvh, useWindingNumber);
+            ClassifyPatch(patch, subTriangles, otherBvh, useWindingNumber, errorBound);
             if (!patch.HasConfidentPoint)
                 localDeg++;
             return localDeg;
@@ -109,11 +115,15 @@ public static class PatchClassifier
         Patch patch,
         IReadOnlyList<FaceCutter.SubTriangle> subTriangles,
         BvhTree otherBvh,
-        bool useWindingNumber)
+        bool useWindingNumber,
+        double errorBound)
     {
         var (confidentPoint, margin) = ConfidentPoint.FindConfidentPoint(patch, subTriangles, otherBvh);
         patch.ConfidentPoint = confidentPoint;
-        patch.HasConfidentPoint = margin > DegenerateMarginThreshold;
+        patch.ClassificationMargin = margin;
+        patch.ClassificationErrorBound = errorBound;
+        patch.IsClassificationCertified = margin > errorBound;
+        patch.HasConfidentPoint = patch.IsClassificationCertified;
 
         if (!patch.HasConfidentPoint)
         {
@@ -128,6 +138,17 @@ public static class PatchClassifier
             : RayCastClassifier.Classify(confidentPoint, otherBvh);
 
         patch.IsInside = classification == SolidClassification.Inside;
+    }
+
+    private static double ComputeCertificationErrorBound(BvhTree otherBvh)
+    {
+        if (otherBvh.NodeCount == 0)
+            return DegenerateMarginThreshold;
+
+        var bounds = otherBvh.Mesh.GetBounds();
+        double sceneScale = System.Math.Max(1.0, bounds.Size.Length);
+        double fpBound = sceneScale * 1e-12;
+        return System.Math.Max(DegenerateMarginThreshold, fpBound);
     }
 }
 

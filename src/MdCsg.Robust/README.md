@@ -26,6 +26,7 @@ Initial scaffold now exists:
 - `LegacyBridgedRobustCsgEngine` (transitional bridge + validation diagnostics)
   - can route face-cut triangulation through `Kernel/Triangulation/RobustConstrainedTriangulator` via `CsgOptions.TriangulationKernel`
   - emits triangulation telemetry (invocation/native/fallback/dropped-degenerate counts, fallback reason buckets, fallback signature samples)
+  - emits classification certification telemetry (certified vs exact-fallback patch counts) via `classification:*` stage certificates and diagnostics fallback counters
   - emits reconstruction telemetry (boundary/open-loop/unmatched/non-manifold counts + reconstruction certificates)
   - reconstruction metrics are computed via deterministic boundary-incidence accounting in `MeshStitcher.AnalyzeBoundaryIncidence`
   - strict bridge path uses a deterministic constructive reconstruction pass (relink, balanced-loop fill, invalid-component pruning)

@@ -17,6 +17,15 @@ public class Patch
     /// <summary>The "most confident" point for classification (max margin from other solid's faces).</summary>
     public Vec3 ConfidentPoint { get; set; }
 
+    /// <summary>Margin at the selected confident point.</summary>
+    public double ClassificationMargin { get; set; }
+
+    /// <summary>Error bound used for certification at classification time.</summary>
+    public double ClassificationErrorBound { get; set; }
+
+    /// <summary>True when <see cref="ClassificationMargin"/> is certified above <see cref="ClassificationErrorBound"/>.</summary>
+    public bool IsClassificationCertified { get; set; }
+
     /// <summary>Classification result: true = inside the other solid.</summary>
     public bool? IsInside { get; set; }
 
