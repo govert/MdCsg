@@ -42,6 +42,11 @@ public class CsgResult
     /// </summary>
     public int? SelectedPatchExtractionConnectedComponentCount { get; init; }
 
+    /// <summary>
+    /// Deterministic candidate signatures considered by the patch-extraction selector.
+    /// </summary>
+    public IReadOnlyList<string> PatchExtractionCandidateSignatures { get; init; } = Array.Empty<string>();
+
     /// <summary>Total number of faces in the result.</summary>
     public int FaceCount => Mesh.Faces.Count;
 

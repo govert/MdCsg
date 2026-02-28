@@ -136,6 +136,7 @@ public static class Csg
         var extractionMode = ResolveExtractionMode(options.PatchExtractionMode, intersections.Segments.Count > 0);
 
         AssemblyCandidate chosen;
+        IReadOnlyList<string> candidateSignatures;
         if (options.PatchExtractionMode == PatchExtractionMode.Auto
             && options.PreferTopologyPreservingPatchExtraction
             && intersections.Segments.Count > 0)
@@ -177,11 +178,14 @@ public static class Csg
                 operation,
                 options);
 
+            var candidates = new[] { intra, global, arrangement };
             chosen = intra;
             if (IsBetterTopologyQuality(global.TopologyQuality, chosen.TopologyQuality))
                 chosen = global;
             if (IsBetterTopologyQuality(arrangement.TopologyQuality, chosen.TopologyQuality))
                 chosen = arrangement;
+
+            candidateSignatures = BuildCandidateSignatures(candidates);
         }
         else
         {
@@ -197,6 +201,8 @@ public static class Csg
                 b,
                 operation,
                 options);
+
+            candidateSignatures = BuildCandidateSignatures([chosen]);
         }
 
         // Step 6: Stitch into output mesh
@@ -225,7 +231,8 @@ public static class Csg
             SelectedPatchExtractionMode = chosen.ExtractionMode,
             SelectedPatchExtractionBoundaryEdgeCount = chosen.TopologyQuality.BoundaryEdgeCount,
             SelectedPatchExtractionIsEdgeManifold = chosen.TopologyQuality.IsEdgeManifold,
-            SelectedPatchExtractionConnectedComponentCount = chosen.TopologyQuality.ConnectedComponentCount
+            SelectedPatchExtractionConnectedComponentCount = chosen.TopologyQuality.ConnectedComponentCount,
+            PatchExtractionCandidateSignatures = candidateSignatures
         };
     }
 
@@ -551,6 +558,33 @@ public static class Csg
             return a.ConnectedComponentCount < b.ConnectedComponentCount;
 
         return false;
+    }
+
+    private static IReadOnlyList<string> BuildCandidateSignatures(
+        IReadOnlyList<AssemblyCandidate> candidates)
+    {
+        var ordered = new List<AssemblyCandidate>(candidates.Count);
+        for (int i = 0; i < candidates.Count; i++)
+            ordered.Add(candidates[i]);
+        ordered.Sort(static (x, y) => x.ExtractionMode.CompareTo(y.ExtractionMode));
+
+        var signatures = new string[ordered.Count];
+        for (int i = 0; i < ordered.Count; i++)
+            signatures[i] = BuildCandidateSignature(ordered[i]);
+        return signatures;
+    }
+
+    private static string BuildCandidateSignature(AssemblyCandidate candidate)
+    {
+        int degenerateTotal = candidate.DegenerateCountA + candidate.DegenerateCountB;
+        return $"{candidate.ExtractionMode}:"
+            + $"boundary={candidate.TopologyQuality.BoundaryEdgeCount};"
+            + $"manifold={(candidate.TopologyQuality.IsEdgeManifold ? 1 : 0)};"
+            + $"components={candidate.TopologyQuality.ConnectedComponentCount};"
+            + $"patchA={candidate.PatchCountA};"
+            + $"patchB={candidate.PatchCountB};"
+            + $"deg={degenerateTotal};"
+            + $"tri={candidate.Assembly.Triangles.Count}";
     }
 
     private static HalfEdgeMesh PruneFragmentComponents(HalfEdgeMesh mesh, double weldTolerance)

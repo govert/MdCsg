@@ -75,6 +75,47 @@ public class CsgPatchExtractionModeTests
     }
 
     [Fact]
+    public void TopologyPreservingAutoSelection_EmitsDeterministicCandidateSignatures()
+    {
+        var y = new Vec3(0, 1, 0);
+        var sphere = Primitives.Sphere(Vec3.Zero, 1.3, 3);
+        var box = Primitives.Cube(Vec3.Zero, 1.8);
+        var cylX = Primitives.Cylinder(new Vec3(-1.5, 0, 0), new Vec3(1, 0, 0), 0.5, 3.0);
+        var cylY = Primitives.Cylinder(new Vec3(0, -1.5, 0), y, 0.5, 3.0);
+
+        var step1 = Csg.Intersect(sphere, box, new CsgOptions { Parallel = false });
+        var step2 = Csg.Difference(new Solid(step1.Mesh), cylX, new CsgOptions { Parallel = false });
+        var step2Solid = new Solid(step2.Mesh);
+
+        var baseline = Csg.Difference(step2Solid, cylY, new CsgOptions
+        {
+            Parallel = false,
+            PatchExtractionMode = PatchExtractionMode.Auto,
+            PreferTopologyPreservingPatchExtraction = true
+        });
+
+        Assert.Equal(3, baseline.PatchExtractionCandidateSignatures.Count);
+        Assert.Contains(baseline.PatchExtractionCandidateSignatures, static s => s.StartsWith("IntraFace:", StringComparison.Ordinal));
+        Assert.Contains(baseline.PatchExtractionCandidateSignatures, static s => s.StartsWith("Global:", StringComparison.Ordinal));
+        Assert.Contains(baseline.PatchExtractionCandidateSignatures, static s => s.StartsWith("Arrangement:", StringComparison.Ordinal));
+        Assert.Contains(
+            baseline.PatchExtractionCandidateSignatures,
+            s => s.StartsWith($"{baseline.SelectedPatchExtractionMode}:", StringComparison.Ordinal));
+
+        for (int i = 0; i < 3; i++)
+        {
+            var next = Csg.Difference(step2Solid, cylY, new CsgOptions
+            {
+                Parallel = false,
+                PatchExtractionMode = PatchExtractionMode.Auto,
+                PreferTopologyPreservingPatchExtraction = true
+            });
+
+            Assert.Equal(baseline.PatchExtractionCandidateSignatures, next.PatchExtractionCandidateSignatures);
+        }
+    }
+
+    [Fact]
     public void ExplicitArrangementMode_ReportsArrangementSelection()
     {
         var a = Primitives.Cube(Vec3.Zero, 2.0);

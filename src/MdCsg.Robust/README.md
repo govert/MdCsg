@@ -64,4 +64,5 @@ Current conformance snapshot:
 - Showcase parity:
   - `CsgOperations` strict mode is closed + zero-fallback,
   - `ChainedCsg` step-2 strict mode is closed + zero-fallback,
-  - `ChainedCsg` step-3 strict mode currently has an active fail-closed repro asserting reconstruction/output invariant failure with zero triangulation fallback.
+  - `ChainedCsg` step-3 strict mode currently has an active fail-closed repro asserting reconstruction/output invariant failure with zero triangulation fallback,
+  - step-3 now emits deterministic `patch-extraction-candidates:*` certificates (IntraFace/Global/Arrangement signatures) so unresolved topology signatures are tracked across runs.

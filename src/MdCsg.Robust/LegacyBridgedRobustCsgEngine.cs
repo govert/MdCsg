@@ -324,6 +324,12 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 + $"manifold={(result.SelectedPatchExtractionIsEdgeManifold == true ? 1 : 0)};"
                 + $"components={result.SelectedPatchExtractionConnectedComponentCount.GetValueOrDefault(-1)}");
         }
+        if (result.PatchExtractionCandidateSignatures.Count > 0)
+        {
+            stageCertificates.Add(
+                "patch-extraction-candidates:"
+                + string.Join("|", result.PatchExtractionCandidateSignatures));
+        }
         stageCertificates.Add(
             $"classification:pass;certified={classifiedCertifiedCount};"
             + $"fallback={classificationFallbackCount};policy=margin>errorBound");
@@ -705,7 +711,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             SelectedPatchExtractionMode = result.SelectedPatchExtractionMode,
             SelectedPatchExtractionBoundaryEdgeCount = result.SelectedPatchExtractionBoundaryEdgeCount,
             SelectedPatchExtractionIsEdgeManifold = result.SelectedPatchExtractionIsEdgeManifold,
-            SelectedPatchExtractionConnectedComponentCount = result.SelectedPatchExtractionConnectedComponentCount
+            SelectedPatchExtractionConnectedComponentCount = result.SelectedPatchExtractionConnectedComponentCount,
+            PatchExtractionCandidateSignatures = result.PatchExtractionCandidateSignatures
         };
     }
 
@@ -998,7 +1005,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             SelectedPatchExtractionMode = source.SelectedPatchExtractionMode,
             SelectedPatchExtractionBoundaryEdgeCount = source.SelectedPatchExtractionBoundaryEdgeCount,
             SelectedPatchExtractionIsEdgeManifold = source.SelectedPatchExtractionIsEdgeManifold,
-            SelectedPatchExtractionConnectedComponentCount = source.SelectedPatchExtractionConnectedComponentCount
+            SelectedPatchExtractionConnectedComponentCount = source.SelectedPatchExtractionConnectedComponentCount,
+            PatchExtractionCandidateSignatures = source.PatchExtractionCandidateSignatures
         };
     }
 

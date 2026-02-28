@@ -119,8 +119,10 @@ public static class ArrangementPatchExtractor
 
         var faceBoundaryCache = new Dictionary<(int FaceIndex, int V0, int V1), bool>();
 
-        foreach (var (edgeKey, refs) in edgeMap)
+        foreach (var kvp in edgeMap)
         {
+            var edgeKey = kvp.Key;
+            var refs = kvp.Value;
             bool isBoundary = refs.Any(static r => r.IsTaggedIntersectionEdge);
             if (!isBoundary)
             {
