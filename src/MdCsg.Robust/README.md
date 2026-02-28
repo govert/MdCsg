@@ -65,10 +65,15 @@ Current conformance snapshot:
 - `tests/MdCsg.Robust.Conformance` currently runs green in the robustness gate slices (no known skipped gate cases).
 - CI rescue bar entrypoint is `tools/ci/run-robustness-gate.ps1` (wired to `.github/workflows/robustness-gate.yml`).
   - gate runner now retries a slice once when test-host crash/abort markers are detected, and fails hard if the retry is not clean
-  - gate slices: showcase/backlog/replay, strict fuzz smoke, triangulation+smoke+reconstruction+algebraic+differential guardrails (with hang-timeout protection)
+  - gate slices: showcase/backlog/replay, strict fuzz smoke, triangulation+smoke+reconstruction+algebraic+differential+dependency+shadow+readiness+budget guardrails (with hang-timeout protection)
+- strict readiness snapshot entrypoint is `tools/ci/run-robust-readiness-report.ps1` (reports blocker status + stable-corpus health).
+- deterministic performance budget entrypoint is `tools/ci/run-robust-performance-budget.ps1`.
 - Stable-overlap and smoke union zero-fallback checks are active and passing.
 - Seeded strict fuzz smoke tests are active and passing with deterministic seeds.
 - Stable-case differential parity tests are active (`RobustDifferentialParityTests`) and assert robust boundary dominance against legacy plus bounded relative-volume drift for legacy-closed outputs.
+- Kernel dependency accretion is guarded by `RobustKernelDependencyGuardTests` to prevent new legacy couplings in `src/MdCsg.Robust/Kernel`.
+- Shadow rollout divergence classification is guarded by `RobustShadowRolloutTests`.
+- Robust showcase now defaults to robust-strict execution with explicit `--legacy-csg` opt-out (and transparent legacy failover on robust failure).
 - Showcase parity:
   - `CsgOperations` strict mode is closed + zero-fallback,
   - `ChainedCsg` step-2 strict mode is closed + zero-fallback,

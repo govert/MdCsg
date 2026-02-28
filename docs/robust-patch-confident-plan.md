@@ -145,6 +145,15 @@ Current status:
 - Reconstruction now applies arrangement-edge-guided boundary snapping (`arrEdgeSnap`) in addition to arrangement-vertex snapping before boundary repair.
 - Strict robust diagnostics now emit reconstruction policy certificates (`reconstruction-policy:*`) with operation-aware truth-table checks on source/flip accounting.
 - Added stable-case differential parity conformance (`RobustDifferentialParityTests`) comparing strict robust vs legacy outputs with robust boundary dominance checks and bounded relative volume drift on legacy-closed outputs.
+- Chained step-3 blocker conformance now pins candidate signature structure and `reconstruction-pre`/`reconstruction` contract tags in showcase parity tests.
+- Patch confident-point candidate evaluation is now deterministically bounded for large patches, reducing strict-step runtime blowups while preserving fail-closed classification.
+- Reconstruction stage now emits explicit `reconstruction-pre:*` certificates and enforces a strict non-worsening contract (`nonWorse`) across boundary/unmatched/non-manifold/component-invalid metrics.
+- Added strict readiness snapshot coverage (`RobustReadinessSnapshotTests`) and CI report entrypoint (`tools/ci/run-robust-readiness-report.ps1`).
+- Added shadow rollout divergence harness (`RobustShadowRolloutTests`) that fails on unclassified robust-vs-legacy divergences in stable corpus.
+- Added deterministic performance budget conformance (`RobustPerformanceBudgetTests`) and CI entrypoint (`tools/ci/run-robust-performance-budget.ps1`).
+- Added robust-kernel dependency guard coverage (`RobustKernelDependencyGuardTests`) to freeze current allowed legacy couplings in `src/MdCsg.Robust/Kernel`.
+- Showcase runtime now defaults to robust-strict CSG with explicit `--legacy-csg` opt-out and transparent legacy failover on robust failure.
+- Rescue-bar gate slice 3 now includes reconstruction/algebraic/differential plus dependency/shadow/readiness/performance guardrail suites.
 
 ## M3 - Robust Triangulation and Patch Extraction
 
@@ -209,9 +218,7 @@ Parallel streams:
 3. Move patch extraction in the robust path from legacy mesh-adjacency flood fill toward arrangement-boundary-native extraction with stable patch IDs.
 4. Add replay corpus files for remaining step-3 artifact signatures and enforce deterministic conformance expectations in CI.
 
-## 6. Stage Batch Draft (38-42)
-
-Planning-only draft. No implementation is started by this section.
+## 6. Stage Batch (38-42) Execution
 
 ## Stage 38 - Robust Kernel API Freeze
 
@@ -225,6 +232,7 @@ Exit criteria:
 
 - Robust kernel modules compile and run conformance suites without introducing new legacy references.
 - Interface changes require explicit plan/doc updates before merge.
+- Status: Completed (`RobustKernelDependencyGuardTests`).
 
 ## Stage 39 - Default-Mode Shadow Rollout
 
@@ -238,6 +246,7 @@ Exit criteria:
 
 - Shadow mode runs on gate corpus with deterministic outputs.
 - Every divergence is either resolved or mapped to a checked-in, versioned exception class.
+- Status: Completed (`RobustShadowRolloutTests`).
 
 ## Stage 40 - Performance Floor and Deterministic Budgets
 
@@ -251,6 +260,7 @@ Exit criteria:
 
 - Robust gate includes budget assertions with deterministic tolerances.
 - Budget overruns surface structured diagnostics and never bypass invariants.
+- Status: Completed (`RobustPerformanceBudgetTests`, `tools/ci/run-robust-performance-budget.ps1`).
 
 ## Stage 41 - Strict-by-Default Switch Preparation
 
@@ -264,6 +274,7 @@ Exit criteria:
 
 - Default invocation paths use robust strict mode end-to-end.
 - Legacy path remains available only behind explicit configuration.
+- Status: Completed for showcase/runtime harness (`ShowcaseCsg`, `--legacy-csg` opt-out).
 
 ## Stage 42 - Legacy Critical Path Decommission
 
@@ -277,6 +288,7 @@ Exit criteria:
 
 - Production path has no runtime dependency on legacy boolean assembly.
 - Differential harness remains green and usable as long-term regression protection.
+- Status: In progress/partial. Legacy remains as reference/failover where blockers persist; CI readiness and performance/dependency/shadow gates are now active.
 
 ## 7. Risks and Mitigations
 
