@@ -142,6 +142,7 @@ Current status:
 - Reconstruction certificates/diagnostics now include deterministic component-level validity accounting (`components`, `invalidComponents`) with strict error surfacing for invalid reconstructed components.
 - Rescue-bar gate slice 3 now explicitly includes reconstruction-incidence and algebraic conformance suites alongside triangulation/smoke guardrails.
 - Added explicit conformance coverage for the formerly failing `partition/split-failure` triangulation signature class, now expected to succeed natively with preserved constraint edges.
+- Reconstruction now applies arrangement-edge-guided boundary snapping (`arrEdgeSnap`) in addition to arrangement-vertex snapping before boundary repair.
 
 ## M3 - Robust Triangulation and Patch Extraction
 

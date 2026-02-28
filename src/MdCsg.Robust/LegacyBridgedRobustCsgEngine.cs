@@ -54,6 +54,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int reconstructionNonManifoldUndirectedEdgeCount = 0;
         int reconstructionDroppedComponentCount = 0;
         int reconstructionArrangementSnapCount = 0;
+        int reconstructionArrangementEdgeSnapCount = 0;
         int reconstructionComponentCount = 0;
         int reconstructionInvalidComponentCount = 0;
         int classificationFallbackCount = 0;
@@ -192,6 +193,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     reconstructionNonManifoldUndirectedEdgeCount,
                     reconstructionDroppedComponentCount,
                     reconstructionArrangementSnapCount,
+                    reconstructionArrangementEdgeSnapCount,
                     reconstructionComponentCount,
                     reconstructionInvalidComponentCount,
                     reconstructionCertificates.ToArray(),
@@ -345,7 +347,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             csgOptions.WeldTolerance,
             arrangement,
             out reconstructionDroppedComponentCount,
-            out reconstructionArrangementSnapCount);
+            out reconstructionArrangementSnapCount,
+            out reconstructionArrangementEdgeSnapCount);
         result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
         var reconstructionInvariant = AnalyzeReconstructionTopology(result.Mesh);
         reconstructionBoundaryHalfEdgeCount = reconstructionInvariant.BoundaryHalfEdgeCount;
@@ -456,6 +459,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"oriented={(reconstructionInvariant.IsConsistentlyOriented ? 1 : 0)};"
             + $"dropped={reconstructionDroppedComponentCount};"
             + $"arrSnap={reconstructionArrangementSnapCount};"
+            + $"arrEdgeSnap={reconstructionArrangementEdgeSnapCount};"
             + $"components={reconstructionComponentCount};"
             + $"invalidComponents={reconstructionInvalidComponentCount}";
         reconstructionCertificates.Add(reconstructionCertificate);
@@ -575,6 +579,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 reconstructionNonManifoldUndirectedEdgeCount,
                 reconstructionDroppedComponentCount,
                 reconstructionArrangementSnapCount,
+                reconstructionArrangementEdgeSnapCount,
                 reconstructionComponentCount,
                 reconstructionInvalidComponentCount,
                 reconstructionCertificates.ToArray(),
@@ -777,10 +782,12 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         double weldTolerance,
         ArrangementGraph? arrangement,
         out int droppedComponentCount,
-        out int arrangementSnapCount)
+        out int arrangementSnapCount,
+        out int arrangementEdgeSnapCount)
     {
         droppedComponentCount = 0;
         arrangementSnapCount = 0;
+        arrangementEdgeSnapCount = 0;
         var mesh = result.Mesh;
         if (mesh.Faces.Count == 0)
             return result;
@@ -798,7 +805,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
 
             double tol = baseTolerance * (1 << pass);
             if (arrangement != null && arrangement.Vertices.Count > 0)
+            {
                 arrangementSnapCount += SnapBoundaryVerticesToArrangement(mesh, arrangement, tol);
+                arrangementEdgeSnapCount += SnapBoundaryVerticesToArrangementEdges(mesh, arrangement, tol);
+            }
             MeshStitcher.RepairBoundary(mesh, tol);
             MeshStitcher.RelinkBoundaryTwinsDeterministic(mesh);
 
@@ -829,16 +839,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         if (tolerance <= 0 || arrangement.Vertices.Count == 0)
             return 0;
 
-        var boundaryVertices = new Dictionary<int, Vertex>();
-        foreach (var he in mesh.HalfEdges)
-        {
-            if (he.Twin != null)
-                continue;
-
-            boundaryVertices[he.Origin.Id] = he.Origin;
-            boundaryVertices[he.Target.Id] = he.Target;
-        }
-
+        var boundaryVertices = CollectBoundaryVertices(mesh);
         if (boundaryVertices.Count == 0)
             return 0;
 
@@ -852,7 +853,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         double tolSq = tolerance * tolerance;
         int snapped = 0;
 
-        foreach (var vertex in boundaryVertices.Values.OrderBy(static v => v.Id))
+        foreach (var vertex in boundaryVertices)
         {
             int bestIndex = -1;
             double bestDistSq = tolSq;
@@ -878,6 +879,117 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         }
 
         return snapped;
+    }
+
+    private static int SnapBoundaryVerticesToArrangementEdges(
+        HalfEdgeMesh mesh,
+        ArrangementGraph arrangement,
+        double tolerance)
+    {
+        if (tolerance <= 0 || arrangement.Edges.Count == 0 || arrangement.Vertices.Count == 0)
+            return 0;
+
+        var boundaryVertices = CollectBoundaryVertices(mesh);
+        if (boundaryVertices.Count == 0)
+            return 0;
+
+        var vertexPositions = arrangement.Vertices
+            .OrderBy(static v => v.Id)
+            .ToDictionary(static v => v.Id, static v => v.Position);
+        var edgeSegments = arrangement.Edges
+            .Where(static e => !e.IsDegenerate)
+            .OrderBy(static e => e.Id)
+            .Select(e =>
+            {
+                if (!vertexPositions.TryGetValue(e.StartVertexId, out var start)
+                    || !vertexPositions.TryGetValue(e.EndVertexId, out var end))
+                    return ((Vec3 Start, Vec3 End)?)null;
+                return (start, end);
+            })
+            .Where(static s => s.HasValue)
+            .Select(static s => s!.Value)
+            .ToArray();
+
+        if (edgeSegments.Length == 0)
+            return 0;
+
+        double tolSq = tolerance * tolerance;
+        int snapped = 0;
+
+        foreach (var vertex in boundaryVertices)
+        {
+            var original = vertex.Position;
+            Vec3 bestPoint = original;
+            double bestDistSq = tolSq;
+
+            for (int i = 0; i < edgeSegments.Length; i++)
+            {
+                var segment = edgeSegments[i];
+                if (!TryProjectPointToSegment(
+                    original,
+                    segment.Start,
+                    segment.End,
+                    out var projected))
+                {
+                    continue;
+                }
+
+                double distSq = Vec3.DistanceSquared(original, projected);
+                if (distSq > bestDistSq || distSq == 0)
+                    continue;
+
+                bestDistSq = distSq;
+                bestPoint = projected;
+            }
+
+            if (bestDistSq < tolSq)
+            {
+                vertex.Position = bestPoint;
+                snapped++;
+            }
+        }
+
+        return snapped;
+    }
+
+    private static List<Vertex> CollectBoundaryVertices(HalfEdgeMesh mesh)
+    {
+        var boundaryVertices = new Dictionary<int, Vertex>();
+        foreach (var he in mesh.HalfEdges)
+        {
+            if (he.Twin != null)
+                continue;
+
+            boundaryVertices[he.Origin.Id] = he.Origin;
+            boundaryVertices[he.Target.Id] = he.Target;
+        }
+
+        if (boundaryVertices.Count == 0)
+            return [];
+
+        return boundaryVertices.Values
+            .OrderBy(static v => v.Id)
+            .ToList();
+    }
+
+    private static bool TryProjectPointToSegment(
+        Vec3 point,
+        Vec3 segStart,
+        Vec3 segEnd,
+        out Vec3 projected)
+    {
+        var dir = segEnd - segStart;
+        double lenSq = dir.LengthSquared;
+        if (lenSq <= 1e-24)
+        {
+            projected = segStart;
+            return false;
+        }
+
+        double t = Vec3.Dot(point - segStart, dir) / lenSq;
+        t = System.Math.Max(0.0, System.Math.Min(1.0, t));
+        projected = segStart + dir * t;
+        return true;
     }
 
     private static bool IsMeshClosedOrientedAndManifold(HalfEdgeMesh mesh)
@@ -1180,6 +1292,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int reconstructionNonManifoldUndirectedEdgeCount,
         int reconstructionDroppedComponentCount,
         int reconstructionArrangementSnapCount,
+        int reconstructionArrangementEdgeSnapCount,
         int reconstructionComponentCount,
         int reconstructionInvalidComponentCount,
         IReadOnlyList<string> reconstructionInvariantCertificates,
@@ -1223,6 +1336,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             ReconstructionNonManifoldUndirectedEdgeCount = reconstructionNonManifoldUndirectedEdgeCount,
             ReconstructionDroppedComponentCount = reconstructionDroppedComponentCount,
             ReconstructionArrangementSnapCount = reconstructionArrangementSnapCount,
+            ReconstructionArrangementEdgeSnapCount = reconstructionArrangementEdgeSnapCount,
             ReconstructionComponentCount = reconstructionComponentCount,
             ReconstructionInvalidComponentCount = reconstructionInvalidComponentCount,
             ReconstructionInvariantCertificates = reconstructionInvariantCertificates,

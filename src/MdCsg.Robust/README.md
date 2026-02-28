@@ -29,6 +29,7 @@ Initial scaffold now exists:
   - emits classification certification telemetry (certified vs exact-fallback patch counts) via `classification:*` stage certificates and diagnostics fallback counters
   - emits reconstruction telemetry (boundary/open-loop/unmatched/non-manifold counts + reconstruction certificates)
   - reconstruction pass now performs arrangement-guided boundary vertex snapping before boundary repair and records snap counts in diagnostics/certificates
+  - reconstruction pass also performs arrangement-edge-guided boundary projection snapping (`arrEdgeSnap`) before repair passes
   - reconstruction certificates now include component validity accounting (`components`, `invalidComponents`) and strict mode emits explicit errors when invalid components remain
   - reconstruction metrics are computed via deterministic boundary-incidence accounting in `MeshStitcher.AnalyzeBoundaryIncidence`
   - strict bridge path uses a deterministic constructive reconstruction pass (relink, balanced-loop fill, invalid-component pruning)

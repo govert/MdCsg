@@ -74,6 +74,8 @@ public sealed class RobustDiagnostics
 
     public int ReconstructionArrangementSnapCount { get; init; }
 
+    public int ReconstructionArrangementEdgeSnapCount { get; init; }
+
     public int ReconstructionComponentCount { get; init; }
 
     public int ReconstructionInvalidComponentCount { get; init; }
