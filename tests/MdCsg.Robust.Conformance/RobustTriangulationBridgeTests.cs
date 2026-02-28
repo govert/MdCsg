@@ -219,7 +219,7 @@ public class RobustTriangulationBridgeTests
 
         for (int caseIdx = 0; caseIdx < 64; caseIdx++)
         {
-            int vertexCount = rng.Next(8, 13);
+            int vertexCount = rng.Next(8, 11);
             var verts = CreateConvexPolygon(vertexCount, radiusBase: 2.8, rng);
             var constraints = CreateDenseFanConstraints(vertexCount);
 

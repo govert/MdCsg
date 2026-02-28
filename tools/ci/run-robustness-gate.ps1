@@ -54,4 +54,4 @@ Invoke-GateSlice `
 
 Invoke-GateSlice `
     "3/3: Triangulation bridge + smoke guardrails..." `
-    "(FullyQualifiedName~RobustTriangulationBridgeTests|FullyQualifiedName~RobustCsgSmokeTests)"
+    "(FullyQualifiedName~RobustTriangulationBridgeTests|FullyQualifiedName~RobustCsgSmokeTests|FullyQualifiedName~ReconstructionIncidenceTests|FullyQualifiedName~RobustAlgebraicConformanceTests)"
