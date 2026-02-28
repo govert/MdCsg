@@ -69,10 +69,25 @@ public class RobustShowcaseParityTests
         RobustDiagnosticsAssertions.AssertHasPatchExtractionCertificate(step3.Diagnostics);
         Assert.Contains(step3.Diagnostics.StageInvariantCertificates, static c => c.StartsWith("patch-extraction-candidates:", StringComparison.Ordinal));
         var candidates = GetStageCertificate(step3, "patch-extraction-candidates:");
-        Assert.Contains("IntraFace:", candidates, StringComparison.Ordinal);
-        Assert.Contains("Global:", candidates, StringComparison.Ordinal);
-        Assert.Contains("Arrangement:", candidates, StringComparison.Ordinal);
+        var signatures = candidates["patch-extraction-candidates:".Length..]
+            .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        Assert.Equal(3, signatures.Length);
+        Assert.Contains(signatures, static s => s.StartsWith("IntraFace:", StringComparison.Ordinal));
+        Assert.Contains(signatures, static s => s.StartsWith("Global:", StringComparison.Ordinal));
+        Assert.Contains(signatures, static s => s.StartsWith("Arrangement:", StringComparison.Ordinal));
+        foreach (string signature in signatures)
+        {
+            Assert.Contains("authority=", signature, StringComparison.Ordinal);
+            Assert.Contains("boundary=", signature, StringComparison.Ordinal);
+            Assert.Contains("manifold=", signature, StringComparison.Ordinal);
+            Assert.Contains("components=", signature, StringComparison.Ordinal);
+            Assert.Contains("patchA=", signature, StringComparison.Ordinal);
+            Assert.Contains("patchB=", signature, StringComparison.Ordinal);
+            Assert.Contains("deg=", signature, StringComparison.Ordinal);
+            Assert.Contains("tri=", signature, StringComparison.Ordinal);
+        }
         Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction:fail;", StringComparison.Ordinal));
+        Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("output:fail;", StringComparison.Ordinal));
         RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(step3.Diagnostics);
     }
 
