@@ -18,9 +18,9 @@ internal class CsgOperationsScene : IScene
         var a = Primitives.Sphere(Vec3.Zero, 1.2, 3);
         var b = Primitives.Cube(new Vec3(0.6, 0, 0), 1.5);
 
-        var union = new Solid(Csg.Union(a, b).Mesh);
-        var inter = new Solid(Csg.Intersect(a, b).Mesh);
-        var diff = new Solid(Csg.Difference(a, b).Mesh);
+        var union = ShowcaseCsg.Union(a, b);
+        var inter = ShowcaseCsg.Intersect(a, b);
+        var diff = ShowcaseCsg.Difference(a, b);
 
         var entries = new (Solid s, Vector3 off, Vector4 col, string lbl)[]
         {

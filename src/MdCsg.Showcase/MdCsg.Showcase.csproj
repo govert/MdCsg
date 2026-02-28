@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MdCsg\MdCsg.csproj" />
+    <ProjectReference Include="..\MdCsg.Robust\MdCsg.Robust.csproj" />
     <PackageReference Include="TerraFX.Interop.Windows" Version="10.*" />
   </ItemGroup>
 

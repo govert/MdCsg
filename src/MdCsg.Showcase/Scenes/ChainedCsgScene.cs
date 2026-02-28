@@ -24,10 +24,10 @@ internal class ChainedCsgScene : IScene
         var cylY = Primitives.Cylinder(new Vec3(0, -1.5, 0), y, 0.5, 3.0);
         var cylZ = Primitives.Cylinder(new Vec3(0, 0, -1.5), new Vec3(0, 0, 1), 0.5, 3.0);
 
-        var step1 = new Solid(Csg.Intersect(sphere, box).Mesh);
-        var step2 = new Solid(Csg.Difference(step1, cylX).Mesh);
-        var step3 = new Solid(Csg.Difference(step2, cylY).Mesh);
-        var final = new Solid(Csg.Difference(step3, cylZ).Mesh);
+        var step1 = ShowcaseCsg.Intersect(sphere, box);
+        var step2 = ShowcaseCsg.Difference(step1, cylX);
+        var step3 = ShowcaseCsg.Difference(step2, cylY);
+        var final = ShowcaseCsg.Difference(step3, cylZ);
 
         var entries = new (Solid s, Vector3 off, Vector4 col)[]
         {

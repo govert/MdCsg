@@ -12,6 +12,13 @@ static unsafe class Program
     {
         bool screenshotMode = args.Length > 0 && args[0] == "--screenshot";
         string? screenshotDir = screenshotMode && args.Length > 1 ? args[1] : null;
+        bool legacyCsgMode = Array.Exists(
+            args,
+            static a => string.Equals(a, "--legacy-csg", StringComparison.OrdinalIgnoreCase));
+        ShowcaseRuntimeOptions.UseLegacyCsg = legacyCsgMode;
+        Console.WriteLine(legacyCsgMode
+            ? "[showcase] CSG mode: legacy (explicit opt-out)"
+            : "[showcase] CSG mode: robust-strict default with legacy failover");
 
         AppWindow.Create(1280, 720, "MdCsg Showcase - Loading...");
 
