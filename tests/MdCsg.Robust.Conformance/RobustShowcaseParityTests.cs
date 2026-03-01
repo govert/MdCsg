@@ -86,9 +86,13 @@ public class RobustShowcaseParityTests
             Assert.Contains("deg=", signature, StringComparison.Ordinal);
             Assert.Contains("tri=", signature, StringComparison.Ordinal);
         }
-        Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction:fail;", StringComparison.Ordinal));
+        string reconstructionCert = GetStageCertificate(step3, "reconstruction:");
+        Assert.StartsWith("reconstruction:fail;", reconstructionCert, StringComparison.Ordinal);
+        Assert.Equal(3, ParseIntTag(reconstructionCert, "boundary"));
+        Assert.Equal(0, ParseIntTag(reconstructionCert, "openLoops"));
+        Assert.Equal(3, ParseIntTag(reconstructionCert, "unmatched"));
         Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction-pre:", StringComparison.Ordinal));
-        Assert.Contains("nonWorse=", GetStageCertificate(step3, "reconstruction:"), StringComparison.Ordinal);
+        Assert.Contains("nonWorse=", reconstructionCert, StringComparison.Ordinal);
         Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("output:fail;", StringComparison.Ordinal));
         RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(step3.Diagnostics);
     }
@@ -162,5 +166,16 @@ public class RobustShowcaseParityTests
             .LastOrDefault(c => c.StartsWith(prefix, StringComparison.Ordinal));
         Assert.False(string.IsNullOrWhiteSpace(cert));
         return cert!;
+    }
+
+    private static int ParseIntTag(string cert, string tag)
+    {
+        string prefix = tag + "=";
+        var parts = cert.Split(';', StringSplitOptions.RemoveEmptyEntries);
+        string value = parts.FirstOrDefault(p => p.StartsWith(prefix, StringComparison.Ordinal)) ?? string.Empty;
+        Assert.False(string.IsNullOrWhiteSpace(value));
+        string text = value[prefix.Length..];
+        Assert.True(int.TryParse(text, out int parsed), $"Invalid integer tag '{tag}' in certificate '{cert}'.");
+        return parsed;
     }
 }
