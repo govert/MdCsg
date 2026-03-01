@@ -432,6 +432,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             predicateTelemetry,
             out int prePruneDegBefore,
             out int prePruneRemoved,
+            out int prePruneAfterRemove,
+            out int prePruneResealIntroduced,
             out int prePruneDegAfter,
             out bool prePruneAccepted,
             out bool prePruneClosedGuard,
@@ -443,7 +445,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             $"deg-prune:phase=pre;"
             + $"before={prePruneDegBefore};"
             + $"removed={prePruneRemoved};"
+            + $"afterRemove={prePruneAfterRemove};"
+            + $"resealIntro={prePruneResealIntroduced};"
             + $"after={prePruneDegAfter};"
+            + $"netRemoved={System.Math.Max(0, prePruneDegBefore - prePruneDegAfter)};"
             + $"accepted={(prePruneAccepted ? 1 : 0)};"
             + $"closedGuard={(prePruneClosedGuard ? 1 : 0)};"
             + $"boundaryBefore={prePruneBoundaryBefore};"
@@ -468,6 +473,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             predicateTelemetry,
             out int postPruneDegBefore,
             out int postPruneRemoved,
+            out int postPruneAfterRemove,
+            out int postPruneResealIntroduced,
             out int postPruneDegAfter,
             out bool postPruneAccepted,
             out bool postPruneClosedGuard,
@@ -479,7 +486,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             $"deg-prune:phase=post;"
             + $"before={postPruneDegBefore};"
             + $"removed={postPruneRemoved};"
+            + $"afterRemove={postPruneAfterRemove};"
+            + $"resealIntro={postPruneResealIntroduced};"
             + $"after={postPruneDegAfter};"
+            + $"netRemoved={System.Math.Max(0, postPruneDegBefore - postPruneDegAfter)};"
             + $"accepted={(postPruneAccepted ? 1 : 0)};"
             + $"closedGuard={(postPruneClosedGuard ? 1 : 0)};"
             + $"boundaryBefore={postPruneBoundaryBefore};"
@@ -1029,6 +1039,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         PredicateTelemetryCounter predicateTelemetry,
         out int beforeDegenerate,
         out int removedDegenerateFaces,
+        out int afterRemovalDegenerate,
+        out int resealIntroducedDegenerate,
         out int afterDegenerate,
         out bool accepted,
         out bool preserveClosedContract,
@@ -1039,6 +1051,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
     {
         beforeDegenerate = 0;
         removedDegenerateFaces = 0;
+        afterRemovalDegenerate = 0;
+        resealIntroducedDegenerate = 0;
         afterDegenerate = 0;
         accepted = false;
         preserveClosedContract = false;
@@ -1051,6 +1065,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             return result;
 
         beforeDegenerate = DegenerateFaceInspector.CountDegenerateFaces(result.Mesh, predicateTelemetry);
+        afterRemovalDegenerate = beforeDegenerate;
         afterDegenerate = beforeDegenerate;
         if (beforeDegenerate == 0)
             return result;
@@ -1088,7 +1103,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
 
         var rebuilt = new MeshBuilder().Build(positions, kept);
         rebuilt.IsComplemented = result.Mesh.IsComplemented;
-        afterDegenerate = DegenerateFaceInspector.CountDegenerateFaces(rebuilt, predicateTelemetry);
+        afterRemovalDegenerate = DegenerateFaceInspector.CountDegenerateFaces(rebuilt, predicateTelemetry);
+        afterDegenerate = afterRemovalDegenerate;
         preserveClosedContract =
             beforeIncidence.BoundaryHalfEdgeCount == 0
             && beforeIncidence.UnmatchedUndirectedEdgeCount == 0;
@@ -1100,6 +1116,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             AttemptDeterministicBoundaryReseal(rebuilt, weldTolerance);
             afterIncidence = MeshStitcher.AnalyzeBoundaryIncidence(rebuilt);
             afterDegenerate = DegenerateFaceInspector.CountDegenerateFaces(rebuilt, predicateTelemetry);
+            resealIntroducedDegenerate = System.Math.Max(0, afterDegenerate - afterRemovalDegenerate);
         }
         var afterComponents = AnalyzeComponentTopology(rebuilt);
         boundaryAfter = afterIncidence.BoundaryHalfEdgeCount;

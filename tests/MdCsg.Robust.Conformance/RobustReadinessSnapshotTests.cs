@@ -78,12 +78,26 @@ public class RobustReadinessSnapshotTests
         string postPrune = GetStageCertificate(step3, "deg-prune:phase=post;");
         Assert.True(ParseIntTag(prePrune, "before") > 0);
         Assert.True(ParseIntTag(prePrune, "removed") > 0);
+        Assert.True(ParseIntTag(prePrune, "afterRemove") >= 0);
+        Assert.Equal(
+            ParseIntTag(prePrune, "after") - ParseIntTag(prePrune, "afterRemove"),
+            ParseIntTag(prePrune, "resealIntro"));
+        Assert.Equal(
+            ParseIntTag(prePrune, "before") - ParseIntTag(prePrune, "after"),
+            ParseIntTag(prePrune, "netRemoved"));
         Assert.Equal(1, ParseIntTag(prePrune, "accepted"));
         Assert.Equal(1, ParseIntTag(prePrune, "closedGuard"));
         Assert.Equal(0, ParseIntTag(prePrune, "boundaryAfter"));
         Assert.Equal(0, ParseIntTag(prePrune, "unmatchedAfter"));
         Assert.True(ParseIntTag(postPrune, "before") > 0);
         Assert.True(ParseIntTag(postPrune, "removed") > 0);
+        Assert.True(ParseIntTag(postPrune, "afterRemove") >= 0);
+        Assert.Equal(
+            ParseIntTag(postPrune, "after") - ParseIntTag(postPrune, "afterRemove"),
+            ParseIntTag(postPrune, "resealIntro"));
+        Assert.Equal(
+            ParseIntTag(postPrune, "before") - ParseIntTag(postPrune, "after"),
+            ParseIntTag(postPrune, "netRemoved"));
         Assert.Equal(1, ParseIntTag(postPrune, "accepted"));
         Assert.Equal(1, ParseIntTag(postPrune, "closedGuard"));
         Assert.Equal(0, ParseIntTag(postPrune, "boundaryAfter"));

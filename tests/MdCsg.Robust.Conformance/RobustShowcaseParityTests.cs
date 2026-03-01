@@ -97,12 +97,26 @@ public class RobustShowcaseParityTests
         string degPrunePost = GetStageCertificate(step3, "deg-prune:phase=post;");
         Assert.True(ParseIntTag(degPrunePre, "before") > 0);
         Assert.True(ParseIntTag(degPrunePre, "removed") > 0);
+        Assert.True(ParseIntTag(degPrunePre, "afterRemove") >= 0);
+        Assert.Equal(
+            ParseIntTag(degPrunePre, "after") - ParseIntTag(degPrunePre, "afterRemove"),
+            ParseIntTag(degPrunePre, "resealIntro"));
+        Assert.Equal(
+            ParseIntTag(degPrunePre, "before") - ParseIntTag(degPrunePre, "after"),
+            ParseIntTag(degPrunePre, "netRemoved"));
         Assert.Equal(1, ParseIntTag(degPrunePre, "accepted"));
         Assert.Equal(1, ParseIntTag(degPrunePre, "closedGuard"));
         Assert.Equal(0, ParseIntTag(degPrunePre, "boundaryAfter"));
         Assert.Equal(0, ParseIntTag(degPrunePre, "unmatchedAfter"));
         Assert.True(ParseIntTag(degPrunePost, "before") > 0);
         Assert.True(ParseIntTag(degPrunePost, "removed") > 0);
+        Assert.True(ParseIntTag(degPrunePost, "afterRemove") >= 0);
+        Assert.Equal(
+            ParseIntTag(degPrunePost, "after") - ParseIntTag(degPrunePost, "afterRemove"),
+            ParseIntTag(degPrunePost, "resealIntro"));
+        Assert.Equal(
+            ParseIntTag(degPrunePost, "before") - ParseIntTag(degPrunePost, "after"),
+            ParseIntTag(degPrunePost, "netRemoved"));
         Assert.Equal(1, ParseIntTag(degPrunePost, "accepted"));
         Assert.Equal(1, ParseIntTag(degPrunePost, "closedGuard"));
         Assert.Equal(0, ParseIntTag(degPrunePost, "boundaryAfter"));

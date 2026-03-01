@@ -607,7 +607,7 @@ Deliverables:
 Exit criteria:
 
 - Conformance can assert deterministic phase-local degenerate accounting on chained step-3 repro.
-- Status: Pending.
+- Status: Completed (`LegacyBridgedRobustCsgEngine` `deg-prune:*` certificates now emit `afterRemove`, `resealIntro`, and `netRemoved`; conformance assertions added in `RobustShowcaseParityTests` and `RobustReadinessSnapshotTests`).
 
 ## Stage 62 - Degenerate-Safe Boundary Reseal
 
