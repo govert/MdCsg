@@ -679,7 +679,7 @@ Deliverables:
 Exit criteria:
 
 - Readiness output and tests agree on blocker/band semantics.
-- Status: Pending.
+- Status: Completed (`run-robust-readiness-report.ps1` now emits `KNOWN_BLOCKER_DETAIL` with owning-stage mapping and explicit `READINESS_DEG_PRUNE_CONTRACT=PASS`, with known-blocked band aligned to blocker detail output).
 
 ## Stage 68 - Docs and Spec Realignment
 

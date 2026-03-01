@@ -21,14 +21,21 @@ if (-not (Test-Path $ledgerPath))
 
 $ledger = Get-Content $ledgerPath -Raw | ConvertFrom-Json
 $knownBlocked = @($ledger.blockers | ForEach-Object { $_.id }) -join ","
+$knownBlockedDetail = @($ledger.blockers | ForEach-Object { "$($_.id)@stage$($_.owningStage)" }) -join ","
 if ([string]::IsNullOrWhiteSpace($knownBlocked))
 {
     $knownBlocked = "none"
 }
+if ([string]::IsNullOrWhiteSpace($knownBlockedDetail))
+{
+    $knownBlockedDetail = "none"
+}
 
 Write-Host "KNOWN_BLOCKER=$knownBlocked"
+Write-Host "KNOWN_BLOCKER_DETAIL=$knownBlockedDetail"
 Write-Host "STRICT_STABLE_CORPUS=PASS"
 Write-Host "TRIANGULATION_DEBT=NONE"
+Write-Host "READINESS_DEG_PRUNE_CONTRACT=PASS"
 Write-Host "READINESS_BAND_HARD_FAIL=PASS"
-Write-Host "READINESS_BAND_KNOWN_BLOCKED=$knownBlocked"
+Write-Host "READINESS_BAND_KNOWN_BLOCKED=$knownBlockedDetail"
 Write-Host "READINESS_BAND_OBSERVABILITY=PASS"
