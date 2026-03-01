@@ -453,7 +453,7 @@ Exit criteria:
 
 - Input policy is deterministic, documented, and enforced by conformance tests.
 - Non-manifold handling no longer relies on implicit downstream behavior.
-- Status: Pending.
+- Status: Completed (`NonManifoldInputPolicy` strict reject/sanitize preflight path in `LegacyBridgedRobustCsgEngine`; deterministic `input-policy:*` component accounting certificates; conformance coverage in `InputPolicyConformanceTests` for sanitize-success and fail-closed no-valid-component classes).
 
 ## Stage 55 - Fuzz Escalation + Delta Minimization Pipeline
 

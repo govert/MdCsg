@@ -23,4 +23,6 @@ public sealed class RobustOperationOptions
     public bool UseRobustTriangulationKernel { get; init; } = true;
 
     public bool FailOnValidationError { get; init; } = true;
+
+    public NonManifoldInputPolicy NonManifoldInputPolicy { get; init; } = NonManifoldInputPolicy.Reject;
 }

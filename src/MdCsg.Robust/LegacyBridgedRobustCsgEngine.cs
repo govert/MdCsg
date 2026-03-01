@@ -30,6 +30,15 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         RobustOperationOptions? options = null)
     {
         var opts = options ?? RobustOperationOptions.Default;
+        var inputA = a;
+        var inputB = b;
+        var inputPolicyOutcomeA = InputPolicyOutcome.Original(a.Mesh.Faces.Count);
+        var inputPolicyOutcomeB = InputPolicyOutcome.Original(b.Mesh.Faces.Count);
+        if (opts.NonManifoldInputPolicy == NonManifoldInputPolicy.SanitizeAndContinue)
+        {
+            inputA = SanitizeInputSolid(a, out inputPolicyOutcomeA);
+            inputB = SanitizeInputSolid(b, out inputPolicyOutcomeB);
+        }
         var issues = new List<RobustIssue>();
         var predicateTelemetry = new PredicateTelemetryCounter();
         ArrangementGraph? arrangement = null;
@@ -70,11 +79,18 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         MeshInvariantSnapshot inputBInvariant = default;
         MeshInvariantSnapshot outputInvariant = default;
         var totalSw = Stopwatch.StartNew();
+        stageCertificates.Add(
+            $"input-policy:policy={opts.NonManifoldInputPolicy};"
+            + $"A={inputPolicyOutcomeA.Action};B={inputPolicyOutcomeB.Action};"
+            + $"Araw={inputPolicyOutcomeA.RawComponentCount};Avalid={inputPolicyOutcomeA.ValidComponentCount};"
+            + $"Akept={inputPolicyOutcomeA.KeptFaceCount};Atotal={inputPolicyOutcomeA.TotalFaceCount};"
+            + $"Braw={inputPolicyOutcomeB.RawComponentCount};Bvalid={inputPolicyOutcomeB.ValidComponentCount};"
+            + $"Bkept={inputPolicyOutcomeB.KeptFaceCount};Btotal={inputPolicyOutcomeB.TotalFaceCount}");
 
         if (opts.ValidateInput)
         {
-            inputAInvariant = ValidateInput(a, "A", opts.Mode, issues, predicateTelemetry);
-            inputBInvariant = ValidateInput(b, "B", opts.Mode, issues, predicateTelemetry);
+            inputAInvariant = ValidateInput(inputA, "A", opts.Mode, issues, predicateTelemetry);
+            inputBInvariant = ValidateInput(inputB, "B", opts.Mode, issues, predicateTelemetry);
 
             bool inputStagePass = inputAInvariant.IsValid && inputBInvariant.IsValid;
             stageCertificates.Add(
@@ -99,7 +115,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
 
         if (opts.AnalyzeInputIntersection)
         {
-            arrangement = ArrangementBuilder.Build(a.Mesh, b.Mesh);
+            arrangement = ArrangementBuilder.Build(inputA.Mesh, inputB.Mesh);
             arrangementAnalysis = ArrangementAnalyzer.Analyze(arrangement);
             if (arrangement.HasCoplanarPairs)
             {
@@ -318,9 +334,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         var opSw = Stopwatch.StartNew();
         var result = operation switch
         {
-            RobustCsgOperation.Union => Csg.Union(a, b, csgOptions),
-            RobustCsgOperation.Intersection => Csg.Intersect(a, b, csgOptions),
-            RobustCsgOperation.Difference => Csg.Difference(a, b, csgOptions),
+            RobustCsgOperation.Union => Csg.Union(inputA, inputB, csgOptions),
+            RobustCsgOperation.Intersection => Csg.Intersect(inputA, inputB, csgOptions),
+            RobustCsgOperation.Difference => Csg.Difference(inputA, inputB, csgOptions),
             _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null)
         };
         opSw.Stop();
@@ -791,6 +807,159 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             boundary,
             isEdgeManifold,
             degenerateFaces);
+    }
+
+    private static Solid SanitizeInputSolid(Solid input, out InputPolicyOutcome outcome)
+    {
+        var components = RawConnectedComponents(input.Mesh);
+        if (components.Count == 0)
+        {
+            outcome = InputPolicyOutcome.Original(input.Mesh.Faces.Count);
+            return input;
+        }
+
+        int validComponentCount = 0;
+        int bestComponentIndex = -1;
+        int bestFaceCount = -1;
+        double bestAbsVolume = -1.0;
+        int bestFaceOrder = int.MaxValue;
+
+        for (int i = 0; i < components.Count; i++)
+        {
+            var component = components[i];
+            if (component.Count == 0)
+                continue;
+
+            var componentMesh = BuildComponentMesh(input.Mesh, component);
+            if (!IsSanitizeCandidateValid(componentMesh))
+                continue;
+
+            validComponentCount++;
+
+            int faceCount = component.Count;
+            double absVolume = System.Math.Abs(MeshQueries.Volume(componentMesh));
+            int faceOrder = component.Min();
+            bool better = faceCount > bestFaceCount
+                || (faceCount == bestFaceCount && absVolume > bestAbsVolume + 1e-12)
+                || (faceCount == bestFaceCount
+                    && System.Math.Abs(absVolume - bestAbsVolume) <= 1e-12
+                    && faceOrder < bestFaceOrder);
+
+            if (better)
+            {
+                bestComponentIndex = i;
+                bestFaceCount = faceCount;
+                bestAbsVolume = absVolume;
+                bestFaceOrder = faceOrder;
+            }
+        }
+
+        if (bestComponentIndex < 0)
+        {
+            outcome = new InputPolicyOutcome(
+                Action: "original",
+                RawComponentCount: components.Count,
+                ValidComponentCount: 0,
+                KeptFaceCount: input.Mesh.Faces.Count,
+                TotalFaceCount: input.Mesh.Faces.Count);
+            return input;
+        }
+
+        var bestComponent = components[bestComponentIndex];
+        bool sanitizeApplied = components.Count > 1 || bestComponent.Count != input.Mesh.Faces.Count;
+        if (!sanitizeApplied)
+        {
+            outcome = new InputPolicyOutcome(
+                Action: "original",
+                RawComponentCount: components.Count,
+                ValidComponentCount: validComponentCount,
+                KeptFaceCount: input.Mesh.Faces.Count,
+                TotalFaceCount: input.Mesh.Faces.Count);
+            return input;
+        }
+
+        var sanitizedMesh = BuildComponentMesh(input.Mesh, bestComponent);
+        sanitizedMesh.IsComplemented = input.Mesh.IsComplemented;
+        outcome = new InputPolicyOutcome(
+            Action: "sanitized",
+            RawComponentCount: components.Count,
+            ValidComponentCount: validComponentCount,
+            KeptFaceCount: sanitizedMesh.Faces.Count,
+            TotalFaceCount: input.Mesh.Faces.Count);
+        return new Solid(sanitizedMesh);
+    }
+
+    private static bool IsSanitizeCandidateValid(HalfEdgeMesh mesh)
+    {
+        if (!HasFiniteVertices(mesh))
+            return false;
+        if (MeshValidator.CountBoundaryEdges(mesh) != 0)
+            return false;
+        if (!MeshValidator.IsEdgeManifold(mesh))
+            return false;
+
+        var telemetry = new PredicateTelemetryCounter();
+        return DegenerateFaceInspector.CountDegenerateFaces(mesh, telemetry) == 0;
+    }
+
+    private static List<List<int>> RawConnectedComponents(HalfEdgeMesh mesh)
+    {
+        var visited = new bool[mesh.Faces.Count];
+        var components = new List<List<int>>();
+        var queue = new Queue<int>();
+
+        for (int i = 0; i < mesh.Faces.Count; i++)
+        {
+            if (visited[i])
+                continue;
+
+            visited[i] = true;
+            queue.Enqueue(i);
+            var component = new List<int>();
+
+            while (queue.Count > 0)
+            {
+                int faceIdx = queue.Dequeue();
+                component.Add(faceIdx);
+
+                var start = mesh.Faces[faceIdx].Edge;
+                var edge = start;
+                do
+                {
+                    if (edge.Twin?.Face is not null)
+                    {
+                        int neighbor = edge.Twin.Face.Id;
+                        if (!visited[neighbor])
+                        {
+                            visited[neighbor] = true;
+                            queue.Enqueue(neighbor);
+                        }
+                    }
+
+                    edge = edge.Next;
+                } while (edge != start);
+            }
+
+            components.Add(component);
+        }
+
+        return components;
+    }
+
+    private readonly record struct InputPolicyOutcome(
+        string Action,
+        int RawComponentCount,
+        int ValidComponentCount,
+        int KeptFaceCount,
+        int TotalFaceCount)
+    {
+        public static InputPolicyOutcome Original(int totalFaceCount)
+            => new(
+                Action: "original",
+                RawComponentCount: 1,
+                ValidComponentCount: 1,
+                KeptFaceCount: totalFaceCount,
+                TotalFaceCount: totalFaceCount);
     }
 
     private readonly record struct MeshInvariantSnapshot(
