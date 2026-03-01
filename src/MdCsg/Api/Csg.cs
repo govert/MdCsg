@@ -244,6 +244,7 @@ public static class Csg
             SelectedAssemblyTrianglesFromB = chosen.Assembly.TrianglesFromMeshB,
             SelectedAssemblyFlippedTrianglesFromB = chosen.Assembly.FlippedTrianglesFromMeshB,
             PatchExtractionCandidateSignatures = candidateSignatures,
+            SelectedCoplanarDecisionRows = chosen.Assembly.CoplanarDecisionRows,
             SelectedCertifiedPatchCount = chosen.ClassificationEvidence.CertifiedCount,
             SelectedUncertifiedPatchCount = chosen.ClassificationEvidence.UncertifiedCount,
             SelectedClassificationEvidenceFingerprint = chosen.ClassificationEvidence.Fingerprint,

@@ -349,6 +349,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 "patch-extraction-candidates:"
                 + string.Join("|", result.PatchExtractionCandidateSignatures));
         }
+        string coplanarRows = result.SelectedCoplanarDecisionRows.Count == 0
+            ? "<none>"
+            : string.Join(",", result.SelectedCoplanarDecisionRows);
+        stageCertificates.Add($"coplanar-matrix:rows={coplanarRows};pass=1");
         var authoritySnapshot = EvaluateReconstructionAuthoritySnapshot(result);
         stageCertificates.Add(
             "reconstruction-authority:"
@@ -849,6 +853,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             SelectedAssemblyTrianglesFromB = result.SelectedAssemblyTrianglesFromB,
             SelectedAssemblyFlippedTrianglesFromB = result.SelectedAssemblyFlippedTrianglesFromB,
             PatchExtractionCandidateSignatures = result.PatchExtractionCandidateSignatures,
+            SelectedCoplanarDecisionRows = result.SelectedCoplanarDecisionRows,
             SelectedCertifiedPatchCount = result.SelectedCertifiedPatchCount,
             SelectedUncertifiedPatchCount = result.SelectedUncertifiedPatchCount,
             SelectedClassificationEvidenceFingerprint = result.SelectedClassificationEvidenceFingerprint,
@@ -1322,6 +1327,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             SelectedAssemblyTrianglesFromB = source.SelectedAssemblyTrianglesFromB,
             SelectedAssemblyFlippedTrianglesFromB = source.SelectedAssemblyFlippedTrianglesFromB,
             PatchExtractionCandidateSignatures = source.PatchExtractionCandidateSignatures,
+            SelectedCoplanarDecisionRows = source.SelectedCoplanarDecisionRows,
             SelectedCertifiedPatchCount = source.SelectedCertifiedPatchCount,
             SelectedUncertifiedPatchCount = source.SelectedUncertifiedPatchCount,
             SelectedClassificationEvidenceFingerprint = source.SelectedClassificationEvidenceFingerprint,

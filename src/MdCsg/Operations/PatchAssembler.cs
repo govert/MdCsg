@@ -9,7 +9,7 @@ namespace MdCsg.Operations;
 /// </summary>
 public static class PatchAssembler
 {
-    private readonly record struct CoplanarPatchDecision(bool Keep, bool FlipNormals);
+    private readonly record struct CoplanarPatchDecision(bool Keep, bool FlipNormals, string RowId);
 
     /// <summary>
     /// Result of patch assembly: selected sub-triangles with normal direction info.
@@ -19,12 +19,14 @@ public static class PatchAssembler
     /// <param name="TrianglesFromMeshA">Number of selected triangles sourced from mesh A.</param>
     /// <param name="TrianglesFromMeshB">Number of selected triangles sourced from mesh B.</param>
     /// <param name="FlippedTrianglesFromMeshB">Number of mesh-B triangles emitted with flipped orientation.</param>
+    /// <param name="CoplanarDecisionRows">Deterministic coplanar decision row counters (`rowId=count`).</param>
     public record AssemblyResult(
         List<Triangle3> Triangles,
         List<bool> FlipNormals,
         int TrianglesFromMeshA,
         int TrianglesFromMeshB,
-        int FlippedTrianglesFromMeshB);
+        int FlippedTrianglesFromMeshB,
+        IReadOnlyList<string> CoplanarDecisionRows);
 
     /// <summary>
     /// Selects patches from both meshes based on the CSG operation.
@@ -46,6 +48,7 @@ public static class PatchAssembler
         int fromA = 0;
         int fromB = 0;
         int flippedFromB = 0;
+        var coplanarRowCounts = new Dictionary<string, int>(StringComparer.Ordinal);
 
         // Select patches from mesh A
         foreach (var patch in patchesA)
@@ -60,6 +63,7 @@ public static class PatchAssembler
                     operation);
                 keep = decision.Keep;
                 flip = decision.FlipNormals;
+                AddCoplanarRow(decision.RowId);
             }
             else
             {
@@ -88,6 +92,7 @@ public static class PatchAssembler
                     fromMeshA: false,
                     patch.CoplanarNormalsAgree.Value,
                     operation);
+                AddCoplanarRow(decision.RowId);
                 if (!decision.Keep)
                     continue;
 
@@ -127,7 +132,18 @@ public static class PatchAssembler
             }
         }
 
-        return new AssemblyResult(triangles, flipNormals, fromA, fromB, flippedFromB);
+        var rows = coplanarRowCounts
+            .OrderBy(static kv => kv.Key, StringComparer.Ordinal)
+            .Select(static kv => $"{kv.Key}={kv.Value}")
+            .ToArray();
+
+        return new AssemblyResult(triangles, flipNormals, fromA, fromB, flippedFromB, rows);
+
+        void AddCoplanarRow(string rowId)
+        {
+            coplanarRowCounts.TryGetValue(rowId, out int count);
+            coplanarRowCounts[rowId] = count + 1;
+        }
     }
 
     /// <summary>
@@ -178,25 +194,31 @@ public static class PatchAssembler
         bool normalsAgree,
         CsgOperation operation)
     {
+        string op = operation.ToString();
+        string orient = normalsAgree ? "Agree" : "Oppose";
+
         if (fromMeshA)
         {
             return operation switch
             {
                 CsgOperation.Union => normalsAgree
-                    ? new CoplanarPatchDecision(Keep: true, FlipNormals: false)
-                    : new CoplanarPatchDecision(Keep: false, FlipNormals: false),
+                    ? new CoplanarPatchDecision(Keep: true, FlipNormals: false, RowId: $"A:{op}:{orient}:Keep")
+                    : new CoplanarPatchDecision(Keep: false, FlipNormals: false, RowId: $"A:{op}:{orient}:Drop"),
                 CsgOperation.Intersection => normalsAgree
-                    ? new CoplanarPatchDecision(Keep: true, FlipNormals: false)
-                    : new CoplanarPatchDecision(Keep: false, FlipNormals: false),
+                    ? new CoplanarPatchDecision(Keep: true, FlipNormals: false, RowId: $"A:{op}:{orient}:Keep")
+                    : new CoplanarPatchDecision(Keep: false, FlipNormals: false, RowId: $"A:{op}:{orient}:Drop"),
                 CsgOperation.Difference => normalsAgree
-                    ? new CoplanarPatchDecision(Keep: false, FlipNormals: false)
-                    : new CoplanarPatchDecision(Keep: true, FlipNormals: false),
-                _ => new CoplanarPatchDecision(Keep: false, FlipNormals: false)
+                    ? new CoplanarPatchDecision(Keep: false, FlipNormals: false, RowId: $"A:{op}:{orient}:Drop")
+                    : new CoplanarPatchDecision(Keep: true, FlipNormals: false, RowId: $"A:{op}:{orient}:Keep"),
+                _ => new CoplanarPatchDecision(Keep: false, FlipNormals: false, RowId: $"A:{op}:{orient}:Drop")
             };
         }
 
         // Mesh B coplanar policy: A-side selection remains authoritative for
         // unresolved coplanar regions so we do not duplicate shared surfaces.
-        return new CoplanarPatchDecision(Keep: false, FlipNormals: false);
+        return new CoplanarPatchDecision(
+            Keep: false,
+            FlipNormals: false,
+            RowId: $"B:{op}:{orient}:DropAuthority");
     }
 }

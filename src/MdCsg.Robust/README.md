@@ -42,6 +42,7 @@ Initial scaffold now exists:
   - extracted patches now carry deterministic provenance (`StableId`, source-face lineage, boundary authority) with arrangement mode explicitly marked arrangement-authoritative
   - emits stage invariant certificates (`input`, `arrangement`, `patch-extraction`, `triangulation`, `reconstruction`, `output`) and strict-mode `StageInvariantViolation` issues when gates fail
   - strict classification certificates now include deterministic evidence fingerprints with selected certified/uncertified patch counters
+  - coplanar decisions are now surfaced as matrix row counters in strict diagnostics (`coplanar-matrix:rows=...`)
   - applies deterministic post-op degenerate-face pruning and topology repair before strict output validation
 - `Kernel/Predicates/CertifiedPredicates` with precision-tier telemetry
 - `Kernel/Arrangement/ArrangementBuilder` native BVH+tri-tri arrangement builder

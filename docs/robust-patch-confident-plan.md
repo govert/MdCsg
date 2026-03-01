@@ -439,7 +439,7 @@ Exit criteria:
 
 - Coplanar behavior is fully table-driven and test-covered for strict mode.
 - No ad hoc coplanar branch remains in strict reconstruction/classification.
-- Status: Pending.
+- Status: Completed (matrix row IDs emitted via `coplanar-matrix:*` certificates + deterministic conformance for shared-face and complement-transformed cases).
 
 ## Stage 54 - Non-Manifold Input Policy and Fail-Closed Contracts
 

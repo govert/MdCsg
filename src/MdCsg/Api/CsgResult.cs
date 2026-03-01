@@ -63,6 +63,11 @@ public class CsgResult
     public IReadOnlyList<string> PatchExtractionCandidateSignatures { get; init; } = Array.Empty<string>();
 
     /// <summary>
+    /// Deterministic coplanar decision row counters for the selected assembly candidate.
+    /// </summary>
+    public IReadOnlyList<string> SelectedCoplanarDecisionRows { get; init; } = Array.Empty<string>();
+
+    /// <summary>
     /// Normalized authoritative boundary contract for reconstruction decisions.
     /// </summary>
     public ReconstructionBoundaryContract? AuthoritativeBoundary { get; init; }
