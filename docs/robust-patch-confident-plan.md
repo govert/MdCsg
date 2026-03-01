@@ -691,7 +691,7 @@ Deliverables:
 Exit criteria:
 
 - Runtime/docs/spec/test expectations are aligned.
-- Status: Pending.
+- Status: Completed (`src/MdCsg.Robust/README.md` and `docs/ROBUSTNESS_SPEC.md` now document fixed-point `deg-prune:*` contracts, rejected-prune fail-closed semantics, and updated gate/readiness observability signals).
 
 ## Stage 69 - Validation Sweep and Stage Sign-Off
 

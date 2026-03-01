@@ -120,6 +120,12 @@ The engine must have explicit rules for:
 Tie-breaking must be deterministic and global (not local epsilon hacks).
 Simulation-of-Simplicity style symbolic perturbation is acceptable if consistently implemented and documented.
 
+Degenerate cleanup policy:
+
+- Degenerate-face cleanup must be bounded and deterministic (fixed-point with explicit iteration budget).
+- Every cleanup attempt must emit certificate-level outcome tags (`accepted`/`rejected`, iteration count, termination reason).
+- Rejected cleanup attempts must not mutate output state (fail-closed, diagnostics-visible no-op).
+
 Current coplanar patch-selection truth table (bridge implementation):
 
 - Source A, normals agree:
@@ -167,6 +173,7 @@ Every operation must expose structured diagnostics:
 
 - stage timings,
 - stage invariant certificates (`input`, `arrangement`, `triangulation`, `output`),
+- degenerate cleanup certificates (`deg-prune:*`) with decomposition and convergence tags,
 - escalation counts (double -> expansion -> exact),
 - fallback triggers,
 - detected degeneracy counters,

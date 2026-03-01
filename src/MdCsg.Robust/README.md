@@ -45,6 +45,7 @@ Initial scaffold now exists:
   - coplanar decisions are now surfaced as matrix row counters in strict diagnostics (`coplanar-matrix:rows=...`)
   - strict input preflight now enforces explicit `NonManifoldInputPolicy` (`Reject` vs `SanitizeAndContinue`) and emits deterministic `input-policy:*` component accounting tags (`raw`, `valid`, `kept`, `total`)
   - applies deterministic post-op degenerate-face pruning and topology repair before strict output validation
+  - degenerate pruning is now bounded fixed-point (`iters`, `applied`, `term`) with decomposed reseal accounting (`afterRemove`, `resealIntro`, `resealSafe`, `resealLoopDegSkipped`) in `deg-prune:*` certificates
 - `Kernel/Predicates/CertifiedPredicates` with precision-tier telemetry
 - `Kernel/Arrangement/ArrangementBuilder` native BVH+tri-tri arrangement builder
   - deterministic overlap traversal and canonical snapped-segment ordering
@@ -77,8 +78,10 @@ Current conformance snapshot:
   - gate runner now retries a slice once when test-host crash/abort markers are detected, and fails hard if the retry is not clean
   - gate slices: showcase/backlog/replay (including reconstruction replay), strict fuzz smoke, triangulation+smoke+reconstruction+algebraic+differential+dependency+shadow+readiness+budget guardrails, showcase runtime strict/failover contract (with hang-timeout protection)
   - gate output now emits quality bands: `ROBUST_GATE_BAND_HARD_FAIL`, `ROBUST_GATE_BAND_KNOWN_BLOCKED`, `ROBUST_GATE_BAND_OBSERVABILITY`
+  - gate slice 1 explicitly includes the known-blocker deg-prune contract test (`KnownBlockerCorpus_IsExplicitlyFailClosed`) and emits `ROBUST_GATE_DEG_PRUNE_CONTRACT`
 - strict readiness snapshot entrypoint is `tools/ci/run-robust-readiness-report.ps1` (reports blocker status + stable-corpus health).
   - readiness output now emits aligned quality bands and derives known blockers from `tools/ci/robust-blocker-ledger.json`
+  - readiness now emits `KNOWN_BLOCKER_DETAIL` (`id@stage`) and `READINESS_DEG_PRUNE_CONTRACT`
 - deterministic performance budget entrypoint is `tools/ci/run-robust-performance-budget.ps1`.
 - Stable-overlap and smoke union zero-fallback checks are active and passing.
 - Seeded strict fuzz smoke tests are active and passing with deterministic seeds.
@@ -94,5 +97,5 @@ Current conformance snapshot:
 - Showcase parity:
   - `CsgOperations` strict mode is closed + zero-fallback,
   - `ChainedCsg` step-2 strict mode is closed + zero-fallback,
-  - `ChainedCsg` step-3 strict mode currently has an active fail-closed repro with closed/manifold topology preserved and residual output degenerates (`OutputMeshHasDegenerateFaces`) pinned as the remaining blocker class,
-  - step-3 emits deterministic `patch-extraction-candidates:*` and `deg-prune:*` certificates so unresolved blocker signatures are tracked across runs.
+  - `ChainedCsg` step-3 strict mode currently has an active fail-closed repro with closed/manifold topology preserved and residual output degenerates (`OutputMeshHasDegenerateFaces`) pinned as the remaining blocker class (`FUZZ-BLOCKER-0001`, owning stage 65),
+  - step-3 emits deterministic `patch-extraction-candidates:*` and fixed-point `deg-prune:*` certificates; unsafe prune attempts may be deterministically rejected (`accepted=0`) while preserving fail-closed output guarantees.
