@@ -355,7 +355,207 @@ Exit criteria:
 - Robustness gate fails deterministically on showcase contract regressions with actionable diagnostics.
 - Status: Completed (`run-robustness-gate.ps1` slice promotion for reconstruction replay + showcase runtime contract tests).
 
-## 8. Risks and Mitigations
+## 8. Stage Batch (48-57) Execution
+
+## Stage 48 - Reconstruction Boundary Authority Refactor
+
+Deliverables:
+
+- Move boundary ownership used by reconstruction from bridge-era adjacency signals to arrangement-authoritative edge/vertex ownership records.
+- Make reconstruction consume a single normalized boundary contract (`authoritativeBoundary`) independent of extraction mode internals.
+- Emit explicit reconstruction authority certificates (`reconstruction-authority:*`) in diagnostics.
+
+Exit criteria:
+
+- Reconstruction no longer depends on legacy mesh-adjacency authority in strict mode.
+- Diagnostics show deterministic authority certificates for all strict operations.
+- Status: Pending.
+
+## Stage 49 - Deterministic Loop Assembly Kernel
+
+Deliverables:
+
+- Introduce a dedicated deterministic loop assembler for reconstruction boundaries with stable tie-breaks on branch points.
+- Replace opportunistic loop stitching with graph-driven Euler-walk assembly and explicit ambiguity failure codes.
+- Add conformance checks for loop ordering determinism across repeated runs.
+
+Exit criteria:
+
+- Reconstruction loop assembly is deterministic across seeds/runs/platforms for corpus cases.
+- Ambiguous loop assembly paths fail closed with structured diagnostics.
+- Status: Pending.
+
+## Stage 50 - Certified Weld/Snap Policy Hardening
+
+Deliverables:
+
+- Replace heuristic reconstruction weld/snap acceptance with certified geometric checks (distance + orientation + incidence compatibility).
+- Add explicit max-snap and incidence-preservation contracts to reconstruction certificates.
+- Add replay-backed tests for over-snap/under-snap regression classes.
+
+Exit criteria:
+
+- Snap/weld decisions are certificate-backed and deterministic.
+- No silent topology drift from aggressive snapping in strict mode.
+- Status: Pending.
+
+## Stage 51 - Arrangement-Native Patch Extraction Completion
+
+Deliverables:
+
+- Promote arrangement-native patch extraction from candidate path to primary strict path.
+- Restrict bridge-era patch extraction to differential/reference-only execution.
+- Add strict conformance that fails if arrangement mode is not selected where required.
+
+Exit criteria:
+
+- Strict robust patch extraction runs arrangement-native for gated corpus operations.
+- Bridge-only extraction remains available only outside strict production path.
+- Status: Pending.
+
+## Stage 52 - Certified Patch Classification Closure
+
+Deliverables:
+
+- Remove residual uncertified classification branches in strict mode.
+- Require certified margin evidence for each patch keep/drop decision; emit per-patch certification summaries.
+- Add conformance for deterministic classification evidence fingerprints.
+
+Exit criteria:
+
+- Strict mode classification contains no silent uncertified accept/reject paths.
+- Classification certificates are stable across repeated runs on corpus.
+- Status: Pending.
+
+## Stage 53 - Coplanar Semantics Completion Matrix
+
+Deliverables:
+
+- Enumerate and implement full operation/source coplanar truth matrix for Union/Intersect/Difference including complements.
+- Add matrix-driven conformance tests with explicit expected inclusion/exclusion outcomes.
+- Emit coplanar decision certificates referencing matrix row IDs.
+
+Exit criteria:
+
+- Coplanar behavior is fully table-driven and test-covered for strict mode.
+- No ad hoc coplanar branch remains in strict reconstruction/classification.
+- Status: Pending.
+
+## Stage 54 - Non-Manifold Input Policy and Fail-Closed Contracts
+
+Deliverables:
+
+- Define explicit strict-mode policy for non-manifold/degenerate inputs (reject vs sanitized-accept paths).
+- Add preflight validation certificates for input policy outcomes.
+- Add regression corpus entries for known problematic non-manifold inputs.
+
+Exit criteria:
+
+- Input policy is deterministic, documented, and enforced by conformance tests.
+- Non-manifold handling no longer relies on implicit downstream behavior.
+- Status: Pending.
+
+## Stage 55 - Fuzz Escalation + Delta Minimization Pipeline
+
+Deliverables:
+
+- Expand seeded strict fuzz to include stage-focused mutation families (coplanar tangency, near-collinear constraints, thin shells).
+- Add automatic failing-case minimization pipeline and checked-in minimized repro artifacts.
+- Classify unresolved fuzz failures into versioned blocker classes with pinned signatures.
+
+Exit criteria:
+
+- New fuzz failures land with minimized deterministic repros before triage closure.
+- Gate reports distinguish new failure classes from known blockers.
+- Status: Pending.
+
+## Stage 56 - Robustness Gate Quality Bands and Blocker Ledger
+
+Deliverables:
+
+- Split gate results into `hard-fail`, `known-blocked`, and `observability` bands with explicit policy.
+- Add machine-readable blocker ledger (IDs, signatures, expected certificates, owning stage).
+- Enforce ledger consistency in CI (unknown blocker signature => fail).
+
+Exit criteria:
+
+- CI output cleanly separates regressions from known unresolved blockers.
+- Blocker lifecycle is auditable and deterministic.
+- Status: Pending.
+
+## Stage 57 - Strict Path API Finalization and Legacy Isolation
+
+Deliverables:
+
+- Freeze strict robust API semantics for downstream consumers (result contracts, issue codes, certificate shape).
+- Isolate legacy/differential APIs behind explicit diagnostic namespaces and flags.
+- Add migration doc section mapping old behavior to strict robust contracts.
+
+Exit criteria:
+
+- Strict path is stable and consumable without depending on legacy behavior.
+- Legacy path remains available only for diagnostics/comparison workflows.
+- Status: Pending.
+
+## 8.1 Stage Dependencies and Execution Order
+
+Dependency chain:
+
+1. Stage 48 -> Stage 49 -> Stage 50
+2. Stage 48 -> Stage 51 -> Stage 52 -> Stage 53
+3. Stage 54 runs in parallel with Stages 50-53, but must complete before Stage 57 sign-off
+4. Stage 55 starts after Stage 52 (classification evidence stable) and feeds Stage 56 blocker ledger inputs
+5. Stage 56 must complete before Stage 57 API freeze/sign-off
+
+Execution policy:
+
+- Ship one stage per commit.
+- No stage marked complete without explicit conformance and gate evidence in commit message/body or linked CI run.
+- If a stage reveals a new unresolved class, add blocker signature pinning before any behavior change is merged.
+
+## 8.2 Validation Map (48-57)
+
+- Stage 48:
+  - Add `reconstruction-authority:*` certificate assertions in robust conformance.
+  - Extend replay checks to require deterministic authority fingerprints.
+- Stage 49:
+  - Add deterministic loop-order fingerprint tests under reconstruction conformance.
+  - Add fail-closed tests for ambiguous branch-point loop assemblies.
+- Stage 50:
+  - Add replay cases for snap/weld overreach and underreach classes.
+  - Assert incidence-preservation tags in `reconstruction:` certificates.
+- Stage 51:
+  - Add strict test asserting arrangement-native extraction is selected on gated corpus.
+  - Add dependency guard to block strict-path reintroduction of legacy extraction.
+- Stage 52:
+  - Add per-patch classification evidence fingerprint assertions.
+  - Assert zero uncertified keep/drop decisions in strict diagnostics.
+- Stage 53:
+  - Add matrix-driven coplanar conformance corpus (operation x source x complement state).
+  - Assert emitted matrix row ID certificates for each coplanar decision.
+- Stage 54:
+  - Add preflight input-policy tests for representative non-manifold classes.
+  - Assert deterministic reject/sanitize contract certificates.
+- Stage 55:
+  - Add seeded fuzz family expansion and deterministic minimization output checks.
+  - Require minimized repro artifact path + signature in failure reports.
+- Stage 56:
+  - Add blocker ledger schema validation test.
+  - Add gate test that unknown blocker signatures fail the run.
+- Stage 57:
+  - Add API contract snapshot tests (issue codes/certificate prefixes/result shape).
+  - Add migration-doc consistency checklist gate.
+
+## 8.3 Completion Evidence Requirements
+
+For each stage (48-57), completion requires:
+
+1. One implementation commit with scope limited to that stage.
+2. One validation run showing relevant targeted tests pass.
+3. One plan-doc status update from `Pending` to `Completed` with exact artifacts/tests named.
+4. No relaxation of strict fail-closed policy or deterministic certificate guarantees.
+
+## 9. Risks and Mitigations
 
 - Risk: complexity growth in exact fallback paths.
   - Mitigation: isolate exact logic behind small kernel interfaces.
