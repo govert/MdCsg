@@ -70,6 +70,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int reconstructionInvalidComponentCount = 0;
         int reconstructionLoopAssemblyOpenChainCount = 0;
         int reconstructionLoopAssemblyAmbiguousBranchCount = 0;
+        int reconstructionLoopAssemblySkippedDegenerateCount = 0;
         double reconstructionMaxSnapDistance = 0.0;
         bool reconstructionIncidencePreserved = true;
         int classificationFallbackCount = 0;
@@ -434,6 +435,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             out int prePruneRemoved,
             out int prePruneAfterRemove,
             out int prePruneResealIntroduced,
+            out bool prePruneResealDegSafe,
+            out int prePruneResealLoopDegSkipped,
             out int prePruneDegAfter,
             out bool prePruneAccepted,
             out bool prePruneClosedGuard,
@@ -447,6 +450,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"removed={prePruneRemoved};"
             + $"afterRemove={prePruneAfterRemove};"
             + $"resealIntro={prePruneResealIntroduced};"
+            + $"resealSafe={(prePruneResealDegSafe ? 1 : 0)};"
+            + $"resealLoopDegSkipped={prePruneResealLoopDegSkipped};"
             + $"after={prePruneDegAfter};"
             + $"netRemoved={System.Math.Max(0, prePruneDegBefore - prePruneDegAfter)};"
             + $"accepted={(prePruneAccepted ? 1 : 0)};"
@@ -465,6 +470,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             out reconstructionArrangementEdgeSnapCount,
             out reconstructionLoopAssemblyOpenChainCount,
             out reconstructionLoopAssemblyAmbiguousBranchCount,
+            out reconstructionLoopAssemblySkippedDegenerateCount,
             out reconstructionMaxSnapDistance,
             out reconstructionIncidencePreserved);
         result = PruneDegenerateOutputFaces(
@@ -475,6 +481,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             out int postPruneRemoved,
             out int postPruneAfterRemove,
             out int postPruneResealIntroduced,
+            out bool postPruneResealDegSafe,
+            out int postPruneResealLoopDegSkipped,
             out int postPruneDegAfter,
             out bool postPruneAccepted,
             out bool postPruneClosedGuard,
@@ -488,6 +496,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"removed={postPruneRemoved};"
             + $"afterRemove={postPruneAfterRemove};"
             + $"resealIntro={postPruneResealIntroduced};"
+            + $"resealSafe={(postPruneResealDegSafe ? 1 : 0)};"
+            + $"resealLoopDegSkipped={postPruneResealLoopDegSkipped};"
             + $"after={postPruneDegAfter};"
             + $"netRemoved={System.Math.Max(0, postPruneDegBefore - postPruneDegAfter)};"
             + $"accepted={(postPruneAccepted ? 1 : 0)};"
@@ -614,6 +624,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"arrEdgeSnap={reconstructionArrangementEdgeSnapCount};"
             + $"loopOpenChains={reconstructionLoopAssemblyOpenChainCount};"
             + $"loopAmbiguous={reconstructionLoopAssemblyAmbiguousBranchCount};"
+            + $"loopDegSkipped={reconstructionLoopAssemblySkippedDegenerateCount};"
             + $"snapMax={reconstructionMaxSnapDistance.ToString("G17", CultureInfo.InvariantCulture)};"
             + $"incidencePreserved={(reconstructionIncidencePreserved ? 1 : 0)};"
             + $"components={reconstructionComponentCount};"
@@ -1041,6 +1052,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         out int removedDegenerateFaces,
         out int afterRemovalDegenerate,
         out int resealIntroducedDegenerate,
+        out bool resealDegenerateSafe,
+        out int resealSkippedDegenerateTriangles,
         out int afterDegenerate,
         out bool accepted,
         out bool preserveClosedContract,
@@ -1053,6 +1066,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         removedDegenerateFaces = 0;
         afterRemovalDegenerate = 0;
         resealIntroducedDegenerate = 0;
+        resealDegenerateSafe = true;
+        resealSkippedDegenerateTriangles = 0;
         afterDegenerate = 0;
         accepted = false;
         preserveClosedContract = false;
@@ -1113,10 +1128,12 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             && (afterIncidence.BoundaryHalfEdgeCount > 0
                 || afterIncidence.UnmatchedUndirectedEdgeCount > 0))
         {
-            AttemptDeterministicBoundaryReseal(rebuilt, weldTolerance);
+            var resealStats = AttemptDeterministicBoundaryReseal(rebuilt, weldTolerance);
+            resealSkippedDegenerateTriangles = resealStats.LoopDegenerateSkipped;
             afterIncidence = MeshStitcher.AnalyzeBoundaryIncidence(rebuilt);
             afterDegenerate = DegenerateFaceInspector.CountDegenerateFaces(rebuilt, predicateTelemetry);
             resealIntroducedDegenerate = System.Math.Max(0, afterDegenerate - afterRemovalDegenerate);
+            resealDegenerateSafe = afterDegenerate <= afterRemovalDegenerate;
         }
         var afterComponents = AnalyzeComponentTopology(rebuilt);
         boundaryAfter = afterIncidence.BoundaryHalfEdgeCount;
@@ -1126,6 +1143,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         if (preserveClosedContract)
         {
             accepted = accepted
+                && resealDegenerateSafe
                 && afterIncidence.BoundaryHalfEdgeCount <= beforeIncidence.BoundaryHalfEdgeCount
                 && afterIncidence.UnmatchedUndirectedEdgeCount <= beforeIncidence.UnmatchedUndirectedEdgeCount;
         }
@@ -1140,8 +1158,11 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         return WithMesh(result, rebuilt);
     }
 
-    private static void AttemptDeterministicBoundaryReseal(HalfEdgeMesh mesh, double weldTolerance)
+    private readonly record struct BoundaryResealStats(int LoopDegenerateSkipped);
+
+    private static BoundaryResealStats AttemptDeterministicBoundaryReseal(HalfEdgeMesh mesh, double weldTolerance)
     {
+        int loopDegenerateSkipped = 0;
         var bounds = mesh.GetBounds();
         double sceneScale = System.Math.Max(1.0, bounds.Size.Length);
         double tol = System.Math.Max(
@@ -1153,10 +1174,13 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         var incidence = MeshStitcher.AnalyzeBoundaryIncidence(mesh);
         if (incidence.BoundaryHalfEdgeCount > 0 && incidence.OpenBoundaryVertexCount == 0)
         {
-            MeshStitcher.CloseBoundaryLoopsDeterministic(mesh);
+            var summary = MeshStitcher.CloseBoundaryLoopsDeterministic(mesh, skipDegenerateFillTriangles: true);
+            loopDegenerateSkipped += summary.SkippedDegenerateTriangleCount;
             MeshStitcher.RepairBoundary(mesh, tol * 2.0);
             MeshStitcher.RelinkBoundaryTwinsDeterministic(mesh);
         }
+
+        return new BoundaryResealStats(loopDegenerateSkipped);
     }
 
     private static CsgResult PruneDuplicateOutputFaces(
@@ -1392,6 +1416,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         out int arrangementEdgeSnapCount,
         out int loopAssemblyOpenChainCount,
         out int loopAssemblyAmbiguousBranchCount,
+        out int loopAssemblySkippedDegenerateCount,
         out double maxSnapDistance,
         out bool incidencePreserved)
     {
@@ -1400,6 +1425,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         arrangementEdgeSnapCount = 0;
         loopAssemblyOpenChainCount = 0;
         loopAssemblyAmbiguousBranchCount = 0;
+        loopAssemblySkippedDegenerateCount = 0;
         maxSnapDistance = 0.0;
         incidencePreserved = true;
         var mesh = result.Mesh;
@@ -1469,6 +1495,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 var loopAssembly = MeshStitcher.CloseBoundaryLoopsDeterministic(mesh);
                 loopAssemblyOpenChainCount += loopAssembly.OpenChainCount;
                 loopAssemblyAmbiguousBranchCount += loopAssembly.AmbiguousBranchVertexCount;
+                loopAssemblySkippedDegenerateCount += loopAssembly.SkippedDegenerateTriangleCount;
             }
 
             // A second relink pass after loop fill catches new near-equal endpoints.

@@ -619,7 +619,7 @@ Deliverables:
 Exit criteria:
 
 - Reseal contracts are deterministic and certificate-backed.
-- Status: Pending.
+- Status: Completed (`deg-prune:*` now emits `resealSafe`/`resealLoopDegSkipped`; strict acceptance now rejects unsafe closed-contract reseal outcomes, and reseal loop fill can skip exact zero-area fan triangles in reseal mode).
 
 ## Stage 63 - Fixed-Point Degenerate Cleanup Pass
 

@@ -27,10 +27,12 @@ public static class MeshStitcher
     /// <param name="ClosedLoopCount">Number of closed loops detected.</param>
     /// <param name="OpenChainCount">Number of open chains encountered.</param>
     /// <param name="AmbiguousBranchVertexCount">Number of branch vertices with multiple next-edge candidates.</param>
+    /// <param name="SkippedDegenerateTriangleCount">Number of loop-fill fan triangles skipped as degenerate.</param>
     public readonly record struct BoundaryLoopAssemblySummary(
         int ClosedLoopCount,
         int OpenChainCount,
-        int AmbiguousBranchVertexCount);
+        int AmbiguousBranchVertexCount,
+        int SkippedDegenerateTriangleCount);
 
     /// <summary>
     /// Creates a HalfEdgeMesh from a list of triangles.
@@ -170,8 +172,11 @@ public static class MeshStitcher
     /// Closes deterministically assembled boundary loops by triangulating each loop with a fan from its centroid.
     /// </summary>
     /// <param name="mesh">The mesh to repair in-place.</param>
+    /// <param name="skipDegenerateFillTriangles">When true, skip zero-area fan triangles during loop fill.</param>
     /// <returns>Loop-assembly summary (including ambiguity/open-chain counts).</returns>
-    public static BoundaryLoopAssemblySummary CloseBoundaryLoopsDeterministic(HalfEdgeMesh mesh)
+    public static BoundaryLoopAssemblySummary CloseBoundaryLoopsDeterministic(
+        HalfEdgeMesh mesh,
+        bool skipDegenerateFillTriangles = false)
     {
         var loops = CollectBoundaryLoopsDeterministic(
             mesh,
@@ -181,9 +186,11 @@ public static class MeshStitcher
             return new BoundaryLoopAssemblySummary(
                 ClosedLoopCount: 0,
                 OpenChainCount: openChains,
-                AmbiguousBranchVertexCount: ambiguousBranchVertices);
+                AmbiguousBranchVertexCount: ambiguousBranchVertices,
+                SkippedDegenerateTriangleCount: 0);
 
         // Phase 3: Fill each boundary loop with fan triangulation.
+        int skippedDegenerateTriangles = 0;
         foreach (var loop in loops)
         {
             // Compute centroid
@@ -205,6 +212,13 @@ public static class MeshStitcher
             for (int i = 0; i < loop.Count; i++)
             {
                 var he = loop[i];
+                if (skipDegenerateFillTriangles
+                    && IsDegenerateFillTriangle(he.Target.Position, he.Origin.Position, centroid))
+                {
+                    skippedDegenerateTriangles++;
+                    continue;
+                }
+
                 mesh.AddFace(he.Target, he.Origin, centroidVertex);
             }
         }
@@ -214,7 +228,8 @@ public static class MeshStitcher
         return new BoundaryLoopAssemblySummary(
             ClosedLoopCount: loops.Count,
             OpenChainCount: openChains,
-            AmbiguousBranchVertexCount: ambiguousBranchVertices);
+            AmbiguousBranchVertexCount: ambiguousBranchVertices,
+            SkippedDegenerateTriangleCount: skippedDegenerateTriangles);
     }
 
     /// <summary>
@@ -229,7 +244,20 @@ public static class MeshStitcher
         return new BoundaryLoopAssemblySummary(
             ClosedLoopCount: loops.Count,
             OpenChainCount: openChains,
-            AmbiguousBranchVertexCount: ambiguousBranchVertices);
+            AmbiguousBranchVertexCount: ambiguousBranchVertices,
+            SkippedDegenerateTriangleCount: 0);
+    }
+
+    private static bool IsDegenerateFillTriangle(Vec3 a, Vec3 b, Vec3 c)
+    {
+        double abSq = Vec3.DistanceSquared(a, b);
+        double bcSq = Vec3.DistanceSquared(b, c);
+        double caSq = Vec3.DistanceSquared(c, a);
+        if (abSq <= 0.0 || bcSq <= 0.0 || caSq <= 0.0)
+            return true;
+
+        var cross = Vec3.Cross(b - a, c - a);
+        return cross.X == 0.0 && cross.Y == 0.0 && cross.Z == 0.0;
     }
 
     private static List<List<HalfEdge>> CollectBoundaryLoopsDeterministic(

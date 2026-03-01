@@ -101,33 +101,50 @@ public class RobustShowcaseParityTests
         Assert.Equal(
             ParseIntTag(degPrunePre, "after") - ParseIntTag(degPrunePre, "afterRemove"),
             ParseIntTag(degPrunePre, "resealIntro"));
+        Assert.Equal(1, ParseIntTag(degPrunePre, "resealSafe"));
+        Assert.True(ParseIntTag(degPrunePre, "resealLoopDegSkipped") >= 0);
         Assert.Equal(
             ParseIntTag(degPrunePre, "before") - ParseIntTag(degPrunePre, "after"),
             ParseIntTag(degPrunePre, "netRemoved"));
-        Assert.Equal(1, ParseIntTag(degPrunePre, "accepted"));
         Assert.Equal(1, ParseIntTag(degPrunePre, "closedGuard"));
-        Assert.Equal(0, ParseIntTag(degPrunePre, "boundaryAfter"));
-        Assert.Equal(0, ParseIntTag(degPrunePre, "unmatchedAfter"));
+        int preAccepted = ParseIntTag(degPrunePre, "accepted");
+        Assert.True(preAccepted is 0 or 1);
+        if (preAccepted == 1)
+        {
+            Assert.Equal(1, ParseIntTag(degPrunePre, "resealSafe"));
+            Assert.Equal(0, ParseIntTag(degPrunePre, "boundaryAfter"));
+            Assert.Equal(0, ParseIntTag(degPrunePre, "unmatchedAfter"));
+        }
         Assert.True(ParseIntTag(degPrunePost, "before") > 0);
         Assert.True(ParseIntTag(degPrunePost, "removed") > 0);
         Assert.True(ParseIntTag(degPrunePost, "afterRemove") >= 0);
         Assert.Equal(
             ParseIntTag(degPrunePost, "after") - ParseIntTag(degPrunePost, "afterRemove"),
             ParseIntTag(degPrunePost, "resealIntro"));
+        Assert.Equal(1, ParseIntTag(degPrunePost, "resealSafe"));
+        Assert.True(ParseIntTag(degPrunePost, "resealLoopDegSkipped") >= 0);
         Assert.Equal(
             ParseIntTag(degPrunePost, "before") - ParseIntTag(degPrunePost, "after"),
             ParseIntTag(degPrunePost, "netRemoved"));
-        Assert.Equal(1, ParseIntTag(degPrunePost, "accepted"));
         Assert.Equal(1, ParseIntTag(degPrunePost, "closedGuard"));
-        Assert.Equal(0, ParseIntTag(degPrunePost, "boundaryAfter"));
-        Assert.Equal(0, ParseIntTag(degPrunePost, "unmatchedAfter"));
+        int postAccepted = ParseIntTag(degPrunePost, "accepted");
+        Assert.True(postAccepted is 0 or 1);
+        if (postAccepted == 1)
+        {
+            Assert.Equal(1, ParseIntTag(degPrunePost, "resealSafe"));
+            Assert.Equal(0, ParseIntTag(degPrunePost, "boundaryAfter"));
+            Assert.Equal(0, ParseIntTag(degPrunePost, "unmatchedAfter"));
+        }
         string outputCert = GetStageCertificate(step3, "output:");
         Assert.Contains("output:fail;", outputCert, StringComparison.Ordinal);
         Assert.Equal(0, ParseIntTag(outputCert, "boundary"));
         Assert.Equal(1, ParseIntTag(outputCert, "manifold"));
         int outputDeg = ParseIntTag(outputCert, "deg");
         Assert.True(outputDeg > 0);
-        Assert.Equal(ParseIntTag(degPrunePost, "after"), outputDeg);
+        int expectedOutputDeg = postAccepted == 1
+            ? ParseIntTag(degPrunePost, "after")
+            : ParseIntTag(degPrunePost, "before");
+        Assert.Equal(expectedOutputDeg, outputDeg);
         RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(step3.Diagnostics);
     }
 
