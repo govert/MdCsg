@@ -15,10 +15,23 @@ static unsafe class Program
         bool legacyCsgMode = Array.Exists(
             args,
             static a => string.Equals(a, "--legacy-csg", StringComparison.OrdinalIgnoreCase));
+        bool legacyFailoverMode = Array.Exists(
+            args,
+            static a => string.Equals(a, "--allow-legacy-failover", StringComparison.OrdinalIgnoreCase));
         ShowcaseRuntimeOptions.UseLegacyCsg = legacyCsgMode;
-        Console.WriteLine(legacyCsgMode
-            ? "[showcase] CSG mode: legacy (explicit opt-out)"
-            : "[showcase] CSG mode: robust-strict default with legacy failover");
+        ShowcaseRuntimeOptions.AllowLegacyFailover = legacyFailoverMode;
+        if (legacyCsgMode)
+        {
+            Console.WriteLine("[showcase] CSG mode: legacy (explicit opt-out)");
+        }
+        else if (legacyFailoverMode)
+        {
+            Console.WriteLine("[showcase] CSG mode: robust-strict with explicit legacy failover");
+        }
+        else
+        {
+            Console.WriteLine("[showcase] CSG mode: robust-strict (no automatic fallback)");
+        }
 
         AppWindow.Create(1280, 720, "MdCsg Showcase - Loading...");
 

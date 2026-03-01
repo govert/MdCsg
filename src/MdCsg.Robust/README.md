@@ -73,7 +73,7 @@ Current conformance snapshot:
 - Stable-case differential parity tests are active (`RobustDifferentialParityTests`) and assert robust boundary dominance against legacy plus bounded relative-volume drift for legacy-closed outputs.
 - Kernel dependency accretion is guarded by `RobustKernelDependencyGuardTests` to prevent new legacy couplings in `src/MdCsg.Robust/Kernel`.
 - Shadow rollout divergence classification is guarded by `RobustShadowRolloutTests`.
-- Robust showcase now defaults to robust-strict execution with explicit `--legacy-csg` opt-out (and transparent legacy failover on robust failure).
+- Robust showcase now defaults to robust-strict execution with explicit `--legacy-csg` opt-out; legacy failover is available only with explicit `--allow-legacy-failover`.
 - Showcase parity:
   - `CsgOperations` strict mode is closed + zero-fallback,
   - `ChainedCsg` step-2 strict mode is closed + zero-fallback,

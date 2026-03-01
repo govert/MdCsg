@@ -8,6 +8,7 @@ namespace MdCsg.Showcase;
 internal static class ShowcaseRuntimeOptions
 {
     public static bool UseLegacyCsg { get; set; }
+    public static bool AllowLegacyFailover { get; set; }
 }
 
 internal static class ShowcaseCsg
@@ -49,12 +50,24 @@ internal static class ShowcaseCsg
         if (robust.Succeeded && robust.Result is not null)
             return new Solid(robust.Result.Mesh);
 
-        string issues = robust.Issues.Count == 0
+        string issues = FormatIssues(robust);
+
+        if (!ShowcaseRuntimeOptions.AllowLegacyFailover)
+        {
+            throw new InvalidOperationException(
+                $"[showcase] robust {opName} failed in strict mode. "
+                + "Use --legacy-csg for full legacy mode or --allow-legacy-failover for fallback. "
+                + $"Issues: {issues}");
+        }
+
+        Console.WriteLine($"[showcase] robust {opName} failed; using explicit legacy failover. Issues: {issues}");
+        return new Solid(runLegacy().Mesh);
+    }
+
+    private static string FormatIssues(RobustCsgResult robust)
+        => robust.Issues.Count == 0
             ? "<none>"
             : string.Join(
                 " | ",
                 robust.Issues.Select(static i => $"{i.Severity}:{i.Code}:{i.Message}"));
-        Console.WriteLine($"[showcase] robust {opName} failed; falling back to legacy. Issues: {issues}");
-        return new Solid(runLegacy().Mesh);
-    }
 }

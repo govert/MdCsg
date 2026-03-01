@@ -152,7 +152,7 @@ Current status:
 - Added shadow rollout divergence harness (`RobustShadowRolloutTests`) that fails on unclassified robust-vs-legacy divergences in stable corpus.
 - Added deterministic performance budget conformance (`RobustPerformanceBudgetTests`) and CI entrypoint (`tools/ci/run-robust-performance-budget.ps1`).
 - Added robust-kernel dependency guard coverage (`RobustKernelDependencyGuardTests`) to freeze current allowed legacy couplings in `src/MdCsg.Robust/Kernel`.
-- Showcase runtime now defaults to robust-strict CSG with explicit `--legacy-csg` opt-out and transparent legacy failover on robust failure.
+- Showcase runtime now defaults to robust-strict CSG with explicit `--legacy-csg` opt-out and explicit `--allow-legacy-failover` fallback opt-in.
 - Rescue-bar gate slice 3 now includes reconstruction/algebraic/differential plus dependency/shadow/readiness/performance guardrail suites.
 
 ## M3 - Robust Triangulation and Patch Extraction
@@ -290,7 +290,71 @@ Exit criteria:
 - Differential harness remains green and usable as long-term regression protection.
 - Status: In progress/partial. Legacy remains as reference/failover where blockers persist; CI readiness and performance/dependency/shadow gates are now active.
 
-## 7. Risks and Mitigations
+## 7. Stage Batch (43-47) Execution
+
+## Stage 43 - Step-3 Blocker Signature Freeze
+
+Deliverables:
+
+- Extend strict showcase parity tests to pin the currently unresolved chained step-3 reconstruction signature.
+- Assert reconstruction certificate tags (`boundary`, `openLoops`, `unmatched`) so blocker drift is explicit in CI.
+
+Exit criteria:
+
+- Step-3 remains a deterministic, fail-closed blocker with stable signature expectations.
+- Status: Completed (`RobustShowcaseParityTests` certificate/signature pinning).
+
+## Stage 44 - Explicit Legacy Failover Contract
+
+Deliverables:
+
+- Remove automatic legacy fallback from showcase robust mode.
+- Add explicit failover flag so fallback is only allowed by operator intent.
+- Align docs/runtime logging with strict-default behavior.
+
+Exit criteria:
+
+- Showcase default robust path throws on strict robust failure unless explicit failover is configured.
+- Legacy full-mode (`--legacy-csg`) remains available for comparison.
+- Status: Completed (`ShowcaseCsg`/`Program` explicit failover contract + conformance/build validation).
+
+## Stage 45 - Showcase Strict-Failure Contract Tests
+
+Deliverables:
+
+- Add deterministic conformance coverage for strict showcase failure behavior and failover opt-in behavior.
+- Pin expected failure codes/certificates for blocked showcase steps under strict mode.
+
+Exit criteria:
+
+- CI guards against regression to implicit/automatic showcase fallback.
+- Status: Pending.
+
+## Stage 46 - Replay Coverage for Step-3 Reconstruction Artifacts
+
+Deliverables:
+
+- Add replay corpus artifacts for the chained step-3 reconstruction blocker signatures.
+- Assert deterministic reconstruction-pre/post certificate invariants across replay runs.
+
+Exit criteria:
+
+- Step-3 blocker behavior is reproducible via replay corpus without relying solely on scene harness execution.
+- Status: Pending.
+
+## Stage 47 - Rescue Gate Promotion for Showcase Contract
+
+Deliverables:
+
+- Promote strict showcase failure-contract tests and step-3 replay checks into robustness gate slices.
+- Ensure gate failures clearly separate unresolved blocker state vs regression.
+
+Exit criteria:
+
+- Robustness gate fails deterministically on showcase contract regressions with actionable diagnostics.
+- Status: Pending.
+
+## 8. Risks and Mitigations
 
 - Risk: complexity growth in exact fallback paths.
   - Mitigation: isolate exact logic behind small kernel interfaces.
