@@ -397,7 +397,7 @@ Exit criteria:
 
 - Snap/weld decisions are certificate-backed and deterministic.
 - No silent topology drift from aggressive snapping in strict mode.
-- Status: Pending.
+- Status: Completed (deterministic anti-collapse snap checks + `snapMax`/`incidencePreserved` reconstruction certificates).
 
 ## Stage 51 - Arrangement-Native Patch Extraction Completion
 

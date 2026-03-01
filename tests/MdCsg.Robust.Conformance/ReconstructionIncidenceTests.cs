@@ -45,6 +45,8 @@ public class ReconstructionIncidenceTests
         Assert.Contains("arrEdgeSnap=", baselineCert, StringComparison.Ordinal);
         Assert.Contains("components=", baselineCert, StringComparison.Ordinal);
         Assert.Contains("invalidComponents=", baselineCert, StringComparison.Ordinal);
+        Assert.Contains("snapMax=", baselineCert, StringComparison.Ordinal);
+        Assert.Contains("incidencePreserved=1", baselineCert, StringComparison.Ordinal);
         Assert.Contains("nonWorse=1", baselineCert, StringComparison.Ordinal);
         Assert.Contains("invalidComponents=", baselinePreCert, StringComparison.Ordinal);
         Assert.Contains("pass=1", baselineAuthorityCert, StringComparison.Ordinal);
