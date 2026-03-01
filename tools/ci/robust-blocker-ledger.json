@@ -12,9 +12,10 @@
       "signature": "issues=OutputMeshHasDegenerateFaces|StageInvariantViolation;boundary=0;openLoops=0;unmatched=0",
       "expectedCertificates": [
         "reconstruction:pass;",
-        "output:fail;"
+        "output:fail;",
+        "deg-prune:phase=post;"
       ],
-      "owningStage": 58
+      "owningStage": 65
     }
   ]
 }

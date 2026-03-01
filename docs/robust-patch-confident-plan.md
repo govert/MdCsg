@@ -655,7 +655,7 @@ Deliverables:
 Exit criteria:
 
 - Blocker state is explicit, deterministic, and reflected in tests + ledger.
-- Status: Pending.
+- Status: Completed (blocker remains unresolved; ledger updated with stage-65 ownership and explicit `deg-prune:phase=post;` evidence requirement while preserving pinned fail-closed signature class).
 
 ## Stage 66 - Robustness Gate Promotion (Degenerate Contracts)
 
