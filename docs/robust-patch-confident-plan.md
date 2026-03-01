@@ -154,6 +154,7 @@ Current status:
 - Added robust-kernel dependency guard coverage (`RobustKernelDependencyGuardTests`) to freeze current allowed legacy couplings in `src/MdCsg.Robust/Kernel`.
 - Showcase runtime now defaults to robust-strict CSG with explicit `--legacy-csg` opt-out and explicit `--allow-legacy-failover` fallback opt-in.
 - Rescue-bar gate slice 3 now includes reconstruction/algebraic/differential plus dependency/shadow/readiness/performance guardrail suites.
+- Rescue-bar gate now also includes reconstruction replay corpus checks (slice 1) and dedicated showcase runtime strict/failover contract tests (slice 4).
 
 ## M3 - Robust Triangulation and Patch Extraction
 
@@ -352,7 +353,7 @@ Deliverables:
 Exit criteria:
 
 - Robustness gate fails deterministically on showcase contract regressions with actionable diagnostics.
-- Status: Pending.
+- Status: Completed (`run-robustness-gate.ps1` slice promotion for reconstruction replay + showcase runtime contract tests).
 
 ## 8. Risks and Mitigations
 

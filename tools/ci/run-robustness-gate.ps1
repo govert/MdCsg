@@ -2,7 +2,8 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "Running robust conformance rescue bar..."
 
-$project = "tests/MdCsg.Robust.Conformance/MdCsg.Robust.Conformance.csproj"
+$robustProject = "tests/MdCsg.Robust.Conformance/MdCsg.Robust.Conformance.csproj"
+$showcaseContractProject = "tests/MdCsg.Showcase.ContractTests/MdCsg.Showcase.ContractTests.csproj"
 $commonArgs = @("-c", "Release", "--nologo", "--blame-hang-timeout", "10m")
 
 function TestHostCrashDetected([string]$output)
@@ -12,11 +13,11 @@ function TestHostCrashDetected([string]$output)
         -or $output.Contains("Internal CLR error", [System.StringComparison]::OrdinalIgnoreCase)
 }
 
-function Invoke-GateSlice([string]$label, [string]$filter)
+function Invoke-GateSlice([string]$label, [string]$projectPath, [string]$filter)
 {
     Write-Host $label
 
-    $args = @($project) + $commonArgs + @("--filter", $filter)
+    $args = @($projectPath) + $commonArgs + @("--filter", $filter)
     $output = (& dotnet test @args 2>&1 | Tee-Object -Variable captured)
     $exitCode = $LASTEXITCODE
     $joined = ($captured | ForEach-Object { $_.ToString() }) -join "`n"
@@ -45,13 +46,21 @@ function Invoke-GateSlice([string]$label, [string]$filter)
 }
 
 Invoke-GateSlice `
-    "1/3: Showcase/backlog/replay robustness gates..." `
-    "(FullyQualifiedName~RobustShowcaseParityTests|FullyQualifiedName~RobustConformanceBacklogTests|FullyQualifiedName~ArrangementReplayCorpusTests|FullyQualifiedName~TriangulationReplayCorpusTests)"
+    "1/4: Showcase/backlog/replay robustness gates..." `
+    $robustProject `
+    "(FullyQualifiedName~RobustShowcaseParityTests|FullyQualifiedName~RobustConformanceBacklogTests|FullyQualifiedName~ArrangementReplayCorpusTests|FullyQualifiedName~TriangulationReplayCorpusTests|FullyQualifiedName~ReconstructionReplayCorpusTests)"
 
 Invoke-GateSlice `
-    "2/3: Seeded strict fuzz smoke gate..." `
+    "2/4: Seeded strict fuzz smoke gate..." `
+    $robustProject `
     "FullyQualifiedName~RobustFuzzSmokeTests"
 
 Invoke-GateSlice `
-    "3/3: Triangulation bridge + smoke + reconstruction/algebraic/differential/dependency/shadow/readiness/budget guardrails..." `
+    "3/4: Triangulation bridge + smoke + reconstruction/algebraic/differential/dependency/shadow/readiness/budget guardrails..." `
+    $robustProject `
     "(FullyQualifiedName~RobustTriangulationBridgeTests|FullyQualifiedName~RobustCsgSmokeTests|FullyQualifiedName~ReconstructionIncidenceTests|FullyQualifiedName~RobustAlgebraicConformanceTests|FullyQualifiedName~RobustDifferentialParityTests|FullyQualifiedName~RobustKernelDependencyGuardTests|FullyQualifiedName~RobustShadowRolloutTests|FullyQualifiedName~RobustReadinessSnapshotTests|FullyQualifiedName~RobustPerformanceBudgetTests)"
+
+Invoke-GateSlice `
+    "4/4: Showcase runtime strict/failover contract gate..." `
+    $showcaseContractProject `
+    "FullyQualifiedName~ShowcaseCsgContractTests"

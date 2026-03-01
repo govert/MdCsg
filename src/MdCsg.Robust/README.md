@@ -67,7 +67,7 @@ Current conformance snapshot:
 - `tests/MdCsg.Robust.Conformance` currently runs green in the robustness gate slices (no known skipped gate cases).
 - CI rescue bar entrypoint is `tools/ci/run-robustness-gate.ps1` (wired to `.github/workflows/robustness-gate.yml`).
   - gate runner now retries a slice once when test-host crash/abort markers are detected, and fails hard if the retry is not clean
-  - gate slices: showcase/backlog/replay, strict fuzz smoke, triangulation+smoke+reconstruction+algebraic+differential+dependency+shadow+readiness+budget guardrails (with hang-timeout protection)
+  - gate slices: showcase/backlog/replay (including reconstruction replay), strict fuzz smoke, triangulation+smoke+reconstruction+algebraic+differential+dependency+shadow+readiness+budget guardrails, showcase runtime strict/failover contract (with hang-timeout protection)
 - strict readiness snapshot entrypoint is `tools/ci/run-robust-readiness-report.ps1` (reports blocker status + stable-corpus health).
 - deterministic performance budget entrypoint is `tools/ci/run-robust-performance-budget.ps1`.
 - Stable-overlap and smoke union zero-fallback checks are active and passing.
