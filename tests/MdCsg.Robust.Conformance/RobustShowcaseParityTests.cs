@@ -106,6 +106,11 @@ public class RobustShowcaseParityTests
         Assert.Equal(
             ParseIntTag(degPrunePre, "before") - ParseIntTag(degPrunePre, "after"),
             ParseIntTag(degPrunePre, "netRemoved"));
+        int preIters = ParseIntTag(degPrunePre, "iters");
+        int preApplied = ParseIntTag(degPrunePre, "applied");
+        Assert.InRange(preIters, 1, 3);
+        Assert.InRange(preApplied, 0, preIters);
+        Assert.Contains("term=", degPrunePre, StringComparison.Ordinal);
         Assert.Equal(1, ParseIntTag(degPrunePre, "closedGuard"));
         int preAccepted = ParseIntTag(degPrunePre, "accepted");
         Assert.True(preAccepted is 0 or 1);
@@ -126,6 +131,11 @@ public class RobustShowcaseParityTests
         Assert.Equal(
             ParseIntTag(degPrunePost, "before") - ParseIntTag(degPrunePost, "after"),
             ParseIntTag(degPrunePost, "netRemoved"));
+        int postIters = ParseIntTag(degPrunePost, "iters");
+        int postApplied = ParseIntTag(degPrunePost, "applied");
+        Assert.InRange(postIters, 1, 3);
+        Assert.InRange(postApplied, 0, postIters);
+        Assert.Contains("term=", degPrunePost, StringComparison.Ordinal);
         Assert.Equal(1, ParseIntTag(degPrunePost, "closedGuard"));
         int postAccepted = ParseIntTag(degPrunePost, "accepted");
         Assert.True(postAccepted is 0 or 1);

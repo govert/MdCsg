@@ -87,6 +87,11 @@ public class RobustReadinessSnapshotTests
         Assert.Equal(
             ParseIntTag(prePrune, "before") - ParseIntTag(prePrune, "after"),
             ParseIntTag(prePrune, "netRemoved"));
+        int preIters = ParseIntTag(prePrune, "iters");
+        int preApplied = ParseIntTag(prePrune, "applied");
+        Assert.InRange(preIters, 1, 3);
+        Assert.InRange(preApplied, 0, preIters);
+        Assert.Contains("term=", prePrune, StringComparison.Ordinal);
         Assert.Equal(1, ParseIntTag(prePrune, "closedGuard"));
         int preAccepted = ParseIntTag(prePrune, "accepted");
         Assert.True(preAccepted is 0 or 1);
@@ -107,6 +112,11 @@ public class RobustReadinessSnapshotTests
         Assert.Equal(
             ParseIntTag(postPrune, "before") - ParseIntTag(postPrune, "after"),
             ParseIntTag(postPrune, "netRemoved"));
+        int postIters = ParseIntTag(postPrune, "iters");
+        int postApplied = ParseIntTag(postPrune, "applied");
+        Assert.InRange(postIters, 1, 3);
+        Assert.InRange(postApplied, 0, postIters);
+        Assert.Contains("term=", postPrune, StringComparison.Ordinal);
         Assert.Equal(1, ParseIntTag(postPrune, "closedGuard"));
         int postAccepted = ParseIntTag(postPrune, "accepted");
         Assert.True(postAccepted is 0 or 1);

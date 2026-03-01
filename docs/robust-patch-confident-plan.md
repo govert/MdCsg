@@ -631,7 +631,7 @@ Deliverables:
 Exit criteria:
 
 - Cleanup converges deterministically and never bypasses topology invariants.
-- Status: Pending.
+- Status: Completed (`PruneDegenerateOutputFaces` now runs bounded fixed-point cleanup with `MaxDegeneratePruneIterations=3`, and `deg-prune:*` certificates now emit deterministic `iters`, `applied`, and `term` tags).
 
 ## Stage 64 - Conformance and Replay Contract Expansion
 

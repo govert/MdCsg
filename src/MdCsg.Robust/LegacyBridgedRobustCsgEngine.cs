@@ -439,6 +439,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             out int prePruneResealLoopDegSkipped,
             out int prePruneDegAfter,
             out bool prePruneAccepted,
+            out int prePruneIterations,
+            out int prePruneAppliedIterations,
+            out string prePruneTermination,
             out bool prePruneClosedGuard,
             out int prePruneBoundaryBefore,
             out int prePruneBoundaryAfter,
@@ -455,6 +458,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"after={prePruneDegAfter};"
             + $"netRemoved={System.Math.Max(0, prePruneDegBefore - prePruneDegAfter)};"
             + $"accepted={(prePruneAccepted ? 1 : 0)};"
+            + $"iters={prePruneIterations};"
+            + $"applied={prePruneAppliedIterations};"
+            + $"term={prePruneTermination};"
             + $"closedGuard={(prePruneClosedGuard ? 1 : 0)};"
             + $"boundaryBefore={prePruneBoundaryBefore};"
             + $"boundaryAfter={prePruneBoundaryAfter};"
@@ -485,6 +491,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             out int postPruneResealLoopDegSkipped,
             out int postPruneDegAfter,
             out bool postPruneAccepted,
+            out int postPruneIterations,
+            out int postPruneAppliedIterations,
+            out string postPruneTermination,
             out bool postPruneClosedGuard,
             out int postPruneBoundaryBefore,
             out int postPruneBoundaryAfter,
@@ -501,6 +510,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"after={postPruneDegAfter};"
             + $"netRemoved={System.Math.Max(0, postPruneDegBefore - postPruneDegAfter)};"
             + $"accepted={(postPruneAccepted ? 1 : 0)};"
+            + $"iters={postPruneIterations};"
+            + $"applied={postPruneAppliedIterations};"
+            + $"term={postPruneTermination};"
             + $"closedGuard={(postPruneClosedGuard ? 1 : 0)};"
             + $"boundaryBefore={postPruneBoundaryBefore};"
             + $"boundaryAfter={postPruneBoundaryAfter};"
@@ -1044,6 +1056,24 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             && DegenerateFaceCount == 0;
     }
 
+    private const int MaxDegeneratePruneIterations = 3;
+
+    private readonly record struct DegeneratePrunePassResult(
+        CsgResult Result,
+        int BeforeDegenerate,
+        int RemovedDegenerateFaces,
+        int AfterRemovalDegenerate,
+        int ResealIntroducedDegenerate,
+        bool ResealDegenerateSafe,
+        int ResealSkippedDegenerateTriangles,
+        int AfterDegenerate,
+        bool Accepted,
+        bool PreserveClosedContract,
+        int BoundaryBefore,
+        int BoundaryAfter,
+        int UnmatchedBefore,
+        int UnmatchedAfter);
+
     private static CsgResult PruneDegenerateOutputFaces(
         CsgResult result,
         double weldTolerance,
@@ -1056,6 +1086,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         out int resealSkippedDegenerateTriangles,
         out int afterDegenerate,
         out bool accepted,
+        out int iterations,
+        out int appliedIterations,
+        out string terminationReason,
         out bool preserveClosedContract,
         out int boundaryBefore,
         out int boundaryAfter,
@@ -1070,20 +1103,159 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         resealSkippedDegenerateTriangles = 0;
         afterDegenerate = 0;
         accepted = false;
+        iterations = 0;
+        appliedIterations = 0;
+        terminationReason = "none";
         preserveClosedContract = false;
         boundaryBefore = 0;
         boundaryAfter = 0;
         unmatchedBefore = 0;
         unmatchedAfter = 0;
 
+        CsgResult current = result;
+        int lastAfter = 0;
+        int lastAfterRemoval = 0;
+        bool sawPass = false;
+
+        for (int i = 0; i < MaxDegeneratePruneIterations; i++)
+        {
+            iterations++;
+            var pass = PruneDegenerateOutputFacesSinglePass(current, weldTolerance, predicateTelemetry);
+            if (!sawPass)
+            {
+                beforeDegenerate = pass.BeforeDegenerate;
+                boundaryBefore = pass.BoundaryBefore;
+                unmatchedBefore = pass.UnmatchedBefore;
+                preserveClosedContract = pass.PreserveClosedContract;
+                sawPass = true;
+            }
+
+            removedDegenerateFaces += pass.RemovedDegenerateFaces;
+            resealIntroducedDegenerate += pass.ResealIntroducedDegenerate;
+            resealSkippedDegenerateTriangles += pass.ResealSkippedDegenerateTriangles;
+            resealDegenerateSafe &= pass.ResealDegenerateSafe;
+            lastAfterRemoval = pass.AfterRemovalDegenerate;
+            boundaryAfter = pass.BoundaryAfter;
+            unmatchedAfter = pass.UnmatchedAfter;
+
+            if (!pass.Accepted)
+            {
+                terminationReason = i == 0 ? "rejected-initial" : "rejected";
+                break;
+            }
+
+            current = pass.Result;
+            appliedIterations++;
+            accepted = true;
+            lastAfter = pass.AfterDegenerate;
+
+            if (pass.AfterDegenerate == 0)
+            {
+                terminationReason = "cleared";
+                break;
+            }
+
+            if (pass.AfterDegenerate >= pass.BeforeDegenerate)
+            {
+                terminationReason = "stalled";
+                break;
+            }
+
+            if (appliedIterations >= MaxDegeneratePruneIterations)
+            {
+                terminationReason = "budget";
+                break;
+            }
+
+            terminationReason = "continue";
+        }
+
+        if (!sawPass)
+        {
+            terminationReason = "empty";
+            return current;
+        }
+
+        if (beforeDegenerate == 0)
+            terminationReason = "already-clean";
+        else if (terminationReason == "continue")
+            terminationReason = "budget";
+
+        if (accepted)
+        {
+            afterRemovalDegenerate = lastAfterRemoval;
+            afterDegenerate = lastAfter;
+            return current;
+        }
+
+        // Rejected/no-op passes keep the original mesh, so output-facing metrics
+        // must remain aligned with the unchanged result.
+        afterRemovalDegenerate = beforeDegenerate;
+        afterDegenerate = beforeDegenerate;
+        boundaryAfter = boundaryBefore;
+        unmatchedAfter = unmatchedBefore;
+        return result;
+    }
+
+    private static DegeneratePrunePassResult PruneDegenerateOutputFacesSinglePass(
+        CsgResult result,
+        double weldTolerance,
+        PredicateTelemetryCounter predicateTelemetry)
+    {
+        int beforeDegenerate = 0;
+        int removedDegenerateFaces = 0;
+        int afterRemovalDegenerate = 0;
+        int resealIntroducedDegenerate = 0;
+        bool resealDegenerateSafe = true;
+        int resealSkippedDegenerateTriangles = 0;
+        int afterDegenerate = 0;
+        bool accepted = false;
+        bool preserveClosedContract = false;
+        int boundaryBefore = 0;
+        int boundaryAfter = 0;
+        int unmatchedBefore = 0;
+        int unmatchedAfter = 0;
+
         if (result.Mesh.Faces.Count == 0)
-            return result;
+        {
+            return new DegeneratePrunePassResult(
+                result,
+                beforeDegenerate,
+                removedDegenerateFaces,
+                afterRemovalDegenerate,
+                resealIntroducedDegenerate,
+                resealDegenerateSafe,
+                resealSkippedDegenerateTriangles,
+                afterDegenerate,
+                accepted,
+                preserveClosedContract,
+                boundaryBefore,
+                boundaryAfter,
+                unmatchedBefore,
+                unmatchedAfter);
+        }
 
         beforeDegenerate = DegenerateFaceInspector.CountDegenerateFaces(result.Mesh, predicateTelemetry);
         afterRemovalDegenerate = beforeDegenerate;
         afterDegenerate = beforeDegenerate;
         if (beforeDegenerate == 0)
-            return result;
+        {
+            return new DegeneratePrunePassResult(
+                result,
+                beforeDegenerate,
+                removedDegenerateFaces,
+                afterRemovalDegenerate,
+                resealIntroducedDegenerate,
+                resealDegenerateSafe,
+                resealSkippedDegenerateTriangles,
+                afterDegenerate,
+                accepted,
+                preserveClosedContract,
+                boundaryBefore,
+                boundaryAfter,
+                unmatchedBefore,
+                unmatchedAfter);
+        }
 
         var beforeIncidence = MeshStitcher.AnalyzeBoundaryIncidence(result.Mesh);
         var beforeComponents = AnalyzeComponentTopology(result.Mesh);
@@ -1114,7 +1286,23 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         }
 
         if (!removedAny)
-            return result;
+        {
+            return new DegeneratePrunePassResult(
+                result,
+                beforeDegenerate,
+                removedDegenerateFaces,
+                afterRemovalDegenerate,
+                resealIntroducedDegenerate,
+                resealDegenerateSafe,
+                resealSkippedDegenerateTriangles,
+                afterDegenerate,
+                accepted,
+                preserveClosedContract,
+                boundaryBefore,
+                boundaryAfter,
+                unmatchedBefore,
+                unmatchedAfter);
+        }
 
         var rebuilt = new MeshBuilder().Build(positions, kept);
         rebuilt.IsComplemented = result.Mesh.IsComplemented;
@@ -1152,10 +1340,23 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             accepted = accepted
                 && afterComponents.InvalidComponentCount <= beforeComponents.InvalidComponentCount;
         }
-        if (!accepted)
-            return result;
 
-        return WithMesh(result, rebuilt);
+        var output = accepted ? WithMesh(result, rebuilt) : result;
+        return new DegeneratePrunePassResult(
+            output,
+            beforeDegenerate,
+            removedDegenerateFaces,
+            afterRemovalDegenerate,
+            resealIntroducedDegenerate,
+            resealDegenerateSafe,
+            resealSkippedDegenerateTriangles,
+            afterDegenerate,
+            accepted,
+            preserveClosedContract,
+            boundaryBefore,
+            boundaryAfter,
+            unmatchedBefore,
+            unmatchedAfter);
     }
 
     private readonly record struct BoundaryResealStats(int LoopDegenerateSkipped);
