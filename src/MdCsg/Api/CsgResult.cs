@@ -62,6 +62,11 @@ public class CsgResult
     /// </summary>
     public IReadOnlyList<string> PatchExtractionCandidateSignatures { get; init; } = Array.Empty<string>();
 
+    /// <summary>
+    /// Normalized authoritative boundary contract for reconstruction decisions.
+    /// </summary>
+    public ReconstructionBoundaryContract? AuthoritativeBoundary { get; init; }
+
     /// <summary>Total number of faces in the result.</summary>
     public int FaceCount => Mesh.Faces.Count;
 

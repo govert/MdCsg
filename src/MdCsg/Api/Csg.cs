@@ -236,7 +236,13 @@ public static class Csg
             SelectedAssemblyTrianglesFromA = chosen.Assembly.TrianglesFromMeshA,
             SelectedAssemblyTrianglesFromB = chosen.Assembly.TrianglesFromMeshB,
             SelectedAssemblyFlippedTrianglesFromB = chosen.Assembly.FlippedTrianglesFromMeshB,
-            PatchExtractionCandidateSignatures = candidateSignatures
+            PatchExtractionCandidateSignatures = candidateSignatures,
+            AuthoritativeBoundary = new ReconstructionBoundaryContract(
+                ExtractionMode: chosen.ExtractionMode,
+                Authority: GetBoundaryAuthorityForMode(chosen.ExtractionMode),
+                BoundaryEdgeCount: chosen.TopologyQuality.BoundaryEdgeCount,
+                IsEdgeManifold: chosen.TopologyQuality.IsEdgeManifold,
+                ConnectedComponentCount: chosen.TopologyQuality.ConnectedComponentCount)
         };
     }
 

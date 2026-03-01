@@ -32,6 +32,7 @@ Initial scaffold now exists:
   - reconstruction pass also performs arrangement-edge-guided boundary projection snapping (`arrEdgeSnap`) before repair passes
   - reconstruction certificates now include component validity accounting (`components`, `invalidComponents`) and strict mode emits explicit errors when invalid components remain
   - strict stage telemetry now includes `reconstruction-policy:*` certificates with operation truth-table checks (`fromA`, `fromB`, `flipB`, `pass`)
+  - strict stage telemetry now includes `reconstruction-authority:*` certificates from normalized authoritative-boundary contracts
   - reconstruction metrics are computed via deterministic boundary-incidence accounting in `MeshStitcher.AnalyzeBoundaryIncidence`
   - strict bridge path uses a deterministic constructive reconstruction pass (relink, balanced-loop fill, invalid-component pruning)
   - strict bridge path now evaluates intra-face, global, and arrangement-driven patch extraction candidates and deterministically selects the best stitched topology

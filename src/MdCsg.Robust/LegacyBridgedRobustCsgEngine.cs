@@ -6,6 +6,7 @@ using MdCsg.Cutting;
 using MdCsg.Math;
 using MdCsg.Mesh;
 using MdCsg.Operations;
+using MdCsg.Patches;
 using MdCsg.Predicates;
 using MdCsg.Robust.Kernel.Arrangement;
 using MdCsg.Robust.Kernel.Predicates;
@@ -337,6 +338,24 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 "patch-extraction-candidates:"
                 + string.Join("|", result.PatchExtractionCandidateSignatures));
         }
+        var authoritySnapshot = EvaluateReconstructionAuthoritySnapshot(result);
+        stageCertificates.Add(
+            "reconstruction-authority:"
+            + $"mode={authoritySnapshot.Mode};"
+            + $"authority={authoritySnapshot.Authority};"
+            + $"boundary={authoritySnapshot.Boundary};"
+            + $"manifold={authoritySnapshot.Manifold};"
+            + $"components={authoritySnapshot.Components};"
+            + $"pass={(authoritySnapshot.IsValid ? 1 : 0)}");
+        if (opts.Mode == RobustMode.Strict && !authoritySnapshot.IsValid)
+        {
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.StageInvariantViolation,
+                "Reconstruction authority contract is missing or invalid.",
+                RobustIssueSeverity.Error);
+        }
         stageCertificates.Add(
             $"classification:pass;certified={classifiedCertifiedCount};"
             + $"fallback={classificationFallbackCount};policy=margin>errorBound");
@@ -376,6 +395,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             result,
             csgOptions.WeldTolerance,
             arrangement,
+            result.AuthoritativeBoundary,
             out reconstructionDroppedComponentCount,
             out reconstructionArrangementSnapCount,
             out reconstructionArrangementEdgeSnapCount);
@@ -790,7 +810,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             SelectedAssemblyTrianglesFromA = result.SelectedAssemblyTrianglesFromA,
             SelectedAssemblyTrianglesFromB = result.SelectedAssemblyTrianglesFromB,
             SelectedAssemblyFlippedTrianglesFromB = result.SelectedAssemblyFlippedTrianglesFromB,
-            PatchExtractionCandidateSignatures = result.PatchExtractionCandidateSignatures
+            PatchExtractionCandidateSignatures = result.PatchExtractionCandidateSignatures,
+            AuthoritativeBoundary = result.AuthoritativeBoundary
         };
     }
 
@@ -831,6 +852,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         CsgResult result,
         double weldTolerance,
         ArrangementGraph? arrangement,
+        ReconstructionBoundaryContract? authoritativeBoundary,
         out int droppedComponentCount,
         out int arrangementSnapCount,
         out int arrangementEdgeSnapCount)
@@ -854,6 +876,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 return result;
 
             double tol = baseTolerance * (1 << pass);
+            // Authority contract is emitted for reconstruction semantics, but while
+            // strict-step3 remains unresolved we keep arrangement-guided snapping
+            // enabled for all extraction authorities to preserve pinned blocker shape.
             if (arrangement != null && arrangement.Vertices.Count > 0)
             {
                 arrangementSnapCount += SnapBoundaryVerticesToArrangement(mesh, arrangement, tol);
@@ -1195,7 +1220,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             SelectedAssemblyTrianglesFromA = source.SelectedAssemblyTrianglesFromA,
             SelectedAssemblyTrianglesFromB = source.SelectedAssemblyTrianglesFromB,
             SelectedAssemblyFlippedTrianglesFromB = source.SelectedAssemblyFlippedTrianglesFromB,
-            PatchExtractionCandidateSignatures = source.PatchExtractionCandidateSignatures
+            PatchExtractionCandidateSignatures = source.PatchExtractionCandidateSignatures,
+            AuthoritativeBoundary = source.AuthoritativeBoundary
         };
     }
 
@@ -1264,6 +1290,40 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int FlippedFromB,
         bool IsValid,
         string Rule);
+
+    private static ReconstructionAuthoritySnapshot EvaluateReconstructionAuthoritySnapshot(CsgResult result)
+    {
+        var boundary = result.AuthoritativeBoundary;
+        if (boundary is null)
+        {
+            return new ReconstructionAuthoritySnapshot(
+                Mode: "Unknown",
+                Authority: "Unknown",
+                Boundary: -1,
+                Manifold: -1,
+                Components: -1,
+                IsValid: false);
+        }
+
+        bool valid =
+            boundary.BoundaryEdgeCount >= 0
+            && boundary.ConnectedComponentCount >= 0;
+        return new ReconstructionAuthoritySnapshot(
+            Mode: boundary.ExtractionMode.ToString(),
+            Authority: boundary.Authority.ToString(),
+            Boundary: boundary.BoundaryEdgeCount,
+            Manifold: boundary.IsEdgeManifold ? 1 : 0,
+            Components: boundary.ConnectedComponentCount,
+            IsValid: valid);
+    }
+
+    private readonly record struct ReconstructionAuthoritySnapshot(
+        string Mode,
+        string Authority,
+        int Boundary,
+        int Manifold,
+        int Components,
+        bool IsValid);
 
     private static ReconstructionComponentSnapshot AnalyzeComponentTopology(HalfEdgeMesh mesh)
     {

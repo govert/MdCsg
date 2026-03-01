@@ -39,12 +39,17 @@ public class ReconstructionIncidenceTests
         Assert.Equal(0, baseline.Diagnostics.ReconstructionInvalidComponentCount);
         string baselineCert = GetReconstructionCert(baseline);
         string baselinePreCert = GetStageCert(baseline, "reconstruction-pre:");
+        string baselineAuthorityCert = GetStageCert(baseline, "reconstruction-authority:");
         Assert.Contains("arrSnap=", baselineCert, StringComparison.Ordinal);
         Assert.Contains("arrEdgeSnap=", baselineCert, StringComparison.Ordinal);
         Assert.Contains("components=", baselineCert, StringComparison.Ordinal);
         Assert.Contains("invalidComponents=", baselineCert, StringComparison.Ordinal);
         Assert.Contains("nonWorse=1", baselineCert, StringComparison.Ordinal);
         Assert.Contains("invalidComponents=", baselinePreCert, StringComparison.Ordinal);
+        Assert.Contains("pass=1", baselineAuthorityCert, StringComparison.Ordinal);
+        Assert.Contains("authority=", baselineAuthorityCert, StringComparison.Ordinal);
+        Assert.Contains("mode=", baselineAuthorityCert, StringComparison.Ordinal);
+        Assert.Contains("boundary=", baselineAuthorityCert, StringComparison.Ordinal);
 
         for (int i = 0; i < 5; i++)
         {
@@ -56,6 +61,7 @@ public class ReconstructionIncidenceTests
             Assert.Equal(baseline.Diagnostics.ReconstructionComponentCount, next.Diagnostics.ReconstructionComponentCount);
             Assert.Equal(baseline.Diagnostics.ReconstructionInvalidComponentCount, next.Diagnostics.ReconstructionInvalidComponentCount);
             Assert.Equal(baselinePreCert, GetStageCert(next, "reconstruction-pre:"));
+            Assert.Equal(baselineAuthorityCert, GetStageCert(next, "reconstruction-authority:"));
             Assert.Equal(baselineCert, GetReconstructionCert(next));
         }
     }

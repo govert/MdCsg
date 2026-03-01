@@ -369,7 +369,7 @@ Exit criteria:
 
 - Reconstruction no longer depends on legacy mesh-adjacency authority in strict mode.
 - Diagnostics show deterministic authority certificates for all strict operations.
-- Status: Pending.
+- Status: Completed (`AuthoritativeBoundary` contract + `reconstruction-authority:*` certificates with deterministic conformance assertions).
 
 ## Stage 49 - Deterministic Loop Assembly Kernel
 
