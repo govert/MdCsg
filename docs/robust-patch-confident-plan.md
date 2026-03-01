@@ -579,6 +579,169 @@ For each stage (48-57), completion requires:
 3. One plan-doc status update from `Pending` to `Completed` with exact artifacts/tests named.
 4. No relaxation of strict fail-closed policy or deterministic certificate guarantees.
 
+## 9. Stage Batch (60-69) Planning
+
+Goal:
+
+- Eliminate the remaining chained step-3 strict blocker (`OutputMeshHasDegenerateFaces`) by replacing residual heuristic cleanup with deterministic, certificate-backed degenerate-repair contracts.
+
+## Stage 60 - Degenerate Burn-Down Plan Freeze
+
+Deliverables:
+
+- Check in Stage 60-69 execution plan with deterministic contracts, dependencies, and validation map.
+- Declare explicit success condition for blocker closure: strict chained step-3 succeeds with zero output degenerates and zero topology regressions.
+
+Exit criteria:
+
+- Stage 60-69 plan is documented and committed.
+- Status: Completed (this plan section).
+
+## Stage 61 - Degenerate Certificate Decomposition
+
+Deliverables:
+
+- Extend strict diagnostics with deterministic degenerate phase accounting (pre-remove, reseal-introduced, post-remove residual).
+- Surface degenerate provenance certificate tags so regressions are attributable to exact repair phase.
+
+Exit criteria:
+
+- Conformance can assert deterministic phase-local degenerate accounting on chained step-3 repro.
+- Status: Pending.
+
+## Stage 62 - Degenerate-Safe Boundary Reseal
+
+Deliverables:
+
+- Harden deterministic boundary loop fill/relink to reject zero-area triangles before insertion.
+- Ensure reseal path cannot silently increase degenerate-face count in strict mode.
+
+Exit criteria:
+
+- Reseal contracts are deterministic and certificate-backed.
+- Status: Pending.
+
+## Stage 63 - Fixed-Point Degenerate Cleanup Pass
+
+Deliverables:
+
+- Introduce bounded deterministic fixed-point degenerate cleanup (prune/reseal/recheck loop with strict budget).
+- Emit iteration/termination reason in `deg-prune:*` certificates.
+
+Exit criteria:
+
+- Cleanup converges deterministically and never bypasses topology invariants.
+- Status: Pending.
+
+## Stage 64 - Conformance and Replay Contract Expansion
+
+Deliverables:
+
+- Add strict conformance and replay assertions for new degenerate cleanup certificates and convergence contracts.
+- Add anti-regression coverage for reseal-generated degenerate classes.
+
+Exit criteria:
+
+- New degenerate contracts are pinned under deterministic tests.
+- Status: Pending.
+
+## Stage 65 - Blocker Closure or Reclassification
+
+Deliverables:
+
+- If chained step-3 is resolved, convert former blocker tests from fail-closed expectation to strict success expectation.
+- If unresolved, pin narrowed residual signature and owner stage with new certificate evidence.
+
+Exit criteria:
+
+- Blocker state is explicit, deterministic, and reflected in tests + ledger.
+- Status: Pending.
+
+## Stage 66 - Robustness Gate Promotion (Degenerate Contracts)
+
+Deliverables:
+
+- Promote new degenerate conformance/replay assertions into robustness gate slices.
+- Ensure gate output separates contract regressions from known-blocked classes.
+
+Exit criteria:
+
+- CI hard-fails on degenerate-contract drift or unknown signatures.
+- Status: Pending.
+
+## Stage 67 - Readiness/Band Alignment
+
+Deliverables:
+
+- Align readiness report script/tests with post-stage blocker state and certificate schema.
+- Keep quality-band semantics (`hard-fail` / `known-blocked` / `observability`) deterministic.
+
+Exit criteria:
+
+- Readiness output and tests agree on blocker/band semantics.
+- Status: Pending.
+
+## Stage 68 - Docs and Spec Realignment
+
+Deliverables:
+
+- Update `src/MdCsg.Robust/README.md` and `docs/ROBUSTNESS_SPEC.md` for degenerate-repair behavior and closure criteria.
+- Remove stale statements that no longer match strict runtime behavior.
+
+Exit criteria:
+
+- Runtime/docs/spec/test expectations are aligned.
+- Status: Pending.
+
+## Stage 69 - Validation Sweep and Stage Sign-Off
+
+Deliverables:
+
+- Run targeted conformance plus robustness gate slices relevant to degenerate contracts.
+- Mark stages 61-69 complete with exact evidence in this plan doc.
+
+Exit criteria:
+
+- Stage batch 60-69 has passing validation evidence and is fully documented.
+- Status: Pending.
+
+## 9.1 Stage Dependencies and Execution Order (60-69)
+
+Dependency chain:
+
+1. Stage 61 -> Stage 62 -> Stage 63
+2. Stage 63 -> Stage 64 -> Stage 65
+3. Stage 65 -> Stage 66 -> Stage 67
+4. Stage 68 runs after Stage 65 contract outcome is known.
+5. Stage 69 runs after Stages 66-68.
+
+Execution policy:
+
+- One stage per commit.
+- Do not close Stage 65 without matching blocker-ledger + conformance updates.
+- Do not close Stage 66+ without targeted script/test evidence.
+
+## 9.2 Validation Map (60-69)
+
+- Stage 61:
+  - Add deterministic assertions for decomposed `deg-prune:*` accounting tags.
+- Stage 62:
+  - Add tests that reseal path does not introduce new zero-area faces in strict mode.
+- Stage 63:
+  - Assert bounded fixed-point cleanup iteration tags and deterministic termination reason.
+- Stage 64:
+  - Add replay and showcase tests asserting new cleanup cert schema.
+- Stage 65:
+  - Update blocker ledger tests and replay manifest expectations to resolved/reclassified outcome.
+- Stage 66:
+  - Update `tools/ci/run-robustness-gate.ps1` slices for new degenerate contract tests.
+- Stage 67:
+  - Update readiness script/test expectations and quality-band mapping.
+- Stage 68:
+  - Update README/spec assertions and migration language.
+- Stage 69:
+  - Run and record targeted/full gate evidence for the 60-69 batch.
+
 ## 9. Risks and Mitigations
 
 - Risk: complexity growth in exact fallback paths.
