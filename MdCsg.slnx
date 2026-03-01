@@ -13,6 +13,7 @@
     <Project Path="tests/MdCsg.ScalingTests/MdCsg.ScalingTests.csproj" />
     <Project Path="tests/MdCsg.Tests/MdCsg.Tests.csproj" />
     <Project Path="tests/MdCsg.Gpu.Tests/MdCsg.Gpu.Tests.csproj" />
+    <Project Path="tests/MdCsg.Showcase.ContractTests/MdCsg.Showcase.ContractTests.csproj" />
     <Project Path="tests/MdCsg.Robust.Conformance/MdCsg.Robust.Conformance.csproj" />
   </Folder>
   <Folder Name="/tools/">

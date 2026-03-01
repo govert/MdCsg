@@ -328,7 +328,7 @@ Deliverables:
 Exit criteria:
 
 - CI guards against regression to implicit/automatic showcase fallback.
-- Status: Pending.
+- Status: Completed (`MdCsg.Showcase.ContractTests` strict/no-failover + explicit failover coverage).
 
 ## Stage 46 - Replay Coverage for Step-3 Reconstruction Artifacts
 

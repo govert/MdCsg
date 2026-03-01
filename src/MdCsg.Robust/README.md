@@ -74,6 +74,7 @@ Current conformance snapshot:
 - Kernel dependency accretion is guarded by `RobustKernelDependencyGuardTests` to prevent new legacy couplings in `src/MdCsg.Robust/Kernel`.
 - Shadow rollout divergence classification is guarded by `RobustShadowRolloutTests`.
 - Robust showcase now defaults to robust-strict execution with explicit `--legacy-csg` opt-out; legacy failover is available only with explicit `--allow-legacy-failover`.
+- Showcase fallback contract is guarded by `tests/MdCsg.Showcase.ContractTests` (strict throw, explicit failover, and forced-legacy bypass coverage).
 - Showcase parity:
   - `CsgOperations` strict mode is closed + zero-fallback,
   - `ChainedCsg` step-2 strict mode is closed + zero-fallback,
