@@ -102,6 +102,25 @@ public class RobustAlgebraicConformanceTests
         Assert.InRange(flipB, 0, fromB);
     }
 
+    [Fact]
+    public void StrictBooleanOps_SelectArrangementPatchExtractionMode()
+    {
+        var a = Primitives.Sphere(Vec3.Zero, 1.2, 3);
+        var b = Primitives.Cube(new Vec3(0.6, 0, 0), 1.5);
+
+        var union = RobustCsg.Union(a, b, StrictOpts);
+        var intersection = RobustCsg.Intersect(a, b, StrictOpts);
+        var difference = RobustCsg.Difference(a, b, StrictOpts);
+
+        AssertRobustClosedWithoutFallback(union);
+        AssertRobustClosedWithoutFallback(intersection);
+        AssertRobustClosedWithoutFallback(difference);
+
+        RobustDiagnosticsAssertions.AssertPatchExtractionMode(union.Diagnostics, PatchExtractionMode.Arrangement);
+        RobustDiagnosticsAssertions.AssertPatchExtractionMode(intersection.Diagnostics, PatchExtractionMode.Arrangement);
+        RobustDiagnosticsAssertions.AssertPatchExtractionMode(difference.Diagnostics, PatchExtractionMode.Arrangement);
+    }
+
     private static void AssertRobustClosedWithoutFallback(RobustCsgResult result)
     {
         Assert.True(result.Succeeded);

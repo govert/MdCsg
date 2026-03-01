@@ -411,7 +411,7 @@ Exit criteria:
 
 - Strict robust patch extraction runs arrangement-native for gated corpus operations.
 - Bridge-only extraction remains available only outside strict production path.
-- Status: Pending.
+- Status: Completed (`ForceArrangementPatchExtraction` strict-path selection + conformance assertions on arrangement mode).
 
 ## Stage 52 - Certified Patch Classification Closure
 

@@ -179,11 +179,18 @@ public static class Csg
                 options);
 
             var candidates = new[] { intra, global, arrangement };
-            chosen = intra;
-            if (IsBetterTopologyQuality(global.TopologyQuality, chosen.TopologyQuality))
-                chosen = global;
-            if (IsBetterTopologyQuality(arrangement.TopologyQuality, chosen.TopologyQuality))
+            if (options.ForceArrangementPatchExtraction)
+            {
                 chosen = arrangement;
+            }
+            else
+            {
+                chosen = intra;
+                if (IsBetterTopologyQuality(global.TopologyQuality, chosen.TopologyQuality))
+                    chosen = global;
+                if (IsBetterTopologyQuality(arrangement.TopologyQuality, chosen.TopologyQuality))
+                    chosen = arrangement;
+            }
 
             candidateSignatures = BuildCandidateSignatures(candidates);
         }

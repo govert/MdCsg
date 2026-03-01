@@ -311,7 +311,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             Parallel = !opts.Deterministic,
             TriangulationKernel = triangulationKernel,
             PatchExtractionMode = PatchExtractionMode.Auto,
-            PreferTopologyPreservingPatchExtraction = opts.Mode == RobustMode.Strict
+            PreferTopologyPreservingPatchExtraction = opts.Mode == RobustMode.Strict,
+            ForceArrangementPatchExtraction = opts.Mode == RobustMode.Strict
         };
 
         var opSw = Stopwatch.StartNew();

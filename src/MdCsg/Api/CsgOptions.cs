@@ -58,4 +58,10 @@ public class CsgOptions
     /// candidate with better stitched topology quality.
     /// </summary>
     public bool PreferTopologyPreservingPatchExtraction { get; set; } = false;
+
+    /// <summary>
+    /// Forces arrangement-native candidate selection when <see cref="PatchExtractionMode.Auto"/>
+    /// evaluates multiple candidates. Candidate signatures are still emitted for diagnostics.
+    /// </summary>
+    public bool ForceArrangementPatchExtraction { get; set; } = false;
 }
