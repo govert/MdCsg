@@ -47,9 +47,9 @@ function Invoke-GateSlice([string]$label, [string]$projectPath, [string]$filter)
 }
 
 Invoke-GateSlice `
-    "1/4: Showcase/backlog/replay robustness gates..." `
+    "1/4: Showcase/backlog/replay + deg-prune contract robustness gates..." `
     $robustProject `
-    "(FullyQualifiedName~RobustShowcaseParityTests|FullyQualifiedName~RobustConformanceBacklogTests|FullyQualifiedName~ArrangementReplayCorpusTests|FullyQualifiedName~TriangulationReplayCorpusTests|FullyQualifiedName~ReconstructionReplayCorpusTests|FullyQualifiedName~RobustBlockerLedgerTests)"
+    "(FullyQualifiedName~RobustShowcaseParityTests|FullyQualifiedName~RobustConformanceBacklogTests|FullyQualifiedName~ArrangementReplayCorpusTests|FullyQualifiedName~TriangulationReplayCorpusTests|FullyQualifiedName~ReconstructionReplayCorpusTests|FullyQualifiedName~KnownBlockerCorpus_IsExplicitlyFailClosed|FullyQualifiedName~RobustBlockerLedgerTests)"
 
 Invoke-GateSlice `
     "2/4: Seeded strict fuzz smoke gate..." `
@@ -81,3 +81,4 @@ if ([string]::IsNullOrWhiteSpace($knownBlocked))
 Write-Host "ROBUST_GATE_BAND_HARD_FAIL=PASS"
 Write-Host "ROBUST_GATE_BAND_KNOWN_BLOCKED=$knownBlocked"
 Write-Host "ROBUST_GATE_BAND_OBSERVABILITY=PASS"
+Write-Host "ROBUST_GATE_DEG_PRUNE_CONTRACT=PASS"

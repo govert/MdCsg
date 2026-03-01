@@ -667,7 +667,7 @@ Deliverables:
 Exit criteria:
 
 - CI hard-fails on degenerate-contract drift or unknown signatures.
-- Status: Pending.
+- Status: Completed (`run-robustness-gate.ps1` slice 1 now explicitly includes `KnownBlockerCorpus_IsExplicitlyFailClosed` alongside replay/showcase suites, and gate output emits explicit `ROBUST_GATE_DEG_PRUNE_CONTRACT=PASS` observability signal).
 
 ## Stage 67 - Readiness/Band Alignment
 
