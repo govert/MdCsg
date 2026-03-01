@@ -643,7 +643,7 @@ Deliverables:
 Exit criteria:
 
 - New degenerate contracts are pinned under deterministic tests.
-- Status: Pending.
+- Status: Completed (`ReconstructionReplayCorpusTests` now pins deterministic `deg-prune:phase=pre/post` certificate equality and schema invariants, including fixed-point `iters/applied/term` contracts and accepted-vs-output deg alignment).
 
 ## Stage 65 - Blocker Closure or Reclassification
 

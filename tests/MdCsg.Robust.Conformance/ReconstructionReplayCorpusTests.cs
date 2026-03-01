@@ -40,13 +40,22 @@ public class ReconstructionReplayCorpusTests
             string pre2 = GetStageCertificate(second, "reconstruction-pre:");
             string recon1 = GetStageCertificate(first, "reconstruction:");
             string recon2 = GetStageCertificate(second, "reconstruction:");
+            string prePrune1 = GetStageCertificate(first, "deg-prune:phase=pre;");
+            string prePrune2 = GetStageCertificate(second, "deg-prune:phase=pre;");
+            string postPrune1 = GetStageCertificate(first, "deg-prune:phase=post;");
+            string postPrune2 = GetStageCertificate(second, "deg-prune:phase=post;");
+            string output1 = GetStageCertificate(first, "output:");
 
             Assert.Equal(pre1, pre2);
             Assert.Equal(recon1, recon2);
+            Assert.Equal(prePrune1, prePrune2);
+            Assert.Equal(postPrune1, postPrune2);
             Assert.StartsWith(row.ExpectReconstructionPrefix, recon1, StringComparison.Ordinal);
             Assert.Equal(row.ExpectBoundary, ParseIntTag(recon1, "boundary"));
             Assert.Equal(row.ExpectOpenLoops, ParseIntTag(recon1, "openLoops"));
             Assert.Equal(row.ExpectUnmatched, ParseIntTag(recon1, "unmatched"));
+            AssertDegPruneContract(prePrune1, output1);
+            AssertDegPruneContract(postPrune1, output1);
 
             foreach (var expectedCode in row.ExpectIssueCodes)
                 Assert.Contains(first.Issues, i => i.Code == expectedCode);
@@ -187,6 +196,62 @@ public class ReconstructionReplayCorpusTests
         string text = value[prefix.Length..];
         Assert.True(int.TryParse(text, out int parsed), $"Invalid integer tag '{tag}' in certificate '{cert}'.");
         return parsed;
+    }
+
+    private static string ParseTextTag(string cert, string tag)
+    {
+        string prefix = tag + "=";
+        var parts = cert.Split(';', StringSplitOptions.RemoveEmptyEntries);
+        string value = parts.FirstOrDefault(p => p.StartsWith(prefix, StringComparison.Ordinal)) ?? string.Empty;
+        Assert.False(string.IsNullOrWhiteSpace(value), $"Missing tag '{tag}' in certificate '{cert}'.");
+        return value[prefix.Length..];
+    }
+
+    private static void AssertDegPruneContract(string cert, string outputCert)
+    {
+        int before = ParseIntTag(cert, "before");
+        int removed = ParseIntTag(cert, "removed");
+        int afterRemove = ParseIntTag(cert, "afterRemove");
+        int resealIntro = ParseIntTag(cert, "resealIntro");
+        int resealSafe = ParseIntTag(cert, "resealSafe");
+        int resealLoopDegSkipped = ParseIntTag(cert, "resealLoopDegSkipped");
+        int after = ParseIntTag(cert, "after");
+        int netRemoved = ParseIntTag(cert, "netRemoved");
+        int accepted = ParseIntTag(cert, "accepted");
+        int iterations = ParseIntTag(cert, "iters");
+        int applied = ParseIntTag(cert, "applied");
+        int closedGuard = ParseIntTag(cert, "closedGuard");
+        string term = ParseTextTag(cert, "term");
+
+        Assert.True(before >= 0);
+        Assert.True(removed >= 0);
+        Assert.True(afterRemove >= 0);
+        Assert.True(resealLoopDegSkipped >= 0);
+        Assert.Equal(after - afterRemove, resealIntro);
+        Assert.Equal(before - after, netRemoved);
+        Assert.True(accepted is 0 or 1);
+        Assert.True(resealSafe is 0 or 1);
+        Assert.Equal(1, closedGuard);
+        Assert.InRange(iterations, 1, 3);
+        Assert.InRange(applied, 0, iterations);
+        Assert.Contains(
+            term,
+            new[]
+            {
+                "already-clean",
+                "cleared",
+                "rejected-initial",
+                "rejected",
+                "stalled",
+                "budget"
+            });
+
+        if (accepted == 1)
+            Assert.Equal(1, resealSafe);
+
+        int outputDeg = ParseIntTag(outputCert, "deg");
+        int expectedOutputDeg = accepted == 1 ? after : before;
+        Assert.Equal(expectedOutputDeg, outputDeg);
     }
 
     private static string LoadRecipe(string casePath)
