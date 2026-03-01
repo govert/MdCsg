@@ -1,5 +1,6 @@
 using MdCsg.Api;
 using MdCsg.Math;
+using MdCsg.Mesh;
 using MdCsg.Operations;
 using System.Linq;
 
@@ -92,6 +93,32 @@ public class ReconstructionIncidenceTests
         }
     }
 
+    [Fact]
+    public void CloseBoundaryLoopsDeterministic_ClosesSimpleLoop()
+    {
+        var mesh = BuildOpenQuadMesh();
+        var before = MeshStitcher.AnalyzeBoundaryIncidence(mesh);
+        Assert.True(before.BoundaryHalfEdgeCount > 0);
+
+        var summary = MeshStitcher.CloseBoundaryLoopsDeterministic(mesh);
+        Assert.True(summary.ClosedLoopCount > 0);
+        Assert.Equal(0, summary.OpenChainCount);
+
+        var after = MeshStitcher.AnalyzeBoundaryIncidence(mesh);
+        Assert.Equal(0, after.BoundaryHalfEdgeCount);
+        Assert.Equal(0, after.OpenBoundaryVertexCount);
+    }
+
+    [Fact]
+    public void AnalyzeBoundaryLoopAssembly_IsDeterministic_OnMultiLoopBoundaryMesh()
+    {
+        var mesh = BuildAmbiguousBoundaryMesh();
+        var first = MeshStitcher.AnalyzeBoundaryLoopAssembly(mesh);
+        var second = MeshStitcher.AnalyzeBoundaryLoopAssembly(mesh);
+        Assert.Equal(first, second);
+        Assert.True(first.ClosedLoopCount > 0);
+    }
+
     private static string GetReconstructionCert(RobustCsgResult result)
     {
         string? cert = result.Diagnostics.ReconstructionInvariantCertificates
@@ -106,5 +133,25 @@ public class ReconstructionIncidenceTests
             .LastOrDefault(c => c.StartsWith(prefix, StringComparison.Ordinal));
         Assert.False(string.IsNullOrWhiteSpace(cert));
         return cert!;
+    }
+
+    private static HalfEdgeMesh BuildOpenQuadMesh()
+    {
+        var triangles = new List<Triangle3>
+        {
+            new(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(1, 1, 0)),
+            new(new Vec3(0, 0, 0), new Vec3(1, 1, 0), new Vec3(0, 1, 0))
+        };
+        return new MeshBuilder(0.0).Build(triangles);
+    }
+
+    private static HalfEdgeMesh BuildAmbiguousBoundaryMesh()
+    {
+        var triangles = new List<Triangle3>
+        {
+            new(new Vec3(0, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 1, 0)),
+            new(new Vec3(0, 0, 0), new Vec3(-1, 0, 0), new Vec3(0, -1, 0))
+        };
+        return new MeshBuilder(0.0).Build(triangles);
     }
 }

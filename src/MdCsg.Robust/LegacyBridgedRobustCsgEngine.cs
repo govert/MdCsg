@@ -58,6 +58,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int reconstructionArrangementEdgeSnapCount = 0;
         int reconstructionComponentCount = 0;
         int reconstructionInvalidComponentCount = 0;
+        int reconstructionLoopAssemblyOpenChainCount = 0;
+        int reconstructionLoopAssemblyAmbiguousBranchCount = 0;
         int classificationFallbackCount = 0;
         var reconstructionCertificates = new List<string>();
         var stageCertificates = new List<string>();
@@ -398,7 +400,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             result.AuthoritativeBoundary,
             out reconstructionDroppedComponentCount,
             out reconstructionArrangementSnapCount,
-            out reconstructionArrangementEdgeSnapCount);
+            out reconstructionArrangementEdgeSnapCount,
+            out reconstructionLoopAssemblyOpenChainCount,
+            out reconstructionLoopAssemblyAmbiguousBranchCount);
         result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
         var reconstructionInvariant = AnalyzeReconstructionTopology(result.Mesh);
         reconstructionBoundaryHalfEdgeCount = reconstructionInvariant.BoundaryHalfEdgeCount;
@@ -516,6 +520,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"dropped={reconstructionDroppedComponentCount};"
             + $"arrSnap={reconstructionArrangementSnapCount};"
             + $"arrEdgeSnap={reconstructionArrangementEdgeSnapCount};"
+            + $"loopOpenChains={reconstructionLoopAssemblyOpenChainCount};"
+            + $"loopAmbiguous={reconstructionLoopAssemblyAmbiguousBranchCount};"
             + $"components={reconstructionComponentCount};"
             + $"invalidComponents={reconstructionInvalidComponentCount};"
             + $"nonWorse={(reconstructionNonWorseningPass ? 1 : 0)}";
@@ -570,6 +576,22 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 opts.Mode,
                 RobustIssueCode.ReconstructionStitchingFailed,
                 $"Reconstruction stitching left open boundary topology (boundary={reconstructionInvariant.BoundaryHalfEdgeCount}, openLoops={reconstructionInvariant.OpenBoundaryLoopCount}).",
+                RobustIssueSeverity.Error);
+        }
+
+        if (reconstructionLoopAssemblyAmbiguousBranchCount > 0 && !reconstructionStagePass)
+        {
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.ReconstructionStitchingFailed,
+                $"Deterministic loop assembly reported ambiguous boundary branches ({reconstructionLoopAssemblyAmbiguousBranchCount}).",
+                RobustIssueSeverity.Error);
+            AddIssue(
+                issues,
+                opts.Mode,
+                RobustIssueCode.StageInvariantViolation,
+                "Reconstruction loop assembly ambiguity requires fail-closed behavior.",
                 RobustIssueSeverity.Error);
         }
 
@@ -855,11 +877,15 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         ReconstructionBoundaryContract? authoritativeBoundary,
         out int droppedComponentCount,
         out int arrangementSnapCount,
-        out int arrangementEdgeSnapCount)
+        out int arrangementEdgeSnapCount,
+        out int loopAssemblyOpenChainCount,
+        out int loopAssemblyAmbiguousBranchCount)
     {
         droppedComponentCount = 0;
         arrangementSnapCount = 0;
         arrangementEdgeSnapCount = 0;
+        loopAssemblyOpenChainCount = 0;
+        loopAssemblyAmbiguousBranchCount = 0;
         var mesh = result.Mesh;
         if (mesh.Faces.Count == 0)
             return result;
@@ -889,7 +915,11 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
 
             var incidence = MeshStitcher.AnalyzeBoundaryIncidence(mesh);
             if (incidence.BoundaryHalfEdgeCount > 0 && incidence.OpenBoundaryVertexCount == 0)
-                MeshStitcher.CloseBoundaryLoops(mesh);
+            {
+                var loopAssembly = MeshStitcher.CloseBoundaryLoopsDeterministic(mesh);
+                loopAssemblyOpenChainCount += loopAssembly.OpenChainCount;
+                loopAssemblyAmbiguousBranchCount += loopAssembly.AmbiguousBranchVertexCount;
+            }
 
             // A second relink pass after loop fill catches new near-equal endpoints.
             MeshStitcher.RepairBoundary(mesh, tol * 2.0);

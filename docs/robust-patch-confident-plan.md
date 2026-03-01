@@ -383,7 +383,7 @@ Exit criteria:
 
 - Reconstruction loop assembly is deterministic across seeds/runs/platforms for corpus cases.
 - Ambiguous loop assembly paths fail closed with structured diagnostics.
-- Status: Pending.
+- Status: Completed (`MeshStitcher` deterministic loop-assembly analysis + reconstruction loop telemetry/fail-closed signaling).
 
 ## Stage 50 - Certified Weld/Snap Policy Hardening
 

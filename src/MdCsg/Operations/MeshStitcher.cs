@@ -22,6 +22,17 @@ public static class MeshStitcher
         int NonManifoldUndirectedEdgeCount);
 
     /// <summary>
+    /// Deterministic boundary-loop assembly summary.
+    /// </summary>
+    /// <param name="ClosedLoopCount">Number of closed loops detected.</param>
+    /// <param name="OpenChainCount">Number of open chains encountered.</param>
+    /// <param name="AmbiguousBranchVertexCount">Number of branch vertices with multiple next-edge candidates.</param>
+    public readonly record struct BoundaryLoopAssemblySummary(
+        int ClosedLoopCount,
+        int OpenChainCount,
+        int AmbiguousBranchVertexCount);
+
+    /// <summary>
     /// Creates a HalfEdgeMesh from a list of triangles.
     /// </summary>
     public static HalfEdgeMesh Stitch(IReadOnlyList<Triangle3> triangles, double weldTolerance = 1e-8)
@@ -153,86 +164,24 @@ public static class MeshStitcher
     /// </summary>
     /// <param name="mesh">The mesh to repair in-place.</param>
     public static void CloseBoundaryLoops(HalfEdgeMesh mesh)
+        => CloseBoundaryLoopsDeterministic(mesh);
+
+    /// <summary>
+    /// Closes deterministically assembled boundary loops by triangulating each loop with a fan from its centroid.
+    /// </summary>
+    /// <param name="mesh">The mesh to repair in-place.</param>
+    /// <returns>Loop-assembly summary (including ambiguity/open-chain counts).</returns>
+    public static BoundaryLoopAssemblySummary CloseBoundaryLoopsDeterministic(HalfEdgeMesh mesh)
     {
-        // Phase 1: Collect boundary half-edges and build next-edge map.
-        // For each boundary vertex, find the boundary half-edge starting at that vertex.
-        var boundary = new List<HalfEdge>();
-        var startMap = new Dictionary<int, List<HalfEdge>>();
-
-        foreach (var he in mesh.HalfEdges)
-        {
-            if (he.Twin != null) continue;
-            boundary.Add(he);
-            int originId = he.Origin.Id;
-            if (!startMap.TryGetValue(originId, out var list))
-            {
-                list = [];
-                startMap[originId] = list;
-            }
-            list.Add(he);
-        }
-
-        if (boundary.Count < 3) return;
-
-        // Phase 2: Chain boundary half-edges into loops.
-        var used = new HashSet<int>();
-        var loops = new List<List<HalfEdge>>();
-
-        foreach (var start in boundary)
-        {
-            if (used.Contains(start.Id)) continue;
-
-            var loop = new List<HalfEdge>();
-            var current = start;
-
-            while (!used.Contains(current.Id))
-            {
-                used.Add(current.Id);
-                loop.Add(current);
-
-                // Find next boundary half-edge: starts at current.Target
-                int targetId = current.Target.Id;
-                HalfEdge? next = null;
-
-                if (startMap.TryGetValue(targetId, out var candidates))
-                {
-                    foreach (var c in candidates)
-                    {
-                        if (!used.Contains(c.Id))
-                        {
-                            next = c;
-                            break;
-                        }
-                    }
-                    // If all candidates are used, check if we're closing the loop
-                    if (next == null)
-                    {
-                        foreach (var c in candidates)
-                        {
-                            if (c == start)
-                            {
-                                next = start; // loop closed
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (next == null) break; // open chain
-                if (next == start) break; // loop closed
-                current = next;
-            }
-
-            // Only process closed loops with enough vertices for triangulation
-            bool isClosed = loop.Count >= 3 &&
-                            startMap.ContainsKey(loop[^1].Target.Id) &&
-                            startMap[loop[^1].Target.Id].Contains(start);
-
-            if (isClosed && loop.Count >= 3)
-                loops.Add(loop);
-        }
-
-        if (loops.Count == 0) return;
+        var loops = CollectBoundaryLoopsDeterministic(
+            mesh,
+            out int openChains,
+            out int ambiguousBranchVertices);
+        if (loops.Count == 0)
+            return new BoundaryLoopAssemblySummary(
+                ClosedLoopCount: 0,
+                OpenChainCount: openChains,
+                AmbiguousBranchVertexCount: ambiguousBranchVertices);
 
         // Phase 3: Fill each boundary loop with fan triangulation.
         foreach (var loop in loops)
@@ -262,6 +211,130 @@ public static class MeshStitcher
 
         // Phase 4: deterministically relink twins for new + existing boundary half-edges.
         RelinkBoundaryTwinsDeterministic(mesh);
+        return new BoundaryLoopAssemblySummary(
+            ClosedLoopCount: loops.Count,
+            OpenChainCount: openChains,
+            AmbiguousBranchVertexCount: ambiguousBranchVertices);
+    }
+
+    /// <summary>
+    /// Analyzes deterministic boundary-loop assembly without mutating the mesh.
+    /// </summary>
+    public static BoundaryLoopAssemblySummary AnalyzeBoundaryLoopAssembly(HalfEdgeMesh mesh)
+    {
+        var loops = CollectBoundaryLoopsDeterministic(
+            mesh,
+            out int openChains,
+            out int ambiguousBranchVertices);
+        return new BoundaryLoopAssemblySummary(
+            ClosedLoopCount: loops.Count,
+            OpenChainCount: openChains,
+            AmbiguousBranchVertexCount: ambiguousBranchVertices);
+    }
+
+    private static List<List<HalfEdge>> CollectBoundaryLoopsDeterministic(
+        HalfEdgeMesh mesh,
+        out int openChains,
+        out int ambiguousBranchVertices)
+    {
+        openChains = 0;
+        ambiguousBranchVertices = 0;
+
+        // Phase 1: collect boundary half-edges and next-edge map (legacy-compatible).
+        var boundary = new List<HalfEdge>();
+        var startMap = new Dictionary<int, List<HalfEdge>>();
+        foreach (var he in mesh.HalfEdges)
+        {
+            if (he.Twin != null)
+                continue;
+
+            boundary.Add(he);
+            int originId = he.Origin.Id;
+            if (!startMap.TryGetValue(originId, out var list))
+            {
+                list = [];
+                startMap[originId] = list;
+            }
+            list.Add(he);
+        }
+
+        if (boundary.Count < 3)
+            return [];
+
+        boundary.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+        foreach (var list in startMap.Values)
+            list.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+
+        // Phase 2: deterministically chain boundary half-edges into loops.
+        var used = new HashSet<int>();
+        var loops = new List<List<HalfEdge>>();
+
+        foreach (var start in boundary)
+        {
+            if (used.Contains(start.Id))
+                continue;
+
+            var loop = new List<HalfEdge>();
+            var current = start;
+
+            while (!used.Contains(current.Id))
+            {
+                used.Add(current.Id);
+                loop.Add(current);
+
+                int targetId = current.Target.Id;
+                HalfEdge? next = null;
+                if (startMap.TryGetValue(targetId, out var candidates))
+                {
+                    int unvisitedCount = 0;
+                    for (int i = 0; i < candidates.Count; i++)
+                    {
+                        var candidate = candidates[i];
+                        if (used.Contains(candidate.Id))
+                            continue;
+
+                        if (next is null)
+                            next = candidate;
+                        unvisitedCount++;
+                    }
+
+                    if (unvisitedCount > 1)
+                        ambiguousBranchVertices++;
+
+                    if (next is null)
+                    {
+                        // If all candidates are used, check if we're closing the loop.
+                        for (int i = 0; i < candidates.Count; i++)
+                        {
+                            if (candidates[i] == start)
+                            {
+                                next = start;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (next is null)
+                {
+                    openChains++;
+                    break;
+                }
+
+                if (next == start)
+                    break;
+
+                current = next;
+            }
+
+            bool isClosed = loop.Count >= 3
+                && startMap.ContainsKey(loop[^1].Target.Id)
+                && startMap[loop[^1].Target.Id].Contains(start);
+            if (isClosed)
+                loops.Add(loop);
+        }
+
+        return loops;
     }
 
     /// <summary>
