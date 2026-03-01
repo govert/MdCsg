@@ -54,6 +54,8 @@ Initial scaffold now exists:
 - Checked-in triangulation replay corpus fixtures and manifest assertions under `tests/MdCsg.Robust.Conformance/ReplayCorpus/triangulation`
   - includes dense non-crossing constrained chord cases that assert native success and required-edge preservation
   - bridge conformance also pins a formerly failing `partition/split-failure` signature to native-success behavior
+- Checked-in reconstruction replay corpus fixtures and manifest assertions under `tests/MdCsg.Robust.Conformance/ReplayCorpus/reconstruction`
+  - includes deterministic chained step-3 blocker replay with pinned `reconstruction-pre`/`reconstruction` certificate expectations
 - `Validation/DegenerateFaceInspector` using certified predicate checks
 - `RobustOperationOptions.TreatCoplanarIntersectionAsError` guardrail toggle for strict conformance runs
 - `RobustOperationOptions.TreatOpposingCoplanarPairsAsError` guardrail toggle for strict conformance runs

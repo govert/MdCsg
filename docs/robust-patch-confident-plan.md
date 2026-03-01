@@ -340,7 +340,7 @@ Deliverables:
 Exit criteria:
 
 - Step-3 blocker behavior is reproducible via replay corpus without relying solely on scene harness execution.
-- Status: Pending.
+- Status: Completed (`ReconstructionReplayCorpusTests` + reconstruction replay manifest/case).
 
 ## Stage 47 - Rescue Gate Promotion for Showcase Contract
 
