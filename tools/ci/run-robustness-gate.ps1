@@ -9,9 +9,9 @@ $commonArgs = @("-c", "Release", "--nologo", "--blame-hang-timeout", "10m")
 
 function TestHostCrashDetected([string]$output)
 {
-    return $output.Contains("Test Run Aborted", [System.StringComparison]::OrdinalIgnoreCase) `
-        -or $output.Contains("Fatal error", [System.StringComparison]::OrdinalIgnoreCase) `
-        -or $output.Contains("Internal CLR error", [System.StringComparison]::OrdinalIgnoreCase)
+    return $output.IndexOf("Test Run Aborted", [System.StringComparison]::OrdinalIgnoreCase) -ge 0 `
+        -or $output.IndexOf("Fatal error", [System.StringComparison]::OrdinalIgnoreCase) -ge 0 `
+        -or $output.IndexOf("Internal CLR error", [System.StringComparison]::OrdinalIgnoreCase) -ge 0
 }
 
 function Invoke-GateSlice([string]$label, [string]$projectPath, [string]$filter)
@@ -59,7 +59,7 @@ Invoke-GateSlice `
 Invoke-GateSlice `
     "3/4: Triangulation bridge + smoke + reconstruction/algebraic/differential/dependency/shadow/readiness/budget guardrails..." `
     $robustProject `
-    "(FullyQualifiedName~RobustTriangulationBridgeTests|FullyQualifiedName~RobustCsgSmokeTests|FullyQualifiedName~ReconstructionIncidenceTests|FullyQualifiedName~RobustAlgebraicConformanceTests|FullyQualifiedName~RobustDifferentialParityTests|FullyQualifiedName~RobustKernelDependencyGuardTests|FullyQualifiedName~RobustShadowRolloutTests|FullyQualifiedName~RobustReadinessSnapshotTests|FullyQualifiedName~RobustPerformanceBudgetTests)"
+    "(FullyQualifiedName~RobustTriangulationBridgeTests|FullyQualifiedName~RobustCsgSmokeTests|FullyQualifiedName~ReconstructionIncidenceTests|FullyQualifiedName~RobustAlgebraicConformanceTests|FullyQualifiedName~RobustDifferentialParityTests|FullyQualifiedName~RobustKernelDependencyGuardTests|FullyQualifiedName~RobustShadowRolloutTests|FullyQualifiedName~RobustReadinessSnapshotTests|FullyQualifiedName~RobustPerformanceBudgetTests|FullyQualifiedName~RobustApiContractSnapshotTests|FullyQualifiedName~RobustMigrationDocTests)"
 
 Invoke-GateSlice `
     "4/4: Showcase runtime strict/failover contract gate..." `

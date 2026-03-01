@@ -57,6 +57,7 @@ Initial scaffold now exists:
   - strict robust execution now disables legacy fallback and reports structured native failure reasons (fail closed)
   - constrained work-budget override (`RobustTriangulationOptions.ConstraintWorkBudgetOverride`) is available for deterministic fail-closed repro/diagnostics coverage
 - `Diagnostics/Replay` arrangement replay capture/serialize/replay harness
+- `Diagnostics/Legacy` explicit diagnostics-only legacy comparison API (`LegacyComparison`) guarded by `LegacyDiagnosticsOptions.AllowLegacyExecution`
 - Checked-in replay corpus fixtures and manifest assertions under `tests/MdCsg.Robust.Conformance/ReplayCorpus/arrangement`
 - Checked-in triangulation replay corpus fixtures and manifest assertions under `tests/MdCsg.Robust.Conformance/ReplayCorpus/triangulation`
   - includes dense non-crossing constrained chord cases that assert native success and required-edge preservation
@@ -84,6 +85,7 @@ Current conformance snapshot:
 - Stage-focused fuzz escalation (`RobustFuzzEscalationTests`) is active with mutation families (`coplanar-tangency`, `near-collinear-axes`, `thin-shell`), deterministic blocker signatures, and automatic minimized repro emission for unknown failure classes.
 - Checked-in minimized fuzz blocker corpus (`ReplayCorpus/fuzz`) pins known blocker signatures (`FUZZ-BLOCKER-*`) and is exercised in gate slice 2.
 - Machine-readable blocker ledger conformance (`RobustBlockerLedgerTests`) guards schema, blocker signature coverage, and unknown-signature hard-fail policy.
+- Strict API snapshot and migration checklist gates are active (`RobustApiContractSnapshotTests`, `RobustMigrationDocTests`).
 - Stable-case differential parity tests are active (`RobustDifferentialParityTests`) and assert robust boundary dominance against legacy plus bounded relative-volume drift for legacy-closed outputs.
 - Kernel dependency accretion is guarded by `RobustKernelDependencyGuardTests` to prevent new legacy couplings in `src/MdCsg.Robust/Kernel`.
 - Shadow rollout divergence classification is guarded by `RobustShadowRolloutTests`.

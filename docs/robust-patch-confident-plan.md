@@ -495,7 +495,7 @@ Exit criteria:
 
 - Strict path is stable and consumable without depending on legacy behavior.
 - Legacy path remains available only for diagnostics/comparison workflows.
-- Status: Pending.
+- Status: Completed (API snapshot gates in `RobustApiContractSnapshotTests`; migration contract + checklist gate in `RobustMigrationDocTests`; diagnostics-only legacy bridge isolated under `MdCsg.Robust.Diagnostics.Legacy` with explicit `AllowLegacyExecution` opt-in).
 
 ## 8.1 Stage Dependencies and Execution Order
 
