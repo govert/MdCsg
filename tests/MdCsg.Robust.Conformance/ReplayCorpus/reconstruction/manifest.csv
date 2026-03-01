@@ -1,2 +1,2 @@
 case_file,expect_success,expect_reconstruction_prefix,expect_boundary,expect_open_loops,expect_unmatched,expect_issue_codes
-showcase-chained-step3.case,false,reconstruction:fail;,3,0,3,ReconstructionInvariantViolation;OutputMeshNotClosed;OutputMeshNotEdgeManifold
+showcase-chained-step3.case,false,reconstruction:pass;,0,0,0,OutputMeshHasDegenerateFaces;StageInvariantViolation

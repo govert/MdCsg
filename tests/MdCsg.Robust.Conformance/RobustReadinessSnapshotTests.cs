@@ -67,9 +67,10 @@ public class RobustReadinessSnapshotTests
         var step3 = RobustCsg.Difference(new Solid(step2.Result!.Mesh), cylY, StrictOpts);
 
         Assert.False(step3.Succeeded);
-        Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.ReconstructionInvariantViolation);
-        Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);
-        Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction:fail;", StringComparison.Ordinal));
+        Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshHasDegenerateFaces);
+        Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);
+        Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotEdgeManifold);
+        Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction:pass;", StringComparison.Ordinal));
         RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(step3.Diagnostics);
     }
 

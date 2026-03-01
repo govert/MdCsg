@@ -340,6 +340,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null)
         };
         opSw.Stop();
+        result = PruneDuplicateOutputFaces(result, csgOptions.WeldTolerance, out int duplicateFaceDropCount);
+        stageCertificates.Add($"post-op-dedup:removedFaces={duplicateFaceDropCount}");
 
         classificationFallbackCount = result.DegenerateCount;
         int classifiedCertifiedCount = result.SelectedCertifiedPatchCount
@@ -424,7 +426,30 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"components={preComponentInvariant.ComponentCount};"
             + $"invalidComponents={preComponentInvariant.InvalidComponentCount}");
 
-        result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
+        result = PruneDegenerateOutputFaces(
+            result,
+            csgOptions.WeldTolerance,
+            predicateTelemetry,
+            out int prePruneDegBefore,
+            out int prePruneRemoved,
+            out int prePruneDegAfter,
+            out bool prePruneAccepted,
+            out bool prePruneClosedGuard,
+            out int prePruneBoundaryBefore,
+            out int prePruneBoundaryAfter,
+            out int prePruneUnmatchedBefore,
+            out int prePruneUnmatchedAfter);
+        stageCertificates.Add(
+            $"deg-prune:phase=pre;"
+            + $"before={prePruneDegBefore};"
+            + $"removed={prePruneRemoved};"
+            + $"after={prePruneDegAfter};"
+            + $"accepted={(prePruneAccepted ? 1 : 0)};"
+            + $"closedGuard={(prePruneClosedGuard ? 1 : 0)};"
+            + $"boundaryBefore={prePruneBoundaryBefore};"
+            + $"boundaryAfter={prePruneBoundaryAfter};"
+            + $"unmatchedBefore={prePruneUnmatchedBefore};"
+            + $"unmatchedAfter={prePruneUnmatchedAfter}");
         result = ReconstructOutputTopology(
             result,
             csgOptions.WeldTolerance,
@@ -437,7 +462,30 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             out reconstructionLoopAssemblyAmbiguousBranchCount,
             out reconstructionMaxSnapDistance,
             out reconstructionIncidencePreserved);
-        result = PruneDegenerateOutputFaces(result, csgOptions.WeldTolerance, predicateTelemetry);
+        result = PruneDegenerateOutputFaces(
+            result,
+            csgOptions.WeldTolerance,
+            predicateTelemetry,
+            out int postPruneDegBefore,
+            out int postPruneRemoved,
+            out int postPruneDegAfter,
+            out bool postPruneAccepted,
+            out bool postPruneClosedGuard,
+            out int postPruneBoundaryBefore,
+            out int postPruneBoundaryAfter,
+            out int postPruneUnmatchedBefore,
+            out int postPruneUnmatchedAfter);
+        stageCertificates.Add(
+            $"deg-prune:phase=post;"
+            + $"before={postPruneDegBefore};"
+            + $"removed={postPruneRemoved};"
+            + $"after={postPruneDegAfter};"
+            + $"accepted={(postPruneAccepted ? 1 : 0)};"
+            + $"closedGuard={(postPruneClosedGuard ? 1 : 0)};"
+            + $"boundaryBefore={postPruneBoundaryBefore};"
+            + $"boundaryAfter={postPruneBoundaryAfter};"
+            + $"unmatchedBefore={postPruneUnmatchedBefore};"
+            + $"unmatchedAfter={postPruneUnmatchedAfter}");
         var reconstructionInvariant = AnalyzeReconstructionTopology(result.Mesh);
         reconstructionBoundaryHalfEdgeCount = reconstructionInvariant.BoundaryHalfEdgeCount;
         reconstructionOpenBoundaryLoopCount = reconstructionInvariant.OpenBoundaryLoopCount;
@@ -978,56 +1026,310 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
     private static CsgResult PruneDegenerateOutputFaces(
         CsgResult result,
         double weldTolerance,
-        PredicateTelemetryCounter predicateTelemetry)
+        PredicateTelemetryCounter predicateTelemetry,
+        out int beforeDegenerate,
+        out int removedDegenerateFaces,
+        out int afterDegenerate,
+        out bool accepted,
+        out bool preserveClosedContract,
+        out int boundaryBefore,
+        out int boundaryAfter,
+        out int unmatchedBefore,
+        out int unmatchedAfter)
     {
+        beforeDegenerate = 0;
+        removedDegenerateFaces = 0;
+        afterDegenerate = 0;
+        accepted = false;
+        preserveClosedContract = false;
+        boundaryBefore = 0;
+        boundaryAfter = 0;
+        unmatchedBefore = 0;
+        unmatchedAfter = 0;
+
         if (result.Mesh.Faces.Count == 0)
             return result;
 
-        var kept = new List<Triangle3>(result.Mesh.Faces.Count);
+        beforeDegenerate = DegenerateFaceInspector.CountDegenerateFaces(result.Mesh, predicateTelemetry);
+        afterDegenerate = beforeDegenerate;
+        if (beforeDegenerate == 0)
+            return result;
+
+        var beforeIncidence = MeshStitcher.AnalyzeBoundaryIncidence(result.Mesh);
+        var beforeComponents = AnalyzeComponentTopology(result.Mesh);
+        boundaryBefore = beforeIncidence.BoundaryHalfEdgeCount;
+        unmatchedBefore = beforeIncidence.UnmatchedUndirectedEdgeCount;
+        var positions = new List<Vec3>(result.Mesh.Vertices.Count);
+        foreach (var vertex in result.Mesh.Vertices)
+            positions.Add(vertex.Position);
+        var kept = new List<(int I0, int I1, int I2)>(result.Mesh.Faces.Count);
         bool removedAny = false;
 
         foreach (var face in result.Mesh.Faces)
         {
-            face.GetTrianglePositions(out var a, out var b, out var c);
+            var verts = face.GetVertices();
+            Vec3 a = verts[0].Position;
+            Vec3 b = verts[1].Position;
+            Vec3 c = verts[2].Position;
             var areaSign = EvaluateProjectedAreaSign(a, b, c);
             predicateTelemetry.Add(areaSign.Tier);
             if (areaSign.Sign == PredicateSign.Zero)
             {
                 removedAny = true;
+                removedDegenerateFaces++;
                 continue;
             }
 
-            kept.Add(new Triangle3(a, b, c));
+            kept.Add((verts[0].Id, verts[1].Id, verts[2].Id));
         }
 
         if (!removedAny)
             return result;
 
-        var rebuilt = new MeshBuilder(weldTolerance).Build(kept);
+        var rebuilt = new MeshBuilder().Build(positions, kept);
         rebuilt.IsComplemented = result.Mesh.IsComplemented;
-
-        return new CsgResult
+        afterDegenerate = DegenerateFaceInspector.CountDegenerateFaces(rebuilt, predicateTelemetry);
+        preserveClosedContract =
+            beforeIncidence.BoundaryHalfEdgeCount == 0
+            && beforeIncidence.UnmatchedUndirectedEdgeCount == 0;
+        var afterIncidence = MeshStitcher.AnalyzeBoundaryIncidence(rebuilt);
+        if (preserveClosedContract
+            && (afterIncidence.BoundaryHalfEdgeCount > 0
+                || afterIncidence.UnmatchedUndirectedEdgeCount > 0))
         {
-            Mesh = rebuilt,
-            PatchCountA = result.PatchCountA,
-            PatchCountB = result.PatchCountB,
-            DegenerateCount = result.DegenerateCount,
-            IntersectionSegmentCount = result.IntersectionSegmentCount,
-            SelectedPatchExtractionMode = result.SelectedPatchExtractionMode,
-            SelectedPatchExtractionBoundaryEdgeCount = result.SelectedPatchExtractionBoundaryEdgeCount,
-            SelectedPatchExtractionIsEdgeManifold = result.SelectedPatchExtractionIsEdgeManifold,
-            SelectedPatchExtractionConnectedComponentCount = result.SelectedPatchExtractionConnectedComponentCount,
-            SelectedPatchBoundaryAuthority = result.SelectedPatchBoundaryAuthority,
-            SelectedAssemblyTrianglesFromA = result.SelectedAssemblyTrianglesFromA,
-            SelectedAssemblyTrianglesFromB = result.SelectedAssemblyTrianglesFromB,
-            SelectedAssemblyFlippedTrianglesFromB = result.SelectedAssemblyFlippedTrianglesFromB,
-            PatchExtractionCandidateSignatures = result.PatchExtractionCandidateSignatures,
-            SelectedCoplanarDecisionRows = result.SelectedCoplanarDecisionRows,
-            SelectedCertifiedPatchCount = result.SelectedCertifiedPatchCount,
-            SelectedUncertifiedPatchCount = result.SelectedUncertifiedPatchCount,
-            SelectedClassificationEvidenceFingerprint = result.SelectedClassificationEvidenceFingerprint,
-            AuthoritativeBoundary = result.AuthoritativeBoundary
-        };
+            AttemptDeterministicBoundaryReseal(rebuilt, weldTolerance);
+            afterIncidence = MeshStitcher.AnalyzeBoundaryIncidence(rebuilt);
+            afterDegenerate = DegenerateFaceInspector.CountDegenerateFaces(rebuilt, predicateTelemetry);
+        }
+        var afterComponents = AnalyzeComponentTopology(rebuilt);
+        boundaryAfter = afterIncidence.BoundaryHalfEdgeCount;
+        unmatchedAfter = afterIncidence.UnmatchedUndirectedEdgeCount;
+
+        accepted = afterDegenerate <= beforeDegenerate;
+        if (preserveClosedContract)
+        {
+            accepted = accepted
+                && afterIncidence.BoundaryHalfEdgeCount <= beforeIncidence.BoundaryHalfEdgeCount
+                && afterIncidence.UnmatchedUndirectedEdgeCount <= beforeIncidence.UnmatchedUndirectedEdgeCount;
+        }
+        else
+        {
+            accepted = accepted
+                && afterComponents.InvalidComponentCount <= beforeComponents.InvalidComponentCount;
+        }
+        if (!accepted)
+            return result;
+
+        return WithMesh(result, rebuilt);
+    }
+
+    private static void AttemptDeterministicBoundaryReseal(HalfEdgeMesh mesh, double weldTolerance)
+    {
+        var bounds = mesh.GetBounds();
+        double sceneScale = System.Math.Max(1.0, bounds.Size.Length);
+        double tol = System.Math.Max(
+            System.Math.Max(weldTolerance * 4.0, sceneScale * 1e-8),
+            1e-6);
+
+        MeshStitcher.RepairBoundary(mesh, tol);
+        MeshStitcher.RelinkBoundaryTwinsDeterministic(mesh);
+        var incidence = MeshStitcher.AnalyzeBoundaryIncidence(mesh);
+        if (incidence.BoundaryHalfEdgeCount > 0 && incidence.OpenBoundaryVertexCount == 0)
+        {
+            MeshStitcher.CloseBoundaryLoopsDeterministic(mesh);
+            MeshStitcher.RepairBoundary(mesh, tol * 2.0);
+            MeshStitcher.RelinkBoundaryTwinsDeterministic(mesh);
+        }
+    }
+
+    private static CsgResult PruneDuplicateOutputFaces(
+        CsgResult result,
+        double weldTolerance,
+        out int removedFaceCount)
+    {
+        removedFaceCount = 0;
+        var mesh = result.Mesh;
+        if (mesh.Faces.Count < 2)
+            return result;
+
+        var removeFaces = new HashSet<int>();
+        var idSeen = new HashSet<(int A, int B, int C)>();
+        double quantizeTol = System.Math.Max(weldTolerance, 1e-9);
+        var geomGroups = new Dictionary<QuantizedTriangleKey, List<(int FaceIndex, int OrientationSign)>>();
+
+        for (int i = 0; i < mesh.Faces.Count; i++)
+        {
+            var verts = mesh.Faces[i].GetVertices();
+            int i0 = verts[0].Id;
+            int i1 = verts[1].Id;
+            int i2 = verts[2].Id;
+
+            var idKey = SortTriangleIds(i0, i1, i2);
+            if (!idSeen.Add(idKey))
+                removeFaces.Add(i);
+
+            var q0 = QuantizePoint(verts[0].Position, quantizeTol);
+            var q1 = QuantizePoint(verts[1].Position, quantizeTol);
+            var q2 = QuantizePoint(verts[2].Position, quantizeTol);
+            if (q0.Equals(q1) || q1.Equals(q2) || q2.Equals(q0))
+            {
+                removeFaces.Add(i);
+                continue;
+            }
+
+            var (k0, k1, k2) = SortQuantizedPoints(q0, q1, q2);
+            int p0 = FindSortedPointIndex(q0, k0, k1);
+            int p1 = FindSortedPointIndex(q1, k0, k1);
+            int p2 = FindSortedPointIndex(q2, k0, k1);
+            int inv = 0;
+            if (p0 > p1) inv++;
+            if (p0 > p2) inv++;
+            if (p1 > p2) inv++;
+            int orientationSign = (inv & 1) == 0 ? 1 : -1;
+
+            var geomKey = new QuantizedTriangleKey(k0, k1, k2);
+            if (!geomGroups.TryGetValue(geomKey, out var faces))
+            {
+                faces = [];
+                geomGroups[geomKey] = faces;
+            }
+
+            faces.Add((i, orientationSign));
+        }
+
+        foreach (var kvp in geomGroups)
+        {
+            var grouped = kvp.Value
+                .OrderBy(static entry => entry.FaceIndex)
+                .ToList();
+            if (grouped.Count <= 1)
+                continue;
+
+            var pos = grouped.Where(static entry => entry.OrientationSign > 0)
+                .Select(static entry => entry.FaceIndex)
+                .ToList();
+            var neg = grouped.Where(static entry => entry.OrientationSign < 0)
+                .Select(static entry => entry.FaceIndex)
+                .ToList();
+
+            int cancelPairs = System.Math.Min(pos.Count, neg.Count);
+            for (int i = 0; i < cancelPairs; i++)
+            {
+                removeFaces.Add(pos[i]);
+                removeFaces.Add(neg[i]);
+            }
+
+            var remaining = pos.Skip(cancelPairs)
+                .Concat(neg.Skip(cancelPairs))
+                .OrderBy(static idx => idx)
+                .ToList();
+            for (int i = 1; i < remaining.Count; i++)
+                removeFaces.Add(remaining[i]);
+        }
+
+        removedFaceCount = removeFaces.Count;
+        if (removedFaceCount == 0)
+            return result;
+
+        var positions = new List<Vec3>(mesh.Vertices.Count);
+        foreach (var v in mesh.Vertices)
+            positions.Add(v.Position);
+
+        var kept = new List<(int I0, int I1, int I2)>(mesh.Faces.Count - removedFaceCount);
+        for (int i = 0; i < mesh.Faces.Count; i++)
+        {
+            if (removeFaces.Contains(i))
+                continue;
+            var verts = mesh.Faces[i].GetVertices();
+            kept.Add((verts[0].Id, verts[1].Id, verts[2].Id));
+        }
+
+        var rebuilt = new MeshBuilder(weldTolerance).Build(positions, kept);
+        rebuilt.IsComplemented = mesh.IsComplemented;
+        var before = MeshStitcher.AnalyzeBoundaryIncidence(mesh);
+        var after = MeshStitcher.AnalyzeBoundaryIncidence(rebuilt);
+        var beforeComponents = AnalyzeComponentTopology(mesh);
+        var afterComponents = AnalyzeComponentTopology(rebuilt);
+        bool accepted =
+            after.BoundaryHalfEdgeCount <= before.BoundaryHalfEdgeCount
+            && after.UnmatchedUndirectedEdgeCount <= before.UnmatchedUndirectedEdgeCount
+            && after.NonManifoldUndirectedEdgeCount < before.NonManifoldUndirectedEdgeCount
+            && afterComponents.InvalidComponentCount <= beforeComponents.InvalidComponentCount;
+
+        if (!accepted)
+        {
+            removedFaceCount = 0;
+            return result;
+        }
+
+        return WithMesh(result, rebuilt);
+    }
+
+    private readonly record struct QuantizedPoint(long X, long Y, long Z);
+
+    private readonly record struct QuantizedTriangleKey(
+        QuantizedPoint A,
+        QuantizedPoint B,
+        QuantizedPoint C);
+
+    private static (int A, int B, int C) SortTriangleIds(int i0, int i1, int i2)
+    {
+        int a = i0;
+        int b = i1;
+        int c = i2;
+        if (a > b)
+            (a, b) = (b, a);
+        if (b > c)
+            (b, c) = (c, b);
+        if (a > b)
+            (a, b) = (b, a);
+        return (a, b, c);
+    }
+
+    private static QuantizedPoint QuantizePoint(Vec3 p, double tolerance)
+    {
+        double inv = 1.0 / tolerance;
+        return new QuantizedPoint(
+            QuantizeCoord(p.X, inv),
+            QuantizeCoord(p.Y, inv),
+            QuantizeCoord(p.Z, inv));
+
+        static long QuantizeCoord(double value, double invTol)
+        {
+            return (long)System.Math.Round(value * invTol, MidpointRounding.AwayFromZero);
+        }
+    }
+
+    private static (QuantizedPoint A, QuantizedPoint B, QuantizedPoint C) SortQuantizedPoints(
+        QuantizedPoint p0,
+        QuantizedPoint p1,
+        QuantizedPoint p2)
+    {
+        var points = new[] { p0, p1, p2 };
+        Array.Sort(points, static (left, right) =>
+        {
+            int cmp = left.X.CompareTo(right.X);
+            if (cmp != 0)
+                return cmp;
+            cmp = left.Y.CompareTo(right.Y);
+            if (cmp != 0)
+                return cmp;
+            return left.Z.CompareTo(right.Z);
+        });
+
+        return (points[0], points[1], points[2]);
+    }
+
+    private static int FindSortedPointIndex(
+        QuantizedPoint point,
+        QuantizedPoint k0,
+        QuantizedPoint k1)
+    {
+        if (point.Equals(k0))
+            return 0;
+        if (point.Equals(k1))
+            return 1;
+        return 2;
     }
 
     private static CertifiedPredicateResult EvaluateProjectedAreaSign(Vec3 a, Vec3 b, Vec3 c)
@@ -1098,6 +1400,30 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             if (IsMeshClosedOrientedAndManifold(mesh))
                 return result;
 
+            var passIncidence = MeshStitcher.AnalyzeBoundaryIncidence(mesh);
+            if (passIncidence.BoundaryHalfEdgeCount == 0
+                && passIncidence.UnmatchedUndirectedEdgeCount == 0)
+            {
+                if (TryReduceNonManifoldEdgeIncidence(
+                    mesh,
+                    weldTolerance,
+                    out var reducedMesh,
+                    out int removedFaces))
+                {
+                    mesh = reducedMesh;
+                    result = WithMesh(result, mesh);
+                }
+
+                if (TryPruneInvalidComponents(mesh, weldTolerance, out var closedPassPruned, out int closedPassDropped))
+                {
+                    droppedComponentCount += closedPassDropped;
+                    mesh = closedPassPruned;
+                    result = WithMesh(result, mesh);
+                }
+
+                continue;
+            }
+
             double tol = baseTolerance * (1 << pass);
             // Authority contract is emitted for reconstruction semantics, but while
             // strict-step3 remains unresolved we keep arrangement-guided snapping
@@ -1141,6 +1467,136 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         }
 
         return result;
+    }
+
+    private static bool TryReduceNonManifoldEdgeIncidence(
+        HalfEdgeMesh mesh,
+        double weldTolerance,
+        out HalfEdgeMesh reduced,
+        out int removedFaceCount)
+    {
+        reduced = mesh;
+        removedFaceCount = 0;
+        if (mesh.Faces.Count < 4)
+            return false;
+
+        var before = MeshStitcher.AnalyzeBoundaryIncidence(mesh);
+        if (before.NonManifoldUndirectedEdgeCount == 0)
+            return false;
+
+        var faceAreas = new double[mesh.Faces.Count];
+        var edgeUse = new Dictionary<long, List<EdgeFaceIncidence>>(mesh.Faces.Count * 3);
+        for (int fi = 0; fi < mesh.Faces.Count; fi++)
+        {
+            var verts = mesh.Faces[fi].GetVertices();
+            faceAreas[fi] = TriangleAreaSquared(verts[0].Position, verts[1].Position, verts[2].Position);
+            AddIncidence(verts[0].Id, verts[1].Id, fi);
+            AddIncidence(verts[1].Id, verts[2].Id, fi);
+            AddIncidence(verts[2].Id, verts[0].Id, fi);
+        }
+
+        var removeFaces = new HashSet<int>();
+        foreach (var kvp in edgeUse)
+        {
+            var incidences = kvp.Value;
+            if (incidences.Count <= 2)
+                continue;
+
+            var pos = incidences
+                .Where(static x => x.DirectionSign > 0)
+                .OrderByDescending(x => faceAreas[x.FaceIndex])
+                .ThenBy(static x => x.FaceIndex)
+                .ToList();
+            var neg = incidences
+                .Where(static x => x.DirectionSign < 0)
+                .OrderByDescending(x => faceAreas[x.FaceIndex])
+                .ThenBy(static x => x.FaceIndex)
+                .ToList();
+
+            var keep = new HashSet<int>();
+            if (pos.Count > 0 && neg.Count > 0)
+            {
+                keep.Add(pos[0].FaceIndex);
+                keep.Add(neg[0].FaceIndex);
+            }
+            else
+            {
+                foreach (var incidence in incidences
+                    .OrderByDescending(x => faceAreas[x.FaceIndex])
+                    .ThenBy(static x => x.FaceIndex)
+                    .Take(2))
+                {
+                    keep.Add(incidence.FaceIndex);
+                }
+            }
+
+            foreach (var incidence in incidences)
+            {
+                if (!keep.Contains(incidence.FaceIndex))
+                    removeFaces.Add(incidence.FaceIndex);
+            }
+        }
+
+        if (removeFaces.Count == 0)
+            return false;
+
+        var positions = new List<Vec3>(mesh.Vertices.Count);
+        foreach (var v in mesh.Vertices)
+            positions.Add(v.Position);
+
+        var triangles = new List<(int I0, int I1, int I2)>(mesh.Faces.Count - removeFaces.Count);
+        for (int fi = 0; fi < mesh.Faces.Count; fi++)
+        {
+            if (removeFaces.Contains(fi))
+                continue;
+
+            var verts = mesh.Faces[fi].GetVertices();
+            triangles.Add((verts[0].Id, verts[1].Id, verts[2].Id));
+        }
+
+        if (triangles.Count == 0)
+            return false;
+
+        var rebuilt = new MeshBuilder(weldTolerance).Build(positions, triangles);
+        rebuilt.IsComplemented = mesh.IsComplemented;
+        var after = MeshStitcher.AnalyzeBoundaryIncidence(rebuilt);
+        bool removedTooManyFaces = removeFaces.Count > mesh.Faces.Count / 2;
+        bool boundaryExplosion = after.BoundaryHalfEdgeCount > (before.NonManifoldUndirectedEdgeCount * 2);
+        bool unmatchedExplosion = after.UnmatchedUndirectedEdgeCount > before.NonManifoldUndirectedEdgeCount;
+        if (after.NonManifoldUndirectedEdgeCount >= before.NonManifoldUndirectedEdgeCount
+            || removedTooManyFaces
+            || boundaryExplosion
+            || unmatchedExplosion)
+        {
+            return false;
+        }
+
+        reduced = rebuilt;
+        removedFaceCount = removeFaces.Count;
+        return true;
+
+        void AddIncidence(int a, int b, int faceIndex)
+        {
+            int lo = a < b ? a : b;
+            int hi = a < b ? b : a;
+            long key = ((long)lo << 32) | (uint)hi;
+            int dir = a < b ? 1 : -1;
+            if (!edgeUse.TryGetValue(key, out var list))
+            {
+                list = [];
+                edgeUse[key] = list;
+            }
+
+            list.Add(new EdgeFaceIncidence(faceIndex, dir));
+        }
+    }
+
+    private readonly record struct EdgeFaceIncidence(int FaceIndex, int DirectionSign);
+
+    private static double TriangleAreaSquared(Vec3 a, Vec3 b, Vec3 c)
+    {
+        var cross = Vec3.Cross(b - a, c - a);
+        return cross.LengthSquared;
     }
 
     private static SnapPassStats SnapBoundaryVerticesToArrangement(

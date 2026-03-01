@@ -9,12 +9,12 @@
     {
       "id": "FUZZ-BLOCKER-0001",
       "source": "tests/MdCsg.Robust.Conformance/ReplayCorpus/fuzz/showcase-chained-step3.case",
-      "signature": "issues=OutputMeshHasDegenerateFaces|OutputMeshNotClosed|OutputMeshNotEdgeManifold|ReconstructionInvariantViolation|ReconstructionPatchSelectionFailed|ReconstructionStitchingFailed|StageInvariantViolation;boundary=3;openLoops=0;unmatched=3",
+      "signature": "issues=OutputMeshHasDegenerateFaces|StageInvariantViolation;boundary=0;openLoops=0;unmatched=0",
       "expectedCertificates": [
-        "reconstruction:fail;",
+        "reconstruction:pass;",
         "output:fail;"
       ],
-      "owningStage": 55
+      "owningStage": 58
     }
   ]
 }

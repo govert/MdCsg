@@ -45,7 +45,7 @@ public class RobustShowcaseParityTests
     }
 
     [Fact]
-    public void ChainedCsgSceneCase_Step3_ReproducesTopologyDefect_WithZeroFallback()
+    public void ChainedCsgSceneCase_Step3_ReproducesDegenerateOutputDefect_WithZeroFallback()
     {
         var y = new Vec3(0, 1, 0);
         var sphere = Primitives.Sphere(Vec3.Zero, 1.3, 3);
@@ -63,9 +63,9 @@ public class RobustShowcaseParityTests
 
         var step3 = RobustCsg.Difference(step2Solid, cylY, StrictRobustOpts);
         Assert.False(step3.Succeeded);
-        Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.ReconstructionInvariantViolation);
-        Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);
-        Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotEdgeManifold);
+        Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshHasDegenerateFaces);
+        Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);
+        Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotEdgeManifold);
         RobustDiagnosticsAssertions.AssertHasPatchExtractionCertificate(step3.Diagnostics);
         Assert.Contains(step3.Diagnostics.StageInvariantCertificates, static c => c.StartsWith("patch-extraction-candidates:", StringComparison.Ordinal));
         var candidates = GetStageCertificate(step3, "patch-extraction-candidates:");
@@ -87,13 +87,17 @@ public class RobustShowcaseParityTests
             Assert.Contains("tri=", signature, StringComparison.Ordinal);
         }
         string reconstructionCert = GetStageCertificate(step3, "reconstruction:");
-        Assert.StartsWith("reconstruction:fail;", reconstructionCert, StringComparison.Ordinal);
-        Assert.Equal(3, ParseIntTag(reconstructionCert, "boundary"));
+        Assert.StartsWith("reconstruction:pass;", reconstructionCert, StringComparison.Ordinal);
+        Assert.Equal(0, ParseIntTag(reconstructionCert, "boundary"));
         Assert.Equal(0, ParseIntTag(reconstructionCert, "openLoops"));
-        Assert.Equal(3, ParseIntTag(reconstructionCert, "unmatched"));
+        Assert.Equal(0, ParseIntTag(reconstructionCert, "unmatched"));
         Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction-pre:", StringComparison.Ordinal));
         Assert.Contains("nonWorse=", reconstructionCert, StringComparison.Ordinal);
-        Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("output:fail;", StringComparison.Ordinal));
+        string outputCert = GetStageCertificate(step3, "output:");
+        Assert.Contains("output:fail;", outputCert, StringComparison.Ordinal);
+        Assert.Equal(0, ParseIntTag(outputCert, "boundary"));
+        Assert.Equal(1, ParseIntTag(outputCert, "manifold"));
+        Assert.True(ParseIntTag(outputCert, "deg") > 0);
         RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(step3.Diagnostics);
     }
 

@@ -62,8 +62,8 @@ public class ReconstructionReplayCorpusTests
         Assert.Contains(rows, r =>
             r.CaseFile == "showcase-chained-step3.case"
             && !r.ExpectSuccess
-            && r.ExpectBoundary == 3
-            && r.ExpectUnmatched == 3);
+            && r.ExpectBoundary == 0
+            && r.ExpectUnmatched == 0);
     }
 
     private static RobustCsgResult RunReplayCase(string casePath)
