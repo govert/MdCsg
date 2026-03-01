@@ -41,6 +41,7 @@ Initial scaffold now exists:
   - strict bridge path now forces arrangement candidate selection (`ForceArrangementPatchExtraction`) while retaining full candidate telemetry for diagnostics
   - extracted patches now carry deterministic provenance (`StableId`, source-face lineage, boundary authority) with arrangement mode explicitly marked arrangement-authoritative
   - emits stage invariant certificates (`input`, `arrangement`, `patch-extraction`, `triangulation`, `reconstruction`, `output`) and strict-mode `StageInvariantViolation` issues when gates fail
+  - strict classification certificates now include deterministic evidence fingerprints with selected certified/uncertified patch counters
   - applies deterministic post-op degenerate-face pruning and topology repair before strict output validation
 - `Kernel/Predicates/CertifiedPredicates` with precision-tier telemetry
 - `Kernel/Arrangement/ArrangementBuilder` native BVH+tri-tri arrangement builder

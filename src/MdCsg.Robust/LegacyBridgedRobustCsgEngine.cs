@@ -326,8 +326,13 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         opSw.Stop();
 
         classificationFallbackCount = result.DegenerateCount;
-        int classifiedPatchCount = result.PatchCountA + result.PatchCountB;
-        int classifiedCertifiedCount = System.Math.Max(0, classifiedPatchCount - classificationFallbackCount);
+        int classifiedCertifiedCount = result.SelectedCertifiedPatchCount
+            ?? System.Math.Max(0, (result.PatchCountA + result.PatchCountB) - classificationFallbackCount);
+        int classifiedUncertifiedCount = result.SelectedUncertifiedPatchCount ?? classificationFallbackCount;
+        string classificationFingerprint =
+            string.IsNullOrWhiteSpace(result.SelectedClassificationEvidenceFingerprint)
+                ? "<none>"
+                : result.SelectedClassificationEvidenceFingerprint!;
 
         if (result.SelectedPatchExtractionMode.HasValue)
         {
@@ -364,7 +369,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         }
         stageCertificates.Add(
             $"classification:pass;certified={classifiedCertifiedCount};"
-            + $"fallback={classificationFallbackCount};policy=margin>errorBound");
+            + $"fallback={classificationFallbackCount};"
+            + $"uncertified={classifiedUncertifiedCount};"
+            + $"fingerprint={classificationFingerprint};"
+            + "policy=margin>errorBound");
 
         var policySnapshot = EvaluateReconstructionPolicySnapshot(operation, result);
         stageCertificates.Add(
@@ -841,6 +849,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             SelectedAssemblyTrianglesFromB = result.SelectedAssemblyTrianglesFromB,
             SelectedAssemblyFlippedTrianglesFromB = result.SelectedAssemblyFlippedTrianglesFromB,
             PatchExtractionCandidateSignatures = result.PatchExtractionCandidateSignatures,
+            SelectedCertifiedPatchCount = result.SelectedCertifiedPatchCount,
+            SelectedUncertifiedPatchCount = result.SelectedUncertifiedPatchCount,
+            SelectedClassificationEvidenceFingerprint = result.SelectedClassificationEvidenceFingerprint,
             AuthoritativeBoundary = result.AuthoritativeBoundary
         };
     }
@@ -1311,6 +1322,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             SelectedAssemblyTrianglesFromB = source.SelectedAssemblyTrianglesFromB,
             SelectedAssemblyFlippedTrianglesFromB = source.SelectedAssemblyFlippedTrianglesFromB,
             PatchExtractionCandidateSignatures = source.PatchExtractionCandidateSignatures,
+            SelectedCertifiedPatchCount = source.SelectedCertifiedPatchCount,
+            SelectedUncertifiedPatchCount = source.SelectedUncertifiedPatchCount,
+            SelectedClassificationEvidenceFingerprint = source.SelectedClassificationEvidenceFingerprint,
             AuthoritativeBoundary = source.AuthoritativeBoundary
         };
     }

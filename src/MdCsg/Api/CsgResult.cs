@@ -67,6 +67,17 @@ public class CsgResult
     /// </summary>
     public ReconstructionBoundaryContract? AuthoritativeBoundary { get; init; }
 
+    /// <summary>Certified patch count for the selected extraction/assembly candidate.</summary>
+    public int? SelectedCertifiedPatchCount { get; init; }
+
+    /// <summary>Uncertified patch count for the selected extraction/assembly candidate.</summary>
+    public int? SelectedUncertifiedPatchCount { get; init; }
+
+    /// <summary>
+    /// Deterministic fingerprint over selected candidate patch certification evidence.
+    /// </summary>
+    public string? SelectedClassificationEvidenceFingerprint { get; init; }
+
     /// <summary>Total number of faces in the result.</summary>
     public int FaceCount => Mesh.Faces.Count;
 

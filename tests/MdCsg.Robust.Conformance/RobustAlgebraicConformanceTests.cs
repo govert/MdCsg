@@ -73,9 +73,16 @@ public class RobustAlgebraicConformanceTests
         AssertRobustClosedWithoutFallback(intersection);
         AssertRobustClosedWithoutFallback(difference);
 
-        Assert.Contains(union.Diagnostics.StageInvariantCertificates, c => c.StartsWith("classification:pass;", StringComparison.Ordinal));
-        Assert.Contains(intersection.Diagnostics.StageInvariantCertificates, c => c.StartsWith("classification:pass;", StringComparison.Ordinal));
-        Assert.Contains(difference.Diagnostics.StageInvariantCertificates, c => c.StartsWith("classification:pass;", StringComparison.Ordinal));
+        string unionCert = GetCert(union, "classification:");
+        string intersectionCert = GetCert(intersection, "classification:");
+        string differenceCert = GetCert(difference, "classification:");
+
+        Assert.Contains("uncertified=", unionCert, StringComparison.Ordinal);
+        Assert.Contains("uncertified=", intersectionCert, StringComparison.Ordinal);
+        Assert.Contains("uncertified=", differenceCert, StringComparison.Ordinal);
+        Assert.Contains("fingerprint=", unionCert, StringComparison.Ordinal);
+        Assert.Contains("fingerprint=", intersectionCert, StringComparison.Ordinal);
+        Assert.Contains("fingerprint=", differenceCert, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -121,6 +128,24 @@ public class RobustAlgebraicConformanceTests
         RobustDiagnosticsAssertions.AssertPatchExtractionMode(difference.Diagnostics, PatchExtractionMode.Arrangement);
     }
 
+    [Fact]
+    public void StrictUnion_ClassificationEvidenceFingerprint_IsDeterministic()
+    {
+        var a = Primitives.Cube(Vec3.Zero, 2.0);
+        var b = Primitives.Cube(new Vec3(0.75, 0, 0), 2.0);
+
+        var baseline = RobustCsg.Union(a, b, StrictOpts);
+        AssertRobustClosedWithoutFallback(baseline);
+        string baselineCert = GetCert(baseline, "classification:");
+
+        for (int i = 0; i < 5; i++)
+        {
+            var next = RobustCsg.Union(a, b, StrictOpts);
+            AssertRobustClosedWithoutFallback(next);
+            Assert.Equal(baselineCert, GetCert(next, "classification:"));
+        }
+    }
+
     private static void AssertRobustClosedWithoutFallback(RobustCsgResult result)
     {
         Assert.True(result.Succeeded);
@@ -134,6 +159,14 @@ public class RobustAlgebraicConformanceTests
     {
         string? cert = result.Diagnostics.StageInvariantCertificates
             .LastOrDefault(static c => c.StartsWith("reconstruction-policy:", StringComparison.Ordinal));
+        Assert.False(string.IsNullOrWhiteSpace(cert));
+        return cert!;
+    }
+
+    private static string GetCert(RobustCsgResult result, string prefix)
+    {
+        string? cert = result.Diagnostics.StageInvariantCertificates
+            .LastOrDefault(c => c.StartsWith(prefix, StringComparison.Ordinal));
         Assert.False(string.IsNullOrWhiteSpace(cert));
         return cert!;
     }

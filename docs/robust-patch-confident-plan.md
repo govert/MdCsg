@@ -425,7 +425,7 @@ Exit criteria:
 
 - Strict mode classification contains no silent uncertified accept/reject paths.
 - Classification certificates are stable across repeated runs on corpus.
-- Status: Pending.
+- Status: Completed (selected-candidate certified/uncertified counters + deterministic classification evidence fingerprints in strict certificates).
 
 ## Stage 53 - Coplanar Semantics Completion Matrix
 

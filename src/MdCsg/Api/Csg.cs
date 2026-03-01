@@ -244,6 +244,9 @@ public static class Csg
             SelectedAssemblyTrianglesFromB = chosen.Assembly.TrianglesFromMeshB,
             SelectedAssemblyFlippedTrianglesFromB = chosen.Assembly.FlippedTrianglesFromMeshB,
             PatchExtractionCandidateSignatures = candidateSignatures,
+            SelectedCertifiedPatchCount = chosen.ClassificationEvidence.CertifiedCount,
+            SelectedUncertifiedPatchCount = chosen.ClassificationEvidence.UncertifiedCount,
+            SelectedClassificationEvidenceFingerprint = chosen.ClassificationEvidence.Fingerprint,
             AuthoritativeBoundary = new ReconstructionBoundaryContract(
                 ExtractionMode: chosen.ExtractionMode,
                 Authority: GetBoundaryAuthorityForMode(chosen.ExtractionMode),
@@ -470,7 +473,8 @@ public static class Csg
         int PatchCountB,
         int DegenerateCountA,
         int DegenerateCountB,
-        AssemblyTopologyQuality TopologyQuality);
+        AssemblyTopologyQuality TopologyQuality,
+        ClassificationEvidence ClassificationEvidence);
 
     private readonly record struct AssemblyTopologyQuality(
         int BoundaryEdgeCount,
@@ -479,6 +483,11 @@ public static class Csg
     {
         public bool IsClosedManifold => BoundaryEdgeCount == 0 && IsEdgeManifold;
     }
+
+    private readonly record struct ClassificationEvidence(
+        int CertifiedCount,
+        int UncertifiedCount,
+        string Fingerprint);
 
     private static AssemblyCandidate BuildAssemblyCandidate(
         PatchExtractionMode extractionMode,
@@ -533,6 +542,7 @@ public static class Csg
             operation);
 
         var quality = EvaluateAssemblyTopologyQuality(assembly, options.WeldTolerance);
+        var evidence = BuildClassificationEvidence(patchesA, patchesB);
         return new AssemblyCandidate(
             extractionMode,
             assembly,
@@ -540,7 +550,8 @@ public static class Csg
             patchesB.Count,
             degA,
             degB,
-            quality);
+            quality,
+            evidence);
     }
 
     private static AssemblyTopologyQuality EvaluateAssemblyTopologyQuality(
@@ -575,6 +586,53 @@ public static class Csg
             return a.ConnectedComponentCount < b.ConnectedComponentCount;
 
         return false;
+    }
+
+    private static ClassificationEvidence BuildClassificationEvidence(
+        IReadOnlyList<Patch> patchesA,
+        IReadOnlyList<Patch> patchesB)
+    {
+        int certified = 0;
+        int uncertified = 0;
+        var tokens = new List<string>(patchesA.Count + patchesB.Count);
+
+        AddTokens(patchesA, sourceMesh: "A");
+        AddTokens(patchesB, sourceMesh: "B");
+        tokens.Sort(StringComparer.Ordinal);
+
+        return new ClassificationEvidence(
+            CertifiedCount: certified,
+            UncertifiedCount: uncertified,
+            Fingerprint: string.Join("|", tokens));
+
+        void AddTokens(IReadOnlyList<Patch> patches, string sourceMesh)
+        {
+            for (int i = 0; i < patches.Count; i++)
+            {
+                var patch = patches[i];
+                bool isCertified = patch.IsClassificationCertified;
+                if (isCertified)
+                    certified++;
+                else
+                    uncertified++;
+
+                int inside = patch.IsInside switch
+                {
+                    true => 1,
+                    false => 0,
+                    _ => -1
+                };
+                int coplanar = patch.CoplanarNormalsAgree switch
+                {
+                    true => 1,
+                    false => 0,
+                    _ => -1
+                };
+
+                tokens.Add(
+                    $"{sourceMesh}:{patch.StableId}:{(isCertified ? 1 : 0)}:{inside}:{coplanar}:{patch.SubTriangleIndices.Count}:{(int)patch.BoundaryAuthority}");
+            }
+        }
     }
 
     private static IReadOnlyList<string> BuildCandidateSignatures(
