@@ -79,6 +79,8 @@ Current conformance snapshot:
 - deterministic performance budget entrypoint is `tools/ci/run-robust-performance-budget.ps1`.
 - Stable-overlap and smoke union zero-fallback checks are active and passing.
 - Seeded strict fuzz smoke tests are active and passing with deterministic seeds.
+- Stage-focused fuzz escalation (`RobustFuzzEscalationTests`) is active with mutation families (`coplanar-tangency`, `near-collinear-axes`, `thin-shell`), deterministic blocker signatures, and automatic minimized repro emission for unknown failure classes.
+- Checked-in minimized fuzz blocker corpus (`ReplayCorpus/fuzz`) pins known blocker signatures (`FUZZ-BLOCKER-*`) and is exercised in gate slice 2.
 - Stable-case differential parity tests are active (`RobustDifferentialParityTests`) and assert robust boundary dominance against legacy plus bounded relative-volume drift for legacy-closed outputs.
 - Kernel dependency accretion is guarded by `RobustKernelDependencyGuardTests` to prevent new legacy couplings in `src/MdCsg.Robust/Kernel`.
 - Shadow rollout divergence classification is guarded by `RobustShadowRolloutTests`.

@@ -467,7 +467,7 @@ Exit criteria:
 
 - New fuzz failures land with minimized deterministic repros before triage closure.
 - Gate reports distinguish new failure classes from known blockers.
-- Status: Pending.
+- Status: Completed (`RobustFuzzEscalationTests` adds stage-focused mutation families + deterministic delta minimization reporting for unknown signatures; checked-in minimized blocker replay corpus under `ReplayCorpus/fuzz`; robustness gate slice 2 now runs smoke + escalation fuzz suites).
 
 ## Stage 56 - Robustness Gate Quality Bands and Blocker Ledger
 

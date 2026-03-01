@@ -53,7 +53,7 @@ Invoke-GateSlice `
 Invoke-GateSlice `
     "2/4: Seeded strict fuzz smoke gate..." `
     $robustProject `
-    "FullyQualifiedName~RobustFuzzSmokeTests"
+    "(FullyQualifiedName~RobustFuzzSmokeTests|FullyQualifiedName~RobustFuzzEscalationTests)"
 
 Invoke-GateSlice `
     "3/4: Triangulation bridge + smoke + reconstruction/algebraic/differential/dependency/shadow/readiness/budget guardrails..." `
