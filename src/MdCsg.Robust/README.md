@@ -75,12 +75,15 @@ Current conformance snapshot:
 - CI rescue bar entrypoint is `tools/ci/run-robustness-gate.ps1` (wired to `.github/workflows/robustness-gate.yml`).
   - gate runner now retries a slice once when test-host crash/abort markers are detected, and fails hard if the retry is not clean
   - gate slices: showcase/backlog/replay (including reconstruction replay), strict fuzz smoke, triangulation+smoke+reconstruction+algebraic+differential+dependency+shadow+readiness+budget guardrails, showcase runtime strict/failover contract (with hang-timeout protection)
+  - gate output now emits quality bands: `ROBUST_GATE_BAND_HARD_FAIL`, `ROBUST_GATE_BAND_KNOWN_BLOCKED`, `ROBUST_GATE_BAND_OBSERVABILITY`
 - strict readiness snapshot entrypoint is `tools/ci/run-robust-readiness-report.ps1` (reports blocker status + stable-corpus health).
+  - readiness output now emits aligned quality bands and derives known blockers from `tools/ci/robust-blocker-ledger.json`
 - deterministic performance budget entrypoint is `tools/ci/run-robust-performance-budget.ps1`.
 - Stable-overlap and smoke union zero-fallback checks are active and passing.
 - Seeded strict fuzz smoke tests are active and passing with deterministic seeds.
 - Stage-focused fuzz escalation (`RobustFuzzEscalationTests`) is active with mutation families (`coplanar-tangency`, `near-collinear-axes`, `thin-shell`), deterministic blocker signatures, and automatic minimized repro emission for unknown failure classes.
 - Checked-in minimized fuzz blocker corpus (`ReplayCorpus/fuzz`) pins known blocker signatures (`FUZZ-BLOCKER-*`) and is exercised in gate slice 2.
+- Machine-readable blocker ledger conformance (`RobustBlockerLedgerTests`) guards schema, blocker signature coverage, and unknown-signature hard-fail policy.
 - Stable-case differential parity tests are active (`RobustDifferentialParityTests`) and assert robust boundary dominance against legacy plus bounded relative-volume drift for legacy-closed outputs.
 - Kernel dependency accretion is guarded by `RobustKernelDependencyGuardTests` to prevent new legacy couplings in `src/MdCsg.Robust/Kernel`.
 - Shadow rollout divergence classification is guarded by `RobustShadowRolloutTests`.

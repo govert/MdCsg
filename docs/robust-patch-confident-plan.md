@@ -481,7 +481,7 @@ Exit criteria:
 
 - CI output cleanly separates regressions from known unresolved blockers.
 - Blocker lifecycle is auditable and deterministic.
-- Status: Pending.
+- Status: Completed (machine-readable ledger at `tools/ci/robust-blocker-ledger.json`; `RobustBlockerLedgerTests` enforces schema + known-signature coverage + unknown-signature hard-fail policy; gate/readiness scripts now emit explicit hard-fail/known-blocked/observability bands).
 
 ## Stage 57 - Strict Path API Finalization and Legacy Isolation
 

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "qualityBands": {
+    "hard-fail": "Unknown blocker signature or contract drift.",
+    "known-blocked": "Known unresolved blocker signature reproduced with expected certificates.",
+    "observability": "Non-blocking telemetry or trend-only diagnostics."
+  },
+  "blockers": [
+    {
+      "id": "FUZZ-BLOCKER-0001",
+      "source": "tests/MdCsg.Robust.Conformance/ReplayCorpus/fuzz/showcase-chained-step3.case",
+      "signature": "issues=OutputMeshHasDegenerateFaces|OutputMeshNotClosed|OutputMeshNotEdgeManifold|ReconstructionInvariantViolation|ReconstructionPatchSelectionFailed|ReconstructionStitchingFailed|StageInvariantViolation;boundary=3;openLoops=0;unmatched=3",
+      "expectedCertificates": [
+        "reconstruction:fail;",
+        "output:fail;"
+      ],
+      "owningStage": 55
+    }
+  ]
+}

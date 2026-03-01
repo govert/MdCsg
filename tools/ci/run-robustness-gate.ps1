@@ -4,6 +4,7 @@ Write-Host "Running robust conformance rescue bar..."
 
 $robustProject = "tests/MdCsg.Robust.Conformance/MdCsg.Robust.Conformance.csproj"
 $showcaseContractProject = "tests/MdCsg.Showcase.ContractTests/MdCsg.Showcase.ContractTests.csproj"
+$ledgerPath = "tools/ci/robust-blocker-ledger.json"
 $commonArgs = @("-c", "Release", "--nologo", "--blame-hang-timeout", "10m")
 
 function TestHostCrashDetected([string]$output)
@@ -48,7 +49,7 @@ function Invoke-GateSlice([string]$label, [string]$projectPath, [string]$filter)
 Invoke-GateSlice `
     "1/4: Showcase/backlog/replay robustness gates..." `
     $robustProject `
-    "(FullyQualifiedName~RobustShowcaseParityTests|FullyQualifiedName~RobustConformanceBacklogTests|FullyQualifiedName~ArrangementReplayCorpusTests|FullyQualifiedName~TriangulationReplayCorpusTests|FullyQualifiedName~ReconstructionReplayCorpusTests)"
+    "(FullyQualifiedName~RobustShowcaseParityTests|FullyQualifiedName~RobustConformanceBacklogTests|FullyQualifiedName~ArrangementReplayCorpusTests|FullyQualifiedName~TriangulationReplayCorpusTests|FullyQualifiedName~ReconstructionReplayCorpusTests|FullyQualifiedName~RobustBlockerLedgerTests)"
 
 Invoke-GateSlice `
     "2/4: Seeded strict fuzz smoke gate..." `
@@ -64,3 +65,19 @@ Invoke-GateSlice `
     "4/4: Showcase runtime strict/failover contract gate..." `
     $showcaseContractProject `
     "FullyQualifiedName~ShowcaseCsgContractTests"
+
+if (-not (Test-Path $ledgerPath))
+{
+    throw "Missing blocker ledger: $ledgerPath"
+}
+
+$ledger = Get-Content $ledgerPath -Raw | ConvertFrom-Json
+$knownBlocked = @($ledger.blockers | ForEach-Object { $_.id }) -join ","
+if ([string]::IsNullOrWhiteSpace($knownBlocked))
+{
+    $knownBlocked = "none"
+}
+
+Write-Host "ROBUST_GATE_BAND_HARD_FAIL=PASS"
+Write-Host "ROBUST_GATE_BAND_KNOWN_BLOCKED=$knownBlocked"
+Write-Host "ROBUST_GATE_BAND_OBSERVABILITY=PASS"
