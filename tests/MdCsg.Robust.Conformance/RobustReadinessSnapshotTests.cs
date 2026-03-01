@@ -70,7 +70,31 @@ public class RobustReadinessSnapshotTests
         Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshHasDegenerateFaces);
         Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);
         Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotEdgeManifold);
-        Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction:pass;", StringComparison.Ordinal));
+        string reconstructionCert = GetStageCertificate(step3, "reconstruction:");
+        Assert.StartsWith("reconstruction:pass;", reconstructionCert, StringComparison.Ordinal);
+        Assert.Equal(0, ParseIntTag(reconstructionCert, "boundary"));
+        Assert.Equal(0, ParseIntTag(reconstructionCert, "unmatched"));
+        string prePrune = GetStageCertificate(step3, "deg-prune:phase=pre;");
+        string postPrune = GetStageCertificate(step3, "deg-prune:phase=post;");
+        Assert.True(ParseIntTag(prePrune, "before") > 0);
+        Assert.True(ParseIntTag(prePrune, "removed") > 0);
+        Assert.Equal(1, ParseIntTag(prePrune, "accepted"));
+        Assert.Equal(1, ParseIntTag(prePrune, "closedGuard"));
+        Assert.Equal(0, ParseIntTag(prePrune, "boundaryAfter"));
+        Assert.Equal(0, ParseIntTag(prePrune, "unmatchedAfter"));
+        Assert.True(ParseIntTag(postPrune, "before") > 0);
+        Assert.True(ParseIntTag(postPrune, "removed") > 0);
+        Assert.Equal(1, ParseIntTag(postPrune, "accepted"));
+        Assert.Equal(1, ParseIntTag(postPrune, "closedGuard"));
+        Assert.Equal(0, ParseIntTag(postPrune, "boundaryAfter"));
+        Assert.Equal(0, ParseIntTag(postPrune, "unmatchedAfter"));
+        string outputCert = GetStageCertificate(step3, "output:");
+        Assert.StartsWith("output:fail;", outputCert, StringComparison.Ordinal);
+        Assert.Equal(0, ParseIntTag(outputCert, "boundary"));
+        Assert.Equal(1, ParseIntTag(outputCert, "manifold"));
+        int outputDeg = ParseIntTag(outputCert, "deg");
+        Assert.True(outputDeg > 0);
+        Assert.Equal(ParseIntTag(postPrune, "after"), outputDeg);
         RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(step3.Diagnostics);
     }
 
@@ -85,5 +109,24 @@ public class RobustReadinessSnapshotTests
             result.Diagnostics.StageInvariantCertificates,
             static c => c.StartsWith("reconstruction:pass;", StringComparison.Ordinal)
                 && c.Contains("nonWorse=1", StringComparison.Ordinal));
+    }
+
+    private static string GetStageCertificate(RobustCsgResult result, string prefix)
+    {
+        string? cert = result.Diagnostics.StageInvariantCertificates
+            .LastOrDefault(c => c.StartsWith(prefix, StringComparison.Ordinal));
+        Assert.False(string.IsNullOrWhiteSpace(cert));
+        return cert!;
+    }
+
+    private static int ParseIntTag(string cert, string tag)
+    {
+        string prefix = tag + "=";
+        var parts = cert.Split(';', StringSplitOptions.RemoveEmptyEntries);
+        string value = parts.FirstOrDefault(p => p.StartsWith(prefix, StringComparison.Ordinal)) ?? string.Empty;
+        Assert.False(string.IsNullOrWhiteSpace(value));
+        string text = value[prefix.Length..];
+        Assert.True(int.TryParse(text, out int parsed), $"Invalid integer tag '{tag}' in certificate '{cert}'.");
+        return parsed;
     }
 }

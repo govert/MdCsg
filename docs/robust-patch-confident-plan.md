@@ -128,7 +128,7 @@ Current status:
 - Reconstruction invariant analysis is now centralized in deterministic boundary-incidence accounting (`MeshStitcher.AnalyzeBoundaryIncidence`) and covered by deterministic conformance tests.
 - Coplanar reconstruction selection is now routed through an explicit per-operation/source truth table in `PatchAssembler` (documented in `ROBUSTNESS_SPEC.md`).
 - Robust bridge reconstruction now runs a deterministic constructive topology pass (relink, loop closure on balanced boundaries, invalid-component pruning) with explicit dropped-component telemetry.
-- Chained showcase step-3 remains an active reconstruction blocker, but is now pinned as a strict fail-closed repro requiring `reconstruction:fail` certification with zero triangulation fallback.
+- Chained showcase step-3 remains an active fail-closed blocker, now narrowed to residual output degenerates with reconstruction/output topology preserved (`reconstruction:pass`, `output:fail` with `boundary=0`, `manifold=1`, `deg>0`).
 - Upstream CSG now supports deterministic patch extraction policy control (`Auto`, `IntraFace`, `Global`) and strict-mode topology-preserving arbitration in `Auto` mode.
 - CSG operation results now emit selected patch-extraction telemetry (mode, stitched boundary count, manifold flag, connected components), and strict robust diagnostics mirror this as `patch-extraction:*` stage certificates.
 - Strict robust bridge now includes arrangement-owned boundary classification as a third patch-extraction candidate (alongside intra-face/global) in deterministic topology-preserving selection.
@@ -496,6 +496,30 @@ Exit criteria:
 - Strict path is stable and consumable without depending on legacy behavior.
 - Legacy path remains available only for diagnostics/comparison workflows.
 - Status: Completed (API snapshot gates in `RobustApiContractSnapshotTests`; migration contract + checklist gate in `RobustMigrationDocTests`; diagnostics-only legacy bridge isolated under `MdCsg.Robust.Diagnostics.Legacy` with explicit `AllowLegacyExecution` opt-in).
+
+## Stage 58 - Narrow Step-3 Blocker to Degenerate-Only Fail-Closed
+
+Deliverables:
+
+- Harden deterministic post-op/reconstruction cleanup to avoid step-3 topology regressions while preserving strict fail-closed behavior.
+- Re-pin replay manifests, showcase/readiness conformance, and blocker ledger to the narrowed blocker signature.
+
+Exit criteria:
+
+- Step-3 blocker reproduces deterministically with closed/manifold topology preserved and residual degenerate faces as the sole strict failure class.
+- Status: Completed (`FUZZ-BLOCKER-0001` signature now pins `issues=OutputMeshHasDegenerateFaces|StageInvariantViolation;boundary=0;openLoops=0;unmatched=0` with `reconstruction:pass;` + `output:fail;` contracts).
+
+## Stage 59 - Lock Degenerate-Repair Baseline Contracts
+
+Deliverables:
+
+- Add explicit blocker assertions for `deg-prune:*` stage certificates in showcase/readiness conformance.
+- Pin closed/manifold output topology invariants in blocker tests while unresolved degenerate output remains fail-closed.
+
+Exit criteria:
+
+- Blocker contract fails only for residual degenerates, with deterministic `deg-prune:phase=pre/post` evidence and zero topology regression (`boundary=0`, `manifold=1`) in tests.
+- Status: Completed (showcase/readiness blocker tests assert `deg-prune:*` tags + closed/manifold output certificate tags and remain deterministic under replay/gate suites).
 
 ## 8.1 Stage Dependencies and Execution Order
 

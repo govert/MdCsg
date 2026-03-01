@@ -93,11 +93,27 @@ public class RobustShowcaseParityTests
         Assert.Equal(0, ParseIntTag(reconstructionCert, "unmatched"));
         Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction-pre:", StringComparison.Ordinal));
         Assert.Contains("nonWorse=", reconstructionCert, StringComparison.Ordinal);
+        string degPrunePre = GetStageCertificate(step3, "deg-prune:phase=pre;");
+        string degPrunePost = GetStageCertificate(step3, "deg-prune:phase=post;");
+        Assert.True(ParseIntTag(degPrunePre, "before") > 0);
+        Assert.True(ParseIntTag(degPrunePre, "removed") > 0);
+        Assert.Equal(1, ParseIntTag(degPrunePre, "accepted"));
+        Assert.Equal(1, ParseIntTag(degPrunePre, "closedGuard"));
+        Assert.Equal(0, ParseIntTag(degPrunePre, "boundaryAfter"));
+        Assert.Equal(0, ParseIntTag(degPrunePre, "unmatchedAfter"));
+        Assert.True(ParseIntTag(degPrunePost, "before") > 0);
+        Assert.True(ParseIntTag(degPrunePost, "removed") > 0);
+        Assert.Equal(1, ParseIntTag(degPrunePost, "accepted"));
+        Assert.Equal(1, ParseIntTag(degPrunePost, "closedGuard"));
+        Assert.Equal(0, ParseIntTag(degPrunePost, "boundaryAfter"));
+        Assert.Equal(0, ParseIntTag(degPrunePost, "unmatchedAfter"));
         string outputCert = GetStageCertificate(step3, "output:");
         Assert.Contains("output:fail;", outputCert, StringComparison.Ordinal);
         Assert.Equal(0, ParseIntTag(outputCert, "boundary"));
         Assert.Equal(1, ParseIntTag(outputCert, "manifold"));
-        Assert.True(ParseIntTag(outputCert, "deg") > 0);
+        int outputDeg = ParseIntTag(outputCert, "deg");
+        Assert.True(outputDeg > 0);
+        Assert.Equal(ParseIntTag(degPrunePost, "after"), outputDeg);
         RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(step3.Diagnostics);
     }
 
