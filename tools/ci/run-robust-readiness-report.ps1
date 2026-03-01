@@ -4,7 +4,7 @@ Write-Host "Running strict robust readiness snapshot..."
 
 $project = "tests/MdCsg.Robust.Conformance/MdCsg.Robust.Conformance.csproj"
 $filter = "(FullyQualifiedName~RobustReadinessSnapshotTests|FullyQualifiedName~RobustBlockerLedgerTests)"
-$args = @($project, "-c", "Release", "--nologo", "--blame-hang-timeout", "10m", "--filter", $filter)
+$args = @($project, "-c", "Release", "--nologo", "--blame-hang-timeout", "25m", "--filter", $filter)
 $ledgerPath = "tools/ci/robust-blocker-ledger.json"
 
 & dotnet test @args

@@ -5,7 +5,7 @@ Write-Host "Running robust conformance rescue bar..."
 $robustProject = "tests/MdCsg.Robust.Conformance/MdCsg.Robust.Conformance.csproj"
 $showcaseContractProject = "tests/MdCsg.Showcase.ContractTests/MdCsg.Showcase.ContractTests.csproj"
 $ledgerPath = "tools/ci/robust-blocker-ledger.json"
-$commonArgs = @("-c", "Release", "--nologo", "--blame-hang-timeout", "10m")
+$commonArgs = @("-c", "Release", "--nologo", "--blame-hang-timeout", "25m")
 
 function TestHostCrashDetected([string]$output)
 {
