@@ -815,7 +815,7 @@ Deliverables:
 Exit criteria:
 
 - Snap logic cannot introduce known residual degenerate classes under strict mode.
-- Status: Pending.
+- Status: Completed (snap passes now reject candidates that collapse boundary vertices or would create degenerate incident faces, and reconstruction certificates emit deterministic `snapCollapseReject` / `snapDegReject` counters).
 
 ## Stage 75 - Strict Closure Attempt (Blocker Resolution Try)
 

@@ -71,6 +71,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int reconstructionLoopAssemblyOpenChainCount = 0;
         int reconstructionLoopAssemblyAmbiguousBranchCount = 0;
         int reconstructionLoopAssemblySkippedDegenerateCount = 0;
+        int reconstructionSnapCollapseRejectCount = 0;
+        int reconstructionSnapDegenerateRejectCount = 0;
         double reconstructionMaxSnapDistance = 0.0;
         bool reconstructionIncidencePreserved = true;
         int classificationFallbackCount = 0;
@@ -485,6 +487,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             out reconstructionLoopAssemblyOpenChainCount,
             out reconstructionLoopAssemblyAmbiguousBranchCount,
             out reconstructionLoopAssemblySkippedDegenerateCount,
+            out reconstructionSnapCollapseRejectCount,
+            out reconstructionSnapDegenerateRejectCount,
             out reconstructionMaxSnapDistance,
             out reconstructionIncidencePreserved);
         result = TryLocalDegenerateNeighborhoodRepair(
@@ -675,6 +679,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"loopOpenChains={reconstructionLoopAssemblyOpenChainCount};"
             + $"loopAmbiguous={reconstructionLoopAssemblyAmbiguousBranchCount};"
             + $"loopDegSkipped={reconstructionLoopAssemblySkippedDegenerateCount};"
+            + $"snapCollapseReject={reconstructionSnapCollapseRejectCount};"
+            + $"snapDegReject={reconstructionSnapDegenerateRejectCount};"
             + $"snapMax={reconstructionMaxSnapDistance.ToString("G17", CultureInfo.InvariantCulture)};"
             + $"incidencePreserved={(reconstructionIncidencePreserved ? 1 : 0)};"
             + $"components={reconstructionComponentCount};"
@@ -2006,6 +2012,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         out int loopAssemblyOpenChainCount,
         out int loopAssemblyAmbiguousBranchCount,
         out int loopAssemblySkippedDegenerateCount,
+        out int snapCollapseRejectCount,
+        out int snapDegenerateRejectCount,
         out double maxSnapDistance,
         out bool incidencePreserved)
     {
@@ -2015,6 +2023,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         loopAssemblyOpenChainCount = 0;
         loopAssemblyAmbiguousBranchCount = 0;
         loopAssemblySkippedDegenerateCount = 0;
+        snapCollapseRejectCount = 0;
+        snapDegenerateRejectCount = 0;
         maxSnapDistance = 0.0;
         incidencePreserved = true;
         var mesh = result.Mesh;
@@ -2067,6 +2077,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 var edgeSnap = SnapBoundaryVerticesToArrangementEdges(mesh, arrangement, tol);
                 arrangementSnapCount += vertexSnap.SnappedCount;
                 arrangementEdgeSnapCount += edgeSnap.SnappedCount;
+                snapCollapseRejectCount += vertexSnap.CollapseRejectCount + edgeSnap.CollapseRejectCount;
+                snapDegenerateRejectCount += vertexSnap.IncidentDegenerateRejectCount + edgeSnap.IncidentDegenerateRejectCount;
                 maxSnapDistance = System.Math.Max(
                     maxSnapDistance,
                     System.Math.Max(vertexSnap.MaxSnapDistance, edgeSnap.MaxSnapDistance));
@@ -2254,6 +2266,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         double tolSq = tolerance * tolerance;
         double collapseTolSq = tolSq * 0.04;
         int snapped = 0;
+        int collapseReject = 0;
+        int incidentDegenerateReject = 0;
         double maxSnapDistance = 0.0;
 
         foreach (var vertex in boundaryVertices)
@@ -2279,14 +2293,26 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
 
             var candidate = arrangementPositions[bestIndex];
             if (WouldCollapseBoundaryVertex(vertex, candidate, boundaryVertices, collapseTolSq))
+            {
+                collapseReject++;
                 continue;
+            }
+            if (WouldCreateDegenerateIncidentFace(mesh, vertex, candidate))
+            {
+                incidentDegenerateReject++;
+                continue;
+            }
 
             vertex.Position = candidate;
             snapped++;
             maxSnapDistance = System.Math.Max(maxSnapDistance, System.Math.Sqrt(bestDistSq));
         }
 
-        return new SnapPassStats(snapped, maxSnapDistance);
+        return new SnapPassStats(
+            snapped,
+            maxSnapDistance,
+            collapseReject,
+            incidentDegenerateReject);
     }
 
     private static SnapPassStats SnapBoundaryVerticesToArrangementEdges(
@@ -2324,6 +2350,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         double tolSq = tolerance * tolerance;
         double collapseTolSq = tolSq * 0.04;
         int snapped = 0;
+        int collapseReject = 0;
+        int incidentDegenerateReject = 0;
         double maxSnapDistance = 0.0;
 
         foreach (var vertex in boundaryVertices)
@@ -2355,14 +2383,26 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             if (bestDistSq < tolSq)
             {
                 if (WouldCollapseBoundaryVertex(vertex, bestPoint, boundaryVertices, collapseTolSq))
+                {
+                    collapseReject++;
                     continue;
+                }
+                if (WouldCreateDegenerateIncidentFace(mesh, vertex, bestPoint))
+                {
+                    incidentDegenerateReject++;
+                    continue;
+                }
                 vertex.Position = bestPoint;
                 snapped++;
                 maxSnapDistance = System.Math.Max(maxSnapDistance, System.Math.Sqrt(bestDistSq));
             }
         }
 
-        return new SnapPassStats(snapped, maxSnapDistance);
+        return new SnapPassStats(
+            snapped,
+            maxSnapDistance,
+            collapseReject,
+            incidentDegenerateReject);
     }
 
     private static bool WouldCollapseBoundaryVertex(
@@ -2386,9 +2426,52 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         return false;
     }
 
-    private readonly record struct SnapPassStats(int SnappedCount, double MaxSnapDistance)
+    private static bool WouldCreateDegenerateIncidentFace(
+        HalfEdgeMesh mesh,
+        Vertex movingVertex,
+        Vec3 candidatePosition)
     {
-        public static SnapPassStats Empty => new(0, 0.0);
+        foreach (var face in mesh.Faces)
+        {
+            var verts = face.GetVertices();
+            bool touches = false;
+            Vec3 a = verts[0].Position;
+            Vec3 b = verts[1].Position;
+            Vec3 c = verts[2].Position;
+            if (verts[0].Id == movingVertex.Id)
+            {
+                a = candidatePosition;
+                touches = true;
+            }
+            if (verts[1].Id == movingVertex.Id)
+            {
+                b = candidatePosition;
+                touches = true;
+            }
+            if (verts[2].Id == movingVertex.Id)
+            {
+                c = candidatePosition;
+                touches = true;
+            }
+
+            if (!touches)
+                continue;
+
+            var areaSign = EvaluateProjectedAreaSign(a, b, c);
+            if (areaSign.Sign == PredicateSign.Zero)
+                return true;
+        }
+
+        return false;
+    }
+
+    private readonly record struct SnapPassStats(
+        int SnappedCount,
+        double MaxSnapDistance,
+        int CollapseRejectCount,
+        int IncidentDegenerateRejectCount)
+    {
+        public static SnapPassStats Empty => new(0, 0.0, 0, 0);
     }
 
     private static List<Vertex> CollectBoundaryVertices(HalfEdgeMesh mesh)

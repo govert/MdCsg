@@ -91,6 +91,8 @@ public class RobustShowcaseParityTests
         Assert.Equal(0, ParseIntTag(reconstructionCert, "boundary"));
         Assert.Equal(0, ParseIntTag(reconstructionCert, "openLoops"));
         Assert.Equal(0, ParseIntTag(reconstructionCert, "unmatched"));
+        Assert.True(ParseIntTag(reconstructionCert, "snapCollapseReject") >= 0);
+        Assert.True(ParseIntTag(reconstructionCert, "snapDegReject") >= 0);
         Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction-pre:", StringComparison.Ordinal));
         Assert.Contains("nonWorse=", reconstructionCert, StringComparison.Ordinal);
         string degPrunePre = GetStageCertificate(step3, "deg-prune:phase=pre;");

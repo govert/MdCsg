@@ -74,6 +74,8 @@ public class RobustReadinessSnapshotTests
         Assert.StartsWith("reconstruction:pass;", reconstructionCert, StringComparison.Ordinal);
         Assert.Equal(0, ParseIntTag(reconstructionCert, "boundary"));
         Assert.Equal(0, ParseIntTag(reconstructionCert, "unmatched"));
+        Assert.True(ParseIntTag(reconstructionCert, "snapCollapseReject") >= 0);
+        Assert.True(ParseIntTag(reconstructionCert, "snapDegReject") >= 0);
         string prePrune = GetStageCertificate(step3, "deg-prune:phase=pre;");
         string postPrune = GetStageCertificate(step3, "deg-prune:phase=post;");
         Assert.True(ParseIntTag(prePrune, "before") > 0);
