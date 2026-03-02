@@ -507,7 +507,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             out int localRepairRemovedFaces,
             out int localRepairSingleTry,
             out int localRepairPairTry,
+            out int localRepairTripleTry,
             out int localRepairMultiApplied,
+            out int localRepairMaxArity,
             out int localRepairIterations,
             out int localRepairAppliedIterations,
             out string localRepairTermination);
@@ -520,7 +522,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"removed={localRepairRemovedFaces};"
             + $"singleTry={localRepairSingleTry};"
             + $"pairTry={localRepairPairTry};"
+            + $"tripleTry={localRepairTripleTry};"
             + $"multiApplied={localRepairMultiApplied};"
+            + $"maxArity={localRepairMaxArity};"
             + $"iters={localRepairIterations};"
             + $"applied={localRepairAppliedIterations};"
             + $"closureAttempt={(opts.AttemptResidualDegenerateClosure ? 1 : 0)};"
@@ -1580,6 +1584,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
 
     private const int LocalDegenerateRepairIterationsDefault = 2;
     private const int LocalDegenerateRepairIterationsClosureAttempt = 24;
+    private const int LocalRepairPairCandidateBudget = 128;
+    private const int LocalRepairTripleCandidateBudget = 192;
     private readonly record struct DegenerateFaceDescriptor(int FaceId, int V0, int V1, int V2);
 
     private static CsgResult TryLocalDegenerateNeighborhoodRepair(
@@ -1595,7 +1601,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         out int removedFaces,
         out int singleCandidateAttempts,
         out int pairCandidateAttempts,
+        out int tripleCandidateAttempts,
         out int multiFaceApplied,
+        out int maxRemovedArity,
         out int iterations,
         out int appliedIterations,
         out string terminationReason)
@@ -1607,7 +1615,9 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         removedFaces = 0;
         singleCandidateAttempts = 0;
         pairCandidateAttempts = 0;
+        tripleCandidateAttempts = 0;
         multiFaceApplied = 0;
+        maxRemovedArity = 0;
         iterations = 0;
         appliedIterations = 0;
         terminationReason = authorityGate == 1 ? "none" : "authority-gated";
@@ -1633,11 +1643,13 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 out int removedFaceArity,
                 out int singleTryThisIteration,
                 out int pairTryThisIteration,
+                out int tripleTryThisIteration,
                 out int afterThisIteration))
             {
                 attemptedFaces += attemptedThisIteration;
                 singleCandidateAttempts += singleTryThisIteration;
                 pairCandidateAttempts += pairTryThisIteration;
+                tripleCandidateAttempts += tripleTryThisIteration;
                 terminationReason = "stalled";
                 break;
             }
@@ -1645,8 +1657,11 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             attemptedFaces += attemptedThisIteration;
             singleCandidateAttempts += singleTryThisIteration;
             pairCandidateAttempts += pairTryThisIteration;
+            tripleCandidateAttempts += tripleTryThisIteration;
             current = WithMesh(current, repairedMesh);
             removedFaces++;
+            if (removedFaceArity > maxRemovedArity)
+                maxRemovedArity = removedFaceArity;
             if (removedFaceArity > 1)
                 multiFaceApplied++;
             appliedIterations++;
@@ -1680,6 +1695,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         out int removedFaceArity,
         out int singleCandidateAttempts,
         out int pairCandidateAttempts,
+        out int tripleCandidateAttempts,
         out int afterDegenerate)
     {
         repairedMesh = mesh;
@@ -1687,6 +1703,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         removedFaceArity = 0;
         singleCandidateAttempts = 0;
         pairCandidateAttempts = 0;
+        tripleCandidateAttempts = 0;
         int beforeDegenerate = CountDegenerateFacesNoTelemetry(mesh);
         afterDegenerate = beforeDegenerate;
         if (beforeDegenerate == 0)
@@ -1779,6 +1796,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         if (!allowPairCandidates || degenerateFaces.Length < 2)
             return false;
 
+        int pairBudget = LocalRepairPairCandidateBudget;
+        bool pairBudgetReached = false;
         for (int i = 0; i < degenerateFaces.Length - 1; i++)
         {
             for (int j = i + 1; j < degenerateFaces.Length; j++)
@@ -1788,6 +1807,11 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
 
                 attemptedFaces++;
                 pairCandidateAttempts++;
+                if (pairCandidateAttempts > pairBudget)
+                {
+                    pairBudgetReached = true;
+                    break;
+                }
                 if (!TryCandidate(
                     new[] { degenerateFaces[i].FaceId, degenerateFaces[j].FaceId },
                     out var candidateMesh,
@@ -1800,6 +1824,42 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 removedFaceArity = 2;
                 afterDegenerate = candidateDegenerate;
                 return true;
+            }
+
+            if (pairBudgetReached)
+                break;
+        }
+
+        if (degenerateFaces.Length < 3)
+            return false;
+
+        int tripleBudget = LocalRepairTripleCandidateBudget;
+        for (int i = 0; i < degenerateFaces.Length - 2; i++)
+        {
+            for (int j = i + 1; j < degenerateFaces.Length - 1; j++)
+            {
+                for (int k = j + 1; k < degenerateFaces.Length; k++)
+                {
+                    if (!AreVertexConnectedTriplet(degenerateFaces[i], degenerateFaces[j], degenerateFaces[k]))
+                        continue;
+
+                    attemptedFaces++;
+                    tripleCandidateAttempts++;
+                    if (tripleCandidateAttempts > tripleBudget)
+                        return false;
+                    if (!TryCandidate(
+                        new[] { degenerateFaces[i].FaceId, degenerateFaces[j].FaceId, degenerateFaces[k].FaceId },
+                        out var candidateMesh,
+                        out int candidateDegenerate))
+                    {
+                        continue;
+                    }
+
+                    repairedMesh = candidateMesh;
+                    removedFaceArity = 3;
+                    afterDegenerate = candidateDegenerate;
+                    return true;
+                }
             }
         }
 
@@ -1816,6 +1876,24 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             || a.V2 == b.V0
             || a.V2 == b.V1
             || a.V2 == b.V2;
+
+    private static bool AreVertexConnectedTriplet(
+        DegenerateFaceDescriptor a,
+        DegenerateFaceDescriptor b,
+        DegenerateFaceDescriptor c)
+    {
+        bool ab = ShareAnyVertex(a, b);
+        bool ac = ShareAnyVertex(a, c);
+        bool bc = ShareAnyVertex(b, c);
+        int pairCount = (ab ? 1 : 0) + (ac ? 1 : 0) + (bc ? 1 : 0);
+        if (pairCount < 2)
+            return false;
+
+        bool nodeA = ab || ac;
+        bool nodeB = ab || bc;
+        bool nodeC = ac || bc;
+        return nodeA && nodeB && nodeC;
+    }
 
     private static int CountDegenerateFacesNoTelemetry(HalfEdgeMesh mesh)
     {

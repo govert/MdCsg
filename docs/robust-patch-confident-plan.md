@@ -877,3 +877,16 @@ Exit criteria:
 - Strict default blocker path remains unchanged (`pairTry=0`, `multiApplied=0` in strict known-blocker conformance).
 - Closure-attempt path emits the new search telemetry without relaxing fail-closed output contracts.
 - Status: Completed (`LegacyBridgedRobustCsgEngine` now allows pair-candidate local repair attempts only when `AttemptResidualDegenerateClosure=1`; `deg-local-repair:*` certificate schema extended with `singleTry`, `pairTry`, `multiApplied`; release validation passed for `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker` (`6m55s`), `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ReproducesDegenerateOutputDefect_WithZeroFallback` (`6m49s`), and `RobustReadinessSnapshotTests.KnownBlockerCorpus_IsExplicitlyFailClosed` (`6m22s`)).
+
+## Stage 80 - Closure-Attempt Triple-Candidate Ladder
+
+Deliverables:
+
+- Extend closure-attempt local repair with deterministic, bounded triple-face removal candidates after single/pair search.
+- Emit additional deterministic search-shape telemetry in `deg-local-repair:*` certificates (`tripleTry`, `maxArity`) for forensic replay and budget control.
+
+Exit criteria:
+
+- Strict default blocker path remains unchanged (`pairTry=0`, `tripleTry=0`, `maxArity<=1` in strict known-blocker conformance).
+- Closure-attempt path can exercise bounded pair/triple search while preserving strict fail-closed output contracts and deterministic certificates.
+- Status: Completed (`LegacyBridgedRobustCsgEngine` now adds bounded closure-attempt triple-candidate search (`LocalRepairPairCandidateBudget=128`, `LocalRepairTripleCandidateBudget=192`) with deterministic vertex-connected candidate ordering; `deg-local-repair:*` certificate schema extended with `tripleTry` and `maxArity`; release validation passed for `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker` (`8m12s`), `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ReproducesDegenerateOutputDefect_WithZeroFallback` (`6m57s`), and `RobustReadinessSnapshotTests.KnownBlockerCorpus_IsExplicitlyFailClosed` (`6m36s`)).

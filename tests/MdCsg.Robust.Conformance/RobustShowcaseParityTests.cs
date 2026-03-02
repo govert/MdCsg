@@ -178,7 +178,9 @@ public class RobustShowcaseParityTests
         int localRepairRemoved = ParseIntTag(localRepairCert, "removed");
         int localRepairSingleTry = ParseIntTag(localRepairCert, "singleTry");
         int localRepairPairTry = ParseIntTag(localRepairCert, "pairTry");
+        int localRepairTripleTry = ParseIntTag(localRepairCert, "tripleTry");
         int localRepairMultiApplied = ParseIntTag(localRepairCert, "multiApplied");
+        int localRepairMaxArity = ParseIntTag(localRepairCert, "maxArity");
         int localRepairIters = ParseIntTag(localRepairCert, "iters");
         int localRepairApplied = ParseIntTag(localRepairCert, "applied");
         Assert.True(localRepairGate is 0 or 1);
@@ -186,7 +188,9 @@ public class RobustShowcaseParityTests
         Assert.True(localRepairAttempted >= localRepairRemoved);
         Assert.True(localRepairSingleTry >= 0);
         Assert.Equal(0, localRepairPairTry);
+        Assert.Equal(0, localRepairTripleTry);
         Assert.Equal(0, localRepairMultiApplied);
+        Assert.InRange(localRepairMaxArity, 0, 1);
         Assert.True(localRepairRemoved >= 0);
         Assert.True(localRepairApplied >= 0);
         Assert.True(localRepairIters >= localRepairApplied);
@@ -242,7 +246,9 @@ public class RobustShowcaseParityTests
         Assert.True(ParseIntTag(localRepairCert, "budget") >= 2);
         Assert.True(ParseIntTag(localRepairCert, "singleTry") >= 0);
         Assert.True(ParseIntTag(localRepairCert, "pairTry") >= 0);
+        Assert.True(ParseIntTag(localRepairCert, "tripleTry") >= 0);
         Assert.True(ParseIntTag(localRepairCert, "multiApplied") >= 0);
+        Assert.InRange(ParseIntTag(localRepairCert, "maxArity"), 0, 3);
         Assert.False(step3.Succeeded);
         Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshHasDegenerateFaces);
         Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);
