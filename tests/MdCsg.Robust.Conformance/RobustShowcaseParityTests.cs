@@ -183,6 +183,8 @@ public class RobustShowcaseParityTests
         int localRepairMaxArity = ParseIntTag(localRepairCert, "maxArity");
         int localRepairColGuard = ParseIntTag(localRepairCert, "colGuard");
         int localRepairColReject = ParseIntTag(localRepairCert, "colReject");
+        int localRepairColExactCheck = ParseIntTag(localRepairCert, "colExactCheck");
+        int localRepairColExactConfirm = ParseIntTag(localRepairCert, "colExactConfirm");
         int localRepairIters = ParseIntTag(localRepairCert, "iters");
         int localRepairApplied = ParseIntTag(localRepairCert, "applied");
         Assert.True(localRepairGate is 0 or 1);
@@ -195,6 +197,8 @@ public class RobustShowcaseParityTests
         Assert.InRange(localRepairMaxArity, 0, 1);
         Assert.Equal(0, localRepairColGuard);
         Assert.Equal(0, localRepairColReject);
+        Assert.Equal(0, localRepairColExactCheck);
+        Assert.Equal(0, localRepairColExactConfirm);
         Assert.True(localRepairRemoved >= 0);
         Assert.True(localRepairApplied >= 0);
         Assert.True(localRepairIters >= localRepairApplied);
@@ -264,6 +268,11 @@ public class RobustShowcaseParityTests
         Assert.InRange(ParseIntTag(localRepairCert, "maxArity"), 0, 3);
         Assert.Equal(1, ParseIntTag(localRepairCert, "colGuard"));
         Assert.True(ParseIntTag(localRepairCert, "colReject") >= 0);
+        int colExactCheck = ParseIntTag(localRepairCert, "colExactCheck");
+        int colExactConfirm = ParseIntTag(localRepairCert, "colExactConfirm");
+        Assert.True(colExactCheck > 0);
+        Assert.True(colExactConfirm >= 0);
+        Assert.True(colExactConfirm <= colExactCheck);
         Assert.False(step3.Succeeded);
         Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshHasDegenerateFaces);
         Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);

@@ -916,3 +916,16 @@ Exit criteria:
 - Strict default blocker path remains unchanged (`colGuard=0`, `colReject=0`).
 - Closure-attempt path enables guard policy (`colGuard=1`) and reports deterministic rejection counts while preserving fail-closed contracts.
 - Status: Completed (`TryRemoveOneDegenerateFace` now enforces collinear-progress acceptance gating when residual degenerates are collinear-only under closure-attempt search; `deg-local-repair:*` certificates extended with `colGuard`/`colReject`; release validation passed for `RobustReadinessSnapshotTests.KnownBlockerCorpus_IsExplicitlyFailClosed` (`6m50s`) and `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker` (`8m09s`)).
+
+## Stage 83 - Exact Collinear Escalation Contracts
+
+Deliverables:
+
+- Add exact arithmetic escalation for collinear-degenerate counting in closure-attempt local-repair gating paths.
+- Emit deterministic local-repair telemetry for exact escalation activity (`colExactCheck`, `colExactConfirm`).
+
+Exit criteria:
+
+- Strict default blocker path remains unchanged (`colExactCheck=0`, `colExactConfirm=0`).
+- Closure-attempt path reports non-zero exact-check activity when collinear guard is active, with deterministic counter contracts.
+- Status: Completed (`CountDegenerateClassesNoTelemetry` now supports exact 3D collinearity confirmation via rational cross-component checks (`IsDegenerateTriangleExact3D`) when collinear-guard policy is active; `deg-local-repair:*` certificates extended with `colExactCheck`/`colExactConfirm`; release validation passed for `RobustReadinessSnapshotTests.KnownBlockerCorpus_IsExplicitlyFailClosed` (`5m58s`) and `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker` (`7m20s`)).
