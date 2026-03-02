@@ -132,6 +132,12 @@ public class RobustReadinessSnapshotTests
         Assert.Equal(1, ParseIntTag(outputCert, "manifold"));
         int outputDeg = ParseIntTag(outputCert, "deg");
         Assert.True(outputDeg > 0);
+        string residualCert = GetStageCertificate(step3, "deg-residual:");
+        Assert.Equal(1, ParseIntTag(residualCert, "v"));
+        Assert.Equal(outputDeg, ParseIntTag(residualCert, "count"));
+        Assert.Equal(outputDeg, ParseIntTag(residualCert, "expected"));
+        Assert.Equal(1, ParseIntTag(residualCert, "countMatch"));
+        Assert.Contains("sample=", residualCert, StringComparison.Ordinal);
         int expectedOutputDeg = postAccepted == 1
             ? ParseIntTag(postPrune, "after")
             : ParseIntTag(postPrune, "before");

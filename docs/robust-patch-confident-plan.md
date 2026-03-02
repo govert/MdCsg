@@ -750,3 +750,117 @@ Execution policy:
   - Mitigation: make fallback targeted and measurable; keep fast certified path.
 - Risk: ambiguous semantics in boundary cases.
   - Mitigation: lock semantic truth table in conformance tests before implementation.
+
+## 10. Stage Batch (70-78) Execution
+
+Goal:
+
+- Unblock `FUZZ-BLOCKER-0001` by removing root-cause residual degenerate output faces without relaxing strict fail-closed contracts.
+
+## Stage 70 - Forensic Freeze for Residual Degenerates
+
+Deliverables:
+
+- Add deterministic residual-degenerate forensic certificates for blocked outputs (count/hash/sample).
+- Pin blocker residual diagnostics in conformance so future changes are attributable.
+
+Exit criteria:
+
+- Step-3 blocker emits deterministic `deg-residual:*` evidence aligned with output degenerate count.
+- Status: Completed (`deg-residual:v=1` certificate now emitted on degenerate output and asserted in showcase/readiness blocker tests).
+
+## Stage 71 - Residual Degenerate Taxonomy
+
+Deliverables:
+
+- Classify residual degenerate faces into deterministic taxonomy buckets.
+- Emit taxonomy counters and signatures in diagnostics certificates.
+
+Exit criteria:
+
+- Blocker residuals are partitioned into explicit bucket counts with deterministic fingerprints.
+- Status: Pending.
+
+## Stage 72 - Source-Stage Prevention Guards
+
+Deliverables:
+
+- Add deterministic face-emission guards for taxonomy classes that can be prevented upstream.
+- Ensure prevented classes are rejected before entering reconstruction/output mesh.
+
+Exit criteria:
+
+- Preventable taxonomy classes are blocked at emission sites with certificate evidence.
+- Status: Pending.
+
+## Stage 73 - Local Reconstruction Repair Kernel
+
+Deliverables:
+
+- Add deterministic local repair/retriangulation for residual degenerate neighborhoods.
+- Restrict repair to arrangement-authoritative boundaries to avoid semantic drift.
+
+Exit criteria:
+
+- Local repair removes targeted residual classes without topology regression.
+- Status: Pending.
+
+## Stage 74 - Snap/Collapse Safety Hardening
+
+Deliverables:
+
+- Strengthen deterministic anti-collapse snap constraints around repaired neighborhoods.
+- Emit additional safety counters in reconstruction certificates.
+
+Exit criteria:
+
+- Snap logic cannot introduce known residual degenerate classes under strict mode.
+- Status: Pending.
+
+## Stage 75 - Strict Closure Attempt (Blocker Resolution Try)
+
+Deliverables:
+
+- Attempt full strict success on chained step-3 with zero output degenerates.
+- Flip conformance expectation to success if resolved; otherwise preserve explicit fail-closed blocker evidence.
+
+Exit criteria:
+
+- Either blocker resolved with strict success contracts, or unresolved state is explicitly re-pinned with updated evidence.
+- Status: Pending.
+
+## Stage 76 - Blocker Ledger Migration
+
+Deliverables:
+
+- If resolved, retire `FUZZ-BLOCKER-0001`; if unresolved, split/refine blocker classes by taxonomy where justified.
+- Keep ledger/signature/test policy deterministic and auditable.
+
+Exit criteria:
+
+- Ledger matches actual blocker classes and ownership stages.
+- Status: Pending.
+
+## Stage 77 - Gate and Readiness Promotion
+
+Deliverables:
+
+- Promote unblock-path assertions into robustness gate/readiness scripts and tests.
+- Ensure regressions fail hard and known-blocked output remains explicit.
+
+Exit criteria:
+
+- CI/gate/readiness enforce the updated blocker policy deterministically.
+- Status: Pending.
+
+## Stage 78 - Validation Sweep and Batch Sign-Off
+
+Deliverables:
+
+- Run targeted validation sweep for the 70-78 batch.
+- Update plan statuses with exact evidence and sign-off state.
+
+Exit criteria:
+
+- Stage batch 70-78 is fully documented with passing validation for delivered contracts.
+- Status: Pending.

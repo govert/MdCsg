@@ -732,6 +732,13 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 + $"boundary={outputInvariant.BoundaryEdgeCount};"
                 + $"manifold={(outputInvariant.IsEdgeManifold ? 1 : 0)};"
                 + $"deg={outputInvariant.DegenerateFaceCount}");
+            if (outputInvariant.DegenerateFaceCount > 0)
+            {
+                stageCertificates.Add(
+                    BuildResidualDegenerateCertificate(
+                        result.Mesh,
+                        outputInvariant.DegenerateFaceCount));
+            }
 
             if (opts.Mode == RobustMode.Strict && !outputStagePass)
             {
@@ -888,6 +895,62 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             boundary,
             isEdgeManifold,
             degenerateFaces);
+    }
+
+    private static string BuildResidualDegenerateCertificate(HalfEdgeMesh mesh, int expectedCount)
+    {
+        int degenerateCount = 0;
+        ulong faceHash = 1469598103934665603UL;
+        ulong origHash = 1469598103934665603UL;
+        ulong patchHash = 1469598103934665603UL;
+        ulong vertexHash = 1469598103934665603UL;
+        var samples = new List<string>(6);
+
+        foreach (var face in mesh.Faces)
+        {
+            var verts = face.GetVertices();
+            Vec3 a = verts[0].Position;
+            Vec3 b = verts[1].Position;
+            Vec3 c = verts[2].Position;
+            var areaSign = EvaluateProjectedAreaSign(a, b, c);
+            if (areaSign.Sign != PredicateSign.Zero)
+                continue;
+
+            degenerateCount++;
+            MixHash(ref faceHash, unchecked((uint)face.Id));
+            MixHash(ref origHash, unchecked((uint)face.OriginalFaceId));
+            MixHash(ref patchHash, unchecked((uint)face.PatchId));
+            MixHash(ref vertexHash, unchecked((uint)verts[0].Id));
+            MixHash(ref vertexHash, unchecked((uint)verts[1].Id));
+            MixHash(ref vertexHash, unchecked((uint)verts[2].Id));
+
+            if (samples.Count < 6)
+            {
+                samples.Add(
+                    $"f{face.Id}:o{face.OriginalFaceId}:p{face.PatchId}:v{verts[0].Id}-{verts[1].Id}-{verts[2].Id}");
+            }
+        }
+
+        int countMatch = degenerateCount == expectedCount ? 1 : 0;
+        string sample = samples.Count == 0
+            ? "<none>"
+            : string.Join("|", samples);
+        return "deg-residual:scope=output;"
+            + "v=1;"
+            + $"count={degenerateCount};"
+            + $"expected={expectedCount};"
+            + $"countMatch={countMatch};"
+            + $"faceHash={faceHash:x16};"
+            + $"origHash={origHash:x16};"
+            + $"patchHash={patchHash:x16};"
+            + $"vertHash={vertexHash:x16};"
+            + $"sample={sample}";
+    }
+
+    private static void MixHash(ref ulong hash, uint value)
+    {
+        hash ^= value;
+        hash *= 1099511628211UL;
     }
 
     private static Solid SanitizeInputSolid(Solid input, out InputPolicyOutcome outcome)
