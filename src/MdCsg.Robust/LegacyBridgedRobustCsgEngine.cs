@@ -904,6 +904,11 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         ulong origHash = 1469598103934665603UL;
         ulong patchHash = 1469598103934665603UL;
         ulong vertexHash = 1469598103934665603UL;
+        ulong taxonomyHash = 1469598103934665603UL;
+        int taxonomyDupVid = 0;
+        int taxonomyZeroEdge = 0;
+        int taxonomyDupPos = 0;
+        int taxonomyCollinear = 0;
         var samples = new List<string>(6);
 
         foreach (var face in mesh.Faces)
@@ -923,11 +928,28 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             MixHash(ref vertexHash, unchecked((uint)verts[0].Id));
             MixHash(ref vertexHash, unchecked((uint)verts[1].Id));
             MixHash(ref vertexHash, unchecked((uint)verts[2].Id));
+            var classification = ClassifyResidualDegenerateFace(verts[0], verts[1], verts[2]);
+            switch (classification)
+            {
+                case ResidualDegenerateClass.DuplicateVertexId:
+                    taxonomyDupVid++;
+                    break;
+                case ResidualDegenerateClass.ZeroLengthEdge:
+                    taxonomyZeroEdge++;
+                    break;
+                case ResidualDegenerateClass.DuplicatePosition:
+                    taxonomyDupPos++;
+                    break;
+                default:
+                    taxonomyCollinear++;
+                    break;
+            }
+            MixHash(ref taxonomyHash, (uint)classification);
 
             if (samples.Count < 6)
             {
                 samples.Add(
-                    $"f{face.Id}:o{face.OriginalFaceId}:p{face.PatchId}:v{verts[0].Id}-{verts[1].Id}-{verts[2].Id}");
+                    $"f{face.Id}:o{face.OriginalFaceId}:p{face.PatchId}:v{verts[0].Id}-{verts[1].Id}-{verts[2].Id}:t{(int)classification}");
             }
         }
 
@@ -944,8 +966,45 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"origHash={origHash:x16};"
             + $"patchHash={patchHash:x16};"
             + $"vertHash={vertexHash:x16};"
+            + $"taxDupVid={taxonomyDupVid};"
+            + $"taxZeroEdge={taxonomyZeroEdge};"
+            + $"taxDupPos={taxonomyDupPos};"
+            + $"taxCollinear={taxonomyCollinear};"
+            + $"taxHash={taxonomyHash:x16};"
             + $"sample={sample}";
     }
+
+    private enum ResidualDegenerateClass : uint
+    {
+        DuplicateVertexId = 1,
+        ZeroLengthEdge = 2,
+        DuplicatePosition = 3,
+        Collinear = 4
+    }
+
+    private static ResidualDegenerateClass ClassifyResidualDegenerateFace(Vertex v0, Vertex v1, Vertex v2)
+    {
+        if (v0.Id == v1.Id || v1.Id == v2.Id || v2.Id == v0.Id)
+            return ResidualDegenerateClass.DuplicateVertexId;
+
+        double e01 = Vec3.DistanceSquared(v0.Position, v1.Position);
+        double e12 = Vec3.DistanceSquared(v1.Position, v2.Position);
+        double e20 = Vec3.DistanceSquared(v2.Position, v0.Position);
+        if (e01 == 0.0 || e12 == 0.0 || e20 == 0.0)
+            return ResidualDegenerateClass.ZeroLengthEdge;
+
+        if (SamePosition(v0.Position, v1.Position)
+            || SamePosition(v1.Position, v2.Position)
+            || SamePosition(v2.Position, v0.Position))
+        {
+            return ResidualDegenerateClass.DuplicatePosition;
+        }
+
+        return ResidualDegenerateClass.Collinear;
+    }
+
+    private static bool SamePosition(Vec3 a, Vec3 b)
+        => a.X == b.X && a.Y == b.Y && a.Z == b.Z;
 
     private static void MixHash(ref ulong hash, uint value)
     {

@@ -779,7 +779,7 @@ Deliverables:
 Exit criteria:
 
 - Blocker residuals are partitioned into explicit bucket counts with deterministic fingerprints.
-- Status: Pending.
+- Status: Completed (`deg-residual:*` now emits deterministic taxonomy counters (`taxDupVid`, `taxZeroEdge`, `taxDupPos`, `taxCollinear`) plus `taxHash`, and blocker conformance asserts bucket-sum invariants).
 
 ## Stage 72 - Source-Stage Prevention Guards
 

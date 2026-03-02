@@ -156,6 +156,12 @@ public class RobustShowcaseParityTests
         Assert.Equal(outputDeg, ParseIntTag(residualCert, "count"));
         Assert.Equal(outputDeg, ParseIntTag(residualCert, "expected"));
         Assert.Equal(1, ParseIntTag(residualCert, "countMatch"));
+        int taxDupVid = ParseIntTag(residualCert, "taxDupVid");
+        int taxZeroEdge = ParseIntTag(residualCert, "taxZeroEdge");
+        int taxDupPos = ParseIntTag(residualCert, "taxDupPos");
+        int taxCollinear = ParseIntTag(residualCert, "taxCollinear");
+        Assert.Equal(outputDeg, taxDupVid + taxZeroEdge + taxDupPos + taxCollinear);
+        Assert.Contains("taxHash=", residualCert, StringComparison.Ordinal);
         Assert.Contains("sample=", residualCert, StringComparison.Ordinal);
         int expectedOutputDeg = postAccepted == 1
             ? ParseIntTag(degPrunePost, "after")
