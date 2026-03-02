@@ -437,6 +437,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             out int prePruneResealIntroduced,
             out bool prePruneResealDegSafe,
             out int prePruneResealLoopDegSkipped,
+            out int prePruneResealLoopDupVidSkipped,
+            out int prePruneResealLoopZeroEdgeSkipped,
+            out int prePruneResealLoopDupPosSkipped,
+            out int prePruneResealLoopCollinearSkipped,
             out int prePruneDegAfter,
             out bool prePruneAccepted,
             out int prePruneIterations,
@@ -455,6 +459,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"resealIntro={prePruneResealIntroduced};"
             + $"resealSafe={(prePruneResealDegSafe ? 1 : 0)};"
             + $"resealLoopDegSkipped={prePruneResealLoopDegSkipped};"
+            + $"resealLoopDupVidSkipped={prePruneResealLoopDupVidSkipped};"
+            + $"resealLoopZeroEdgeSkipped={prePruneResealLoopZeroEdgeSkipped};"
+            + $"resealLoopDupPosSkipped={prePruneResealLoopDupPosSkipped};"
+            + $"resealLoopCollinearSkipped={prePruneResealLoopCollinearSkipped};"
             + $"after={prePruneDegAfter};"
             + $"netRemoved={System.Math.Max(0, prePruneDegBefore - prePruneDegAfter)};"
             + $"accepted={(prePruneAccepted ? 1 : 0)};"
@@ -489,6 +497,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             out int postPruneResealIntroduced,
             out bool postPruneResealDegSafe,
             out int postPruneResealLoopDegSkipped,
+            out int postPruneResealLoopDupVidSkipped,
+            out int postPruneResealLoopZeroEdgeSkipped,
+            out int postPruneResealLoopDupPosSkipped,
+            out int postPruneResealLoopCollinearSkipped,
             out int postPruneDegAfter,
             out bool postPruneAccepted,
             out int postPruneIterations,
@@ -507,6 +519,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"resealIntro={postPruneResealIntroduced};"
             + $"resealSafe={(postPruneResealDegSafe ? 1 : 0)};"
             + $"resealLoopDegSkipped={postPruneResealLoopDegSkipped};"
+            + $"resealLoopDupVidSkipped={postPruneResealLoopDupVidSkipped};"
+            + $"resealLoopZeroEdgeSkipped={postPruneResealLoopZeroEdgeSkipped};"
+            + $"resealLoopDupPosSkipped={postPruneResealLoopDupPosSkipped};"
+            + $"resealLoopCollinearSkipped={postPruneResealLoopCollinearSkipped};"
             + $"after={postPruneDegAfter};"
             + $"netRemoved={System.Math.Max(0, postPruneDegBefore - postPruneDegAfter)};"
             + $"accepted={(postPruneAccepted ? 1 : 0)};"
@@ -1188,6 +1204,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int ResealIntroducedDegenerate,
         bool ResealDegenerateSafe,
         int ResealSkippedDegenerateTriangles,
+        int ResealSkippedDuplicateVertexIdTriangles,
+        int ResealSkippedZeroEdgeTriangles,
+        int ResealSkippedDuplicatePositionTriangles,
+        int ResealSkippedCollinearTriangles,
         int AfterDegenerate,
         bool Accepted,
         bool PreserveClosedContract,
@@ -1206,6 +1226,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         out int resealIntroducedDegenerate,
         out bool resealDegenerateSafe,
         out int resealSkippedDegenerateTriangles,
+        out int resealSkippedDuplicateVertexIdTriangles,
+        out int resealSkippedZeroEdgeTriangles,
+        out int resealSkippedDuplicatePositionTriangles,
+        out int resealSkippedCollinearTriangles,
         out int afterDegenerate,
         out bool accepted,
         out int iterations,
@@ -1223,6 +1247,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         resealIntroducedDegenerate = 0;
         resealDegenerateSafe = true;
         resealSkippedDegenerateTriangles = 0;
+        resealSkippedDuplicateVertexIdTriangles = 0;
+        resealSkippedZeroEdgeTriangles = 0;
+        resealSkippedDuplicatePositionTriangles = 0;
+        resealSkippedCollinearTriangles = 0;
         afterDegenerate = 0;
         accepted = false;
         iterations = 0;
@@ -1255,6 +1283,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             removedDegenerateFaces += pass.RemovedDegenerateFaces;
             resealIntroducedDegenerate += pass.ResealIntroducedDegenerate;
             resealSkippedDegenerateTriangles += pass.ResealSkippedDegenerateTriangles;
+            resealSkippedDuplicateVertexIdTriangles += pass.ResealSkippedDuplicateVertexIdTriangles;
+            resealSkippedZeroEdgeTriangles += pass.ResealSkippedZeroEdgeTriangles;
+            resealSkippedDuplicatePositionTriangles += pass.ResealSkippedDuplicatePositionTriangles;
+            resealSkippedCollinearTriangles += pass.ResealSkippedCollinearTriangles;
             resealDegenerateSafe &= pass.ResealDegenerateSafe;
             lastAfterRemoval = pass.AfterRemovalDegenerate;
             boundaryAfter = pass.BoundaryAfter;
@@ -1330,6 +1362,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int resealIntroducedDegenerate = 0;
         bool resealDegenerateSafe = true;
         int resealSkippedDegenerateTriangles = 0;
+        int resealSkippedDuplicateVertexIdTriangles = 0;
+        int resealSkippedZeroEdgeTriangles = 0;
+        int resealSkippedDuplicatePositionTriangles = 0;
+        int resealSkippedCollinearTriangles = 0;
         int afterDegenerate = 0;
         bool accepted = false;
         bool preserveClosedContract = false;
@@ -1348,6 +1384,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 resealIntroducedDegenerate,
                 resealDegenerateSafe,
                 resealSkippedDegenerateTriangles,
+                resealSkippedDuplicateVertexIdTriangles,
+                resealSkippedZeroEdgeTriangles,
+                resealSkippedDuplicatePositionTriangles,
+                resealSkippedCollinearTriangles,
                 afterDegenerate,
                 accepted,
                 preserveClosedContract,
@@ -1370,6 +1410,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 resealIntroducedDegenerate,
                 resealDegenerateSafe,
                 resealSkippedDegenerateTriangles,
+                resealSkippedDuplicateVertexIdTriangles,
+                resealSkippedZeroEdgeTriangles,
+                resealSkippedDuplicatePositionTriangles,
+                resealSkippedCollinearTriangles,
                 afterDegenerate,
                 accepted,
                 preserveClosedContract,
@@ -1417,6 +1461,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 resealIntroducedDegenerate,
                 resealDegenerateSafe,
                 resealSkippedDegenerateTriangles,
+                resealSkippedDuplicateVertexIdTriangles,
+                resealSkippedZeroEdgeTriangles,
+                resealSkippedDuplicatePositionTriangles,
+                resealSkippedCollinearTriangles,
                 afterDegenerate,
                 accepted,
                 preserveClosedContract,
@@ -1440,6 +1488,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         {
             var resealStats = AttemptDeterministicBoundaryReseal(rebuilt, weldTolerance);
             resealSkippedDegenerateTriangles = resealStats.LoopDegenerateSkipped;
+            resealSkippedDuplicateVertexIdTriangles = resealStats.LoopDegenerateDuplicateVertexIdSkipped;
+            resealSkippedZeroEdgeTriangles = resealStats.LoopDegenerateZeroEdgeSkipped;
+            resealSkippedDuplicatePositionTriangles = resealStats.LoopDegenerateDuplicatePositionSkipped;
+            resealSkippedCollinearTriangles = resealStats.LoopDegenerateCollinearSkipped;
             afterIncidence = MeshStitcher.AnalyzeBoundaryIncidence(rebuilt);
             afterDegenerate = DegenerateFaceInspector.CountDegenerateFaces(rebuilt, predicateTelemetry);
             resealIntroducedDegenerate = System.Math.Max(0, afterDegenerate - afterRemovalDegenerate);
@@ -1472,6 +1524,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             resealIntroducedDegenerate,
             resealDegenerateSafe,
             resealSkippedDegenerateTriangles,
+            resealSkippedDuplicateVertexIdTriangles,
+            resealSkippedZeroEdgeTriangles,
+            resealSkippedDuplicatePositionTriangles,
+            resealSkippedCollinearTriangles,
             afterDegenerate,
             accepted,
             preserveClosedContract,
@@ -1481,11 +1537,20 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             unmatchedAfter);
     }
 
-    private readonly record struct BoundaryResealStats(int LoopDegenerateSkipped);
+    private readonly record struct BoundaryResealStats(
+        int LoopDegenerateSkipped,
+        int LoopDegenerateDuplicateVertexIdSkipped,
+        int LoopDegenerateZeroEdgeSkipped,
+        int LoopDegenerateDuplicatePositionSkipped,
+        int LoopDegenerateCollinearSkipped);
 
     private static BoundaryResealStats AttemptDeterministicBoundaryReseal(HalfEdgeMesh mesh, double weldTolerance)
     {
         int loopDegenerateSkipped = 0;
+        int loopDegenerateDuplicateVertexIdSkipped = 0;
+        int loopDegenerateZeroEdgeSkipped = 0;
+        int loopDegenerateDuplicatePositionSkipped = 0;
+        int loopDegenerateCollinearSkipped = 0;
         var bounds = mesh.GetBounds();
         double sceneScale = System.Math.Max(1.0, bounds.Size.Length);
         double tol = System.Math.Max(
@@ -1499,11 +1564,20 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         {
             var summary = MeshStitcher.CloseBoundaryLoopsDeterministic(mesh, skipDegenerateFillTriangles: true);
             loopDegenerateSkipped += summary.SkippedDegenerateTriangleCount;
+            loopDegenerateDuplicateVertexIdSkipped += summary.SkippedDuplicateVertexIdCount;
+            loopDegenerateZeroEdgeSkipped += summary.SkippedZeroEdgeCount;
+            loopDegenerateDuplicatePositionSkipped += summary.SkippedDuplicatePositionCount;
+            loopDegenerateCollinearSkipped += summary.SkippedCollinearCount;
             MeshStitcher.RepairBoundary(mesh, tol * 2.0);
             MeshStitcher.RelinkBoundaryTwinsDeterministic(mesh);
         }
 
-        return new BoundaryResealStats(loopDegenerateSkipped);
+        return new BoundaryResealStats(
+            loopDegenerateSkipped,
+            loopDegenerateDuplicateVertexIdSkipped,
+            loopDegenerateZeroEdgeSkipped,
+            loopDegenerateDuplicatePositionSkipped,
+            loopDegenerateCollinearSkipped);
     }
 
     private static CsgResult PruneDuplicateOutputFaces(

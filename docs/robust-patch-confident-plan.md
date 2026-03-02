@@ -791,7 +791,7 @@ Deliverables:
 Exit criteria:
 
 - Preventable taxonomy classes are blocked at emission sites with certificate evidence.
-- Status: Pending.
+- Status: Completed (`MeshStitcher.CloseBoundaryLoopsDeterministic` now applies deterministic pre-emission guards (duplicate vertex id, zero-edge, duplicate-position, optional collinear), and `deg-prune:*` certificates now expose class-level reseal reject counters).
 
 ## Stage 73 - Local Reconstruction Repair Kernel
 

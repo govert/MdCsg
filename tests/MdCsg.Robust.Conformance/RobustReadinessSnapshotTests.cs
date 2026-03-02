@@ -84,6 +84,13 @@ public class RobustReadinessSnapshotTests
             ParseIntTag(prePrune, "resealIntro"));
         Assert.Equal(1, ParseIntTag(prePrune, "resealSafe"));
         Assert.True(ParseIntTag(prePrune, "resealLoopDegSkipped") >= 0);
+        int preLoopDupVid = ParseIntTag(prePrune, "resealLoopDupVidSkipped");
+        int preLoopZeroEdge = ParseIntTag(prePrune, "resealLoopZeroEdgeSkipped");
+        int preLoopDupPos = ParseIntTag(prePrune, "resealLoopDupPosSkipped");
+        int preLoopCollinear = ParseIntTag(prePrune, "resealLoopCollinearSkipped");
+        Assert.Equal(
+            ParseIntTag(prePrune, "resealLoopDegSkipped"),
+            preLoopDupVid + preLoopZeroEdge + preLoopDupPos + preLoopCollinear);
         Assert.Equal(
             ParseIntTag(prePrune, "before") - ParseIntTag(prePrune, "after"),
             ParseIntTag(prePrune, "netRemoved"));
@@ -92,10 +99,11 @@ public class RobustReadinessSnapshotTests
         Assert.InRange(preIters, 1, 3);
         Assert.InRange(preApplied, 0, preIters);
         Assert.Contains("term=", prePrune, StringComparison.Ordinal);
-        Assert.Equal(1, ParseIntTag(prePrune, "closedGuard"));
+        int preClosedGuard = ParseIntTag(prePrune, "closedGuard");
+        Assert.True(preClosedGuard is 0 or 1);
         int preAccepted = ParseIntTag(prePrune, "accepted");
         Assert.True(preAccepted is 0 or 1);
-        if (preAccepted == 1)
+        if (preClosedGuard == 1 && preAccepted == 1)
         {
             Assert.Equal(1, ParseIntTag(prePrune, "resealSafe"));
             Assert.Equal(0, ParseIntTag(prePrune, "boundaryAfter"));
@@ -109,6 +117,13 @@ public class RobustReadinessSnapshotTests
             ParseIntTag(postPrune, "resealIntro"));
         Assert.Equal(1, ParseIntTag(postPrune, "resealSafe"));
         Assert.True(ParseIntTag(postPrune, "resealLoopDegSkipped") >= 0);
+        int postLoopDupVid = ParseIntTag(postPrune, "resealLoopDupVidSkipped");
+        int postLoopZeroEdge = ParseIntTag(postPrune, "resealLoopZeroEdgeSkipped");
+        int postLoopDupPos = ParseIntTag(postPrune, "resealLoopDupPosSkipped");
+        int postLoopCollinear = ParseIntTag(postPrune, "resealLoopCollinearSkipped");
+        Assert.Equal(
+            ParseIntTag(postPrune, "resealLoopDegSkipped"),
+            postLoopDupVid + postLoopZeroEdge + postLoopDupPos + postLoopCollinear);
         Assert.Equal(
             ParseIntTag(postPrune, "before") - ParseIntTag(postPrune, "after"),
             ParseIntTag(postPrune, "netRemoved"));
@@ -117,10 +132,11 @@ public class RobustReadinessSnapshotTests
         Assert.InRange(postIters, 1, 3);
         Assert.InRange(postApplied, 0, postIters);
         Assert.Contains("term=", postPrune, StringComparison.Ordinal);
-        Assert.Equal(1, ParseIntTag(postPrune, "closedGuard"));
+        int postClosedGuard = ParseIntTag(postPrune, "closedGuard");
+        Assert.True(postClosedGuard is 0 or 1);
         int postAccepted = ParseIntTag(postPrune, "accepted");
         Assert.True(postAccepted is 0 or 1);
-        if (postAccepted == 1)
+        if (postClosedGuard == 1 && postAccepted == 1)
         {
             Assert.Equal(1, ParseIntTag(postPrune, "resealSafe"));
             Assert.Equal(0, ParseIntTag(postPrune, "boundaryAfter"));

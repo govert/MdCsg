@@ -28,11 +28,19 @@ public static class MeshStitcher
     /// <param name="OpenChainCount">Number of open chains encountered.</param>
     /// <param name="AmbiguousBranchVertexCount">Number of branch vertices with multiple next-edge candidates.</param>
     /// <param name="SkippedDegenerateTriangleCount">Number of loop-fill fan triangles skipped as degenerate.</param>
+    /// <param name="SkippedDuplicateVertexIdCount">Skipped fan triangles with duplicate vertex IDs.</param>
+    /// <param name="SkippedZeroEdgeCount">Skipped fan triangles containing a zero-length edge.</param>
+    /// <param name="SkippedDuplicatePositionCount">Skipped fan triangles with duplicate vertex positions.</param>
+    /// <param name="SkippedCollinearCount">Skipped fan triangles with exact collinearity.</param>
     public readonly record struct BoundaryLoopAssemblySummary(
         int ClosedLoopCount,
         int OpenChainCount,
         int AmbiguousBranchVertexCount,
-        int SkippedDegenerateTriangleCount);
+        int SkippedDegenerateTriangleCount,
+        int SkippedDuplicateVertexIdCount,
+        int SkippedZeroEdgeCount,
+        int SkippedDuplicatePositionCount,
+        int SkippedCollinearCount);
 
     /// <summary>
     /// Creates a HalfEdgeMesh from a list of triangles.
@@ -187,10 +195,18 @@ public static class MeshStitcher
                 ClosedLoopCount: 0,
                 OpenChainCount: openChains,
                 AmbiguousBranchVertexCount: ambiguousBranchVertices,
-                SkippedDegenerateTriangleCount: 0);
+                SkippedDegenerateTriangleCount: 0,
+                SkippedDuplicateVertexIdCount: 0,
+                SkippedZeroEdgeCount: 0,
+                SkippedDuplicatePositionCount: 0,
+                SkippedCollinearCount: 0);
 
         // Phase 3: Fill each boundary loop with fan triangulation.
         int skippedDegenerateTriangles = 0;
+        int skippedDuplicateVertexId = 0;
+        int skippedZeroEdge = 0;
+        int skippedDuplicatePosition = 0;
+        int skippedCollinear = 0;
         foreach (var loop in loops)
         {
             // Compute centroid
@@ -212,10 +228,37 @@ public static class MeshStitcher
             for (int i = 0; i < loop.Count; i++)
             {
                 var he = loop[i];
-                if (skipDegenerateFillTriangles
-                    && IsDegenerateFillTriangle(he.Target.Position, he.Origin.Position, centroid))
+                if (he.Target.Id == he.Origin.Id)
                 {
                     skippedDegenerateTriangles++;
+                    skippedDuplicateVertexId++;
+                    continue;
+                }
+
+                var a = he.Target.Position;
+                var b = he.Origin.Position;
+                var c = centroid;
+                double e01 = Vec3.DistanceSquared(a, b);
+                double e12 = Vec3.DistanceSquared(b, c);
+                double e20 = Vec3.DistanceSquared(c, a);
+                if (e01 == 0.0 || e12 == 0.0 || e20 == 0.0)
+                {
+                    skippedDegenerateTriangles++;
+                    skippedZeroEdge++;
+                    continue;
+                }
+
+                if (SamePosition(a, b) || SamePosition(b, c) || SamePosition(c, a))
+                {
+                    skippedDegenerateTriangles++;
+                    skippedDuplicatePosition++;
+                    continue;
+                }
+
+                if (skipDegenerateFillTriangles && IsDegenerateFillTriangle(a, b, c))
+                {
+                    skippedDegenerateTriangles++;
+                    skippedCollinear++;
                     continue;
                 }
 
@@ -229,7 +272,11 @@ public static class MeshStitcher
             ClosedLoopCount: loops.Count,
             OpenChainCount: openChains,
             AmbiguousBranchVertexCount: ambiguousBranchVertices,
-            SkippedDegenerateTriangleCount: skippedDegenerateTriangles);
+            SkippedDegenerateTriangleCount: skippedDegenerateTriangles,
+            SkippedDuplicateVertexIdCount: skippedDuplicateVertexId,
+            SkippedZeroEdgeCount: skippedZeroEdge,
+            SkippedDuplicatePositionCount: skippedDuplicatePosition,
+            SkippedCollinearCount: skippedCollinear);
     }
 
     /// <summary>
@@ -245,7 +292,11 @@ public static class MeshStitcher
             ClosedLoopCount: loops.Count,
             OpenChainCount: openChains,
             AmbiguousBranchVertexCount: ambiguousBranchVertices,
-            SkippedDegenerateTriangleCount: 0);
+            SkippedDegenerateTriangleCount: 0,
+            SkippedDuplicateVertexIdCount: 0,
+            SkippedZeroEdgeCount: 0,
+            SkippedDuplicatePositionCount: 0,
+            SkippedCollinearCount: 0);
     }
 
     private static bool IsDegenerateFillTriangle(Vec3 a, Vec3 b, Vec3 c)
@@ -259,6 +310,9 @@ public static class MeshStitcher
         var cross = Vec3.Cross(b - a, c - a);
         return cross.X == 0.0 && cross.Y == 0.0 && cross.Z == 0.0;
     }
+
+    private static bool SamePosition(Vec3 a, Vec3 b)
+        => a.X == b.X && a.Y == b.Y && a.Z == b.Z;
 
     private static List<List<HalfEdge>> CollectBoundaryLoopsDeterministic(
         HalfEdgeMesh mesh,

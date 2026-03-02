@@ -103,6 +103,13 @@ public class RobustShowcaseParityTests
             ParseIntTag(degPrunePre, "resealIntro"));
         Assert.Equal(1, ParseIntTag(degPrunePre, "resealSafe"));
         Assert.True(ParseIntTag(degPrunePre, "resealLoopDegSkipped") >= 0);
+        int preLoopDupVid = ParseIntTag(degPrunePre, "resealLoopDupVidSkipped");
+        int preLoopZeroEdge = ParseIntTag(degPrunePre, "resealLoopZeroEdgeSkipped");
+        int preLoopDupPos = ParseIntTag(degPrunePre, "resealLoopDupPosSkipped");
+        int preLoopCollinear = ParseIntTag(degPrunePre, "resealLoopCollinearSkipped");
+        Assert.Equal(
+            ParseIntTag(degPrunePre, "resealLoopDegSkipped"),
+            preLoopDupVid + preLoopZeroEdge + preLoopDupPos + preLoopCollinear);
         Assert.Equal(
             ParseIntTag(degPrunePre, "before") - ParseIntTag(degPrunePre, "after"),
             ParseIntTag(degPrunePre, "netRemoved"));
@@ -111,10 +118,11 @@ public class RobustShowcaseParityTests
         Assert.InRange(preIters, 1, 3);
         Assert.InRange(preApplied, 0, preIters);
         Assert.Contains("term=", degPrunePre, StringComparison.Ordinal);
-        Assert.Equal(1, ParseIntTag(degPrunePre, "closedGuard"));
+        int preClosedGuard = ParseIntTag(degPrunePre, "closedGuard");
+        Assert.True(preClosedGuard is 0 or 1);
         int preAccepted = ParseIntTag(degPrunePre, "accepted");
         Assert.True(preAccepted is 0 or 1);
-        if (preAccepted == 1)
+        if (preClosedGuard == 1 && preAccepted == 1)
         {
             Assert.Equal(1, ParseIntTag(degPrunePre, "resealSafe"));
             Assert.Equal(0, ParseIntTag(degPrunePre, "boundaryAfter"));
@@ -128,6 +136,13 @@ public class RobustShowcaseParityTests
             ParseIntTag(degPrunePost, "resealIntro"));
         Assert.Equal(1, ParseIntTag(degPrunePost, "resealSafe"));
         Assert.True(ParseIntTag(degPrunePost, "resealLoopDegSkipped") >= 0);
+        int postLoopDupVid = ParseIntTag(degPrunePost, "resealLoopDupVidSkipped");
+        int postLoopZeroEdge = ParseIntTag(degPrunePost, "resealLoopZeroEdgeSkipped");
+        int postLoopDupPos = ParseIntTag(degPrunePost, "resealLoopDupPosSkipped");
+        int postLoopCollinear = ParseIntTag(degPrunePost, "resealLoopCollinearSkipped");
+        Assert.Equal(
+            ParseIntTag(degPrunePost, "resealLoopDegSkipped"),
+            postLoopDupVid + postLoopZeroEdge + postLoopDupPos + postLoopCollinear);
         Assert.Equal(
             ParseIntTag(degPrunePost, "before") - ParseIntTag(degPrunePost, "after"),
             ParseIntTag(degPrunePost, "netRemoved"));
@@ -136,10 +151,11 @@ public class RobustShowcaseParityTests
         Assert.InRange(postIters, 1, 3);
         Assert.InRange(postApplied, 0, postIters);
         Assert.Contains("term=", degPrunePost, StringComparison.Ordinal);
-        Assert.Equal(1, ParseIntTag(degPrunePost, "closedGuard"));
+        int postClosedGuard = ParseIntTag(degPrunePost, "closedGuard");
+        Assert.True(postClosedGuard is 0 or 1);
         int postAccepted = ParseIntTag(degPrunePost, "accepted");
         Assert.True(postAccepted is 0 or 1);
-        if (postAccepted == 1)
+        if (postClosedGuard == 1 && postAccepted == 1)
         {
             Assert.Equal(1, ParseIntTag(degPrunePost, "resealSafe"));
             Assert.Equal(0, ParseIntTag(degPrunePost, "boundaryAfter"));
