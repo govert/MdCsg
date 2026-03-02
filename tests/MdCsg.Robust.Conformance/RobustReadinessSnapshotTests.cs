@@ -155,6 +155,8 @@ public class RobustReadinessSnapshotTests
         int localRepairTripleTry = ParseIntTag(localRepairCert, "tripleTry");
         int localRepairMultiApplied = ParseIntTag(localRepairCert, "multiApplied");
         int localRepairMaxArity = ParseIntTag(localRepairCert, "maxArity");
+        int localRepairColGuard = ParseIntTag(localRepairCert, "colGuard");
+        int localRepairColReject = ParseIntTag(localRepairCert, "colReject");
         int localRepairIters = ParseIntTag(localRepairCert, "iters");
         int localRepairApplied = ParseIntTag(localRepairCert, "applied");
         Assert.True(localRepairGate is 0 or 1);
@@ -165,6 +167,8 @@ public class RobustReadinessSnapshotTests
         Assert.Equal(0, localRepairTripleTry);
         Assert.Equal(0, localRepairMultiApplied);
         Assert.InRange(localRepairMaxArity, 0, 1);
+        Assert.Equal(0, localRepairColGuard);
+        Assert.Equal(0, localRepairColReject);
         Assert.True(localRepairRemoved >= 0);
         Assert.True(localRepairApplied >= 0);
         Assert.True(localRepairIters >= localRepairApplied);

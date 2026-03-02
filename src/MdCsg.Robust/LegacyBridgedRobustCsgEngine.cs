@@ -510,6 +510,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             out int localRepairTripleTry,
             out int localRepairMultiApplied,
             out int localRepairMaxArity,
+            out int localRepairCollinearGuard,
+            out int localRepairCollinearReject,
             out int localRepairIterations,
             out int localRepairAppliedIterations,
             out string localRepairTermination);
@@ -525,6 +527,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"tripleTry={localRepairTripleTry};"
             + $"multiApplied={localRepairMultiApplied};"
             + $"maxArity={localRepairMaxArity};"
+            + $"colGuard={localRepairCollinearGuard};"
+            + $"colReject={localRepairCollinearReject};"
             + $"iters={localRepairIterations};"
             + $"applied={localRepairAppliedIterations};"
             + $"closureAttempt={(opts.AttemptResidualDegenerateClosure ? 1 : 0)};"
@@ -1626,6 +1630,12 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
     private const int LocalRepairPairCandidateBudget = 128;
     private const int LocalRepairTripleCandidateBudget = 192;
     private readonly record struct DegenerateFaceDescriptor(int FaceId, int V0, int V1, int V2);
+    private readonly record struct DegenerateClassCounts(
+        int Total,
+        int DuplicateVertexId,
+        int ZeroLengthEdge,
+        int DuplicatePosition,
+        int Collinear);
 
     private static CsgResult TryLocalDegenerateNeighborhoodRepair(
         CsgResult result,
@@ -1643,6 +1653,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         out int tripleCandidateAttempts,
         out int multiFaceApplied,
         out int maxRemovedArity,
+        out int collinearGuard,
+        out int collinearReject,
         out int iterations,
         out int appliedIterations,
         out string terminationReason)
@@ -1657,6 +1669,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         tripleCandidateAttempts = 0;
         multiFaceApplied = 0;
         maxRemovedArity = 0;
+        collinearGuard = 0;
+        collinearReject = 0;
         iterations = 0;
         appliedIterations = 0;
         terminationReason = authorityGate == 1 ? "none" : "authority-gated";
@@ -1683,12 +1697,16 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 out int singleTryThisIteration,
                 out int pairTryThisIteration,
                 out int tripleTryThisIteration,
+                out int collinearGuardThisIteration,
+                out int collinearRejectThisIteration,
                 out int afterThisIteration))
             {
                 attemptedFaces += attemptedThisIteration;
                 singleCandidateAttempts += singleTryThisIteration;
                 pairCandidateAttempts += pairTryThisIteration;
                 tripleCandidateAttempts += tripleTryThisIteration;
+                collinearGuard = System.Math.Max(collinearGuard, collinearGuardThisIteration);
+                collinearReject += collinearRejectThisIteration;
                 terminationReason = "stalled";
                 break;
             }
@@ -1697,6 +1715,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             singleCandidateAttempts += singleTryThisIteration;
             pairCandidateAttempts += pairTryThisIteration;
             tripleCandidateAttempts += tripleTryThisIteration;
+            collinearGuard = System.Math.Max(collinearGuard, collinearGuardThisIteration);
+            collinearReject += collinearRejectThisIteration;
             current = WithMesh(current, repairedMesh);
             removedFaces++;
             if (removedFaceArity > maxRemovedArity)
@@ -1735,6 +1755,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         out int singleCandidateAttempts,
         out int pairCandidateAttempts,
         out int tripleCandidateAttempts,
+        out int collinearGuard,
+        out int collinearReject,
         out int afterDegenerate)
     {
         repairedMesh = mesh;
@@ -1743,10 +1765,22 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         singleCandidateAttempts = 0;
         pairCandidateAttempts = 0;
         tripleCandidateAttempts = 0;
-        int beforeDegenerate = CountDegenerateFacesNoTelemetry(mesh);
+        collinearGuard = 0;
+        int collinearRejectCount = 0;
+        var beforeClasses = CountDegenerateClassesNoTelemetry(mesh);
+        int beforeDegenerate = beforeClasses.Total;
         afterDegenerate = beforeDegenerate;
         if (beforeDegenerate == 0)
+        {
+            collinearReject = 0;
             return false;
+        }
+        bool enforceCollinearProgress =
+            allowPairCandidates
+            && beforeClasses.Collinear == beforeClasses.Total
+            && beforeClasses.Total > 0;
+        if (enforceCollinearProgress)
+            collinearGuard = 1;
 
         var baselineIncidence = MeshStitcher.AnalyzeBoundaryIncidence(mesh);
         var baselineComponents = AnalyzeComponentTopology(mesh);
@@ -1768,7 +1802,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             .OrderBy(static item => item.FaceId)
             .ToArray();
         if (degenerateFaces.Length == 0)
+        {
+            collinearReject = 0;
             return false;
+        }
 
         bool TryCandidate(int[] removeFaceIds, out HalfEdgeMesh candidateMesh, out int candidateDegenerate)
         {
@@ -1801,9 +1838,15 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
 
             candidateMesh = new MeshBuilder(weldTolerance).Build(positions, triangles);
             candidateMesh.IsComplemented = mesh.IsComplemented;
-            candidateDegenerate = CountDegenerateFacesNoTelemetry(candidateMesh);
+            var candidateClasses = CountDegenerateClassesNoTelemetry(candidateMesh);
+            candidateDegenerate = candidateClasses.Total;
             if (candidateDegenerate >= beforeDegenerate)
                 return false;
+            if (enforceCollinearProgress && candidateClasses.Collinear >= beforeClasses.Collinear)
+            {
+                collinearRejectCount++;
+                return false;
+            }
 
             var candidateIncidence = MeshStitcher.AnalyzeBoundaryIncidence(candidateMesh);
             var candidateComponents = AnalyzeComponentTopology(candidateMesh);
@@ -1829,11 +1872,15 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             repairedMesh = candidateMesh;
             removedFaceArity = 1;
             afterDegenerate = candidateDegenerate;
+            collinearReject = collinearRejectCount;
             return true;
         }
 
         if (!allowPairCandidates || degenerateFaces.Length < 2)
+        {
+            collinearReject = collinearRejectCount;
             return false;
+        }
 
         int pairBudget = LocalRepairPairCandidateBudget;
         bool pairBudgetReached = false;
@@ -1862,6 +1909,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 repairedMesh = candidateMesh;
                 removedFaceArity = 2;
                 afterDegenerate = candidateDegenerate;
+                collinearReject = collinearRejectCount;
                 return true;
             }
 
@@ -1870,7 +1918,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         }
 
         if (degenerateFaces.Length < 3)
+        {
+            collinearReject = collinearRejectCount;
             return false;
+        }
 
         int tripleBudget = LocalRepairTripleCandidateBudget;
         for (int i = 0; i < degenerateFaces.Length - 2; i++)
@@ -1885,7 +1936,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     attemptedFaces++;
                     tripleCandidateAttempts++;
                     if (tripleCandidateAttempts > tripleBudget)
+                    {
+                        collinearReject = collinearRejectCount;
                         return false;
+                    }
                     if (!TryCandidate(
                         new[] { degenerateFaces[i].FaceId, degenerateFaces[j].FaceId, degenerateFaces[k].FaceId },
                         out var candidateMesh,
@@ -1897,11 +1951,13 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     repairedMesh = candidateMesh;
                     removedFaceArity = 3;
                     afterDegenerate = candidateDegenerate;
+                    collinearReject = collinearRejectCount;
                     return true;
                 }
             }
         }
 
+        collinearReject = collinearRejectCount;
         return false;
     }
 
@@ -1936,14 +1992,50 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
 
     private static int CountDegenerateFacesNoTelemetry(HalfEdgeMesh mesh)
     {
-        int count = 0;
+        return CountDegenerateClassesNoTelemetry(mesh).Total;
+    }
+
+    private static DegenerateClassCounts CountDegenerateClassesNoTelemetry(HalfEdgeMesh mesh)
+    {
+        int total = 0;
+        int duplicateVertexId = 0;
+        int zeroLengthEdge = 0;
+        int duplicatePosition = 0;
+        int collinear = 0;
         foreach (var face in mesh.Faces)
         {
-            if (IsDegenerateFaceNoTelemetry(face))
-                count++;
+            var verts = face.GetVertices();
+            var areaSign = EvaluateProjectedAreaSign(
+                verts[0].Position,
+                verts[1].Position,
+                verts[2].Position);
+            if (areaSign.Sign != PredicateSign.Zero)
+                continue;
+
+            total++;
+            switch (ClassifyResidualDegenerateFace(verts[0], verts[1], verts[2]))
+            {
+                case ResidualDegenerateClass.DuplicateVertexId:
+                    duplicateVertexId++;
+                    break;
+                case ResidualDegenerateClass.ZeroLengthEdge:
+                    zeroLengthEdge++;
+                    break;
+                case ResidualDegenerateClass.DuplicatePosition:
+                    duplicatePosition++;
+                    break;
+                default:
+                    collinear++;
+                    break;
+            }
         }
 
-        return count;
+        return new DegenerateClassCounts(
+            total,
+            duplicateVertexId,
+            zeroLengthEdge,
+            duplicatePosition,
+            collinear);
     }
 
     private static bool IsDegenerateFaceNoTelemetry(Face face)

@@ -903,3 +903,16 @@ Exit criteria:
 - Known blocker outputs emit deterministic collinear forensics alongside existing taxonomy hashes/samples.
 - Showcase/readiness conformance enforces the new certificate tags and invariants.
 - Status: Completed (`BuildResidualDegenerateCertificate` now emits collinear-structure tags (`collinearOnly`, `colAdjPairs`, `colVertSpan`, `colAdjHash`) derived from residual-face adjacency/vertex spans; release validation passed for `RobustReadinessSnapshotTests.KnownBlockerCorpus_IsExplicitlyFailClosed` (`6m52s`) and `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker` (`7m54s`)).
+
+## Stage 82 - Collinear-Aware Candidate Gating
+
+Deliverables:
+
+- Add deterministic collinear-progress guards to closure-attempt local repair candidate acceptance.
+- Emit explicit `deg-local-repair:*` telemetry for guard activation/rejections (`colGuard`, `colReject`).
+
+Exit criteria:
+
+- Strict default blocker path remains unchanged (`colGuard=0`, `colReject=0`).
+- Closure-attempt path enables guard policy (`colGuard=1`) and reports deterministic rejection counts while preserving fail-closed contracts.
+- Status: Completed (`TryRemoveOneDegenerateFace` now enforces collinear-progress acceptance gating when residual degenerates are collinear-only under closure-attempt search; `deg-local-repair:*` certificates extended with `colGuard`/`colReject`; release validation passed for `RobustReadinessSnapshotTests.KnownBlockerCorpus_IsExplicitlyFailClosed` (`6m50s`) and `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker` (`8m09s`)).
