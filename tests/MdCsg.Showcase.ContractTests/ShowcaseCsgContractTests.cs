@@ -27,7 +27,21 @@ public sealed class ShowcaseCsgContractTests : IDisposable
 
         var ex = Assert.Throws<InvalidOperationException>(() => ShowcaseCsg.Difference(step2, cylY));
         Assert.Contains("strict mode", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("closureAttempt=1", ex.Message, StringComparison.Ordinal);
         Assert.Contains("--allow-legacy-failover", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Step3_StrictRobustOnly_DisablesClosureAttempt_InContractMessage()
+    {
+        ShowcaseRuntimeOptions.UseLegacyCsg = false;
+        ShowcaseRuntimeOptions.AllowLegacyFailover = false;
+        ShowcaseRuntimeOptions.UseClosureAttemptRobust = false;
+
+        (Solid step2, Solid cylY) = BuildStep2Input();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ShowcaseCsg.Difference(step2, cylY));
+        Assert.Contains("closureAttempt=0", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -81,5 +95,6 @@ public sealed class ShowcaseCsgContractTests : IDisposable
     {
         ShowcaseRuntimeOptions.UseLegacyCsg = false;
         ShowcaseRuntimeOptions.AllowLegacyFailover = false;
+        ShowcaseRuntimeOptions.UseClosureAttemptRobust = true;
     }
 }

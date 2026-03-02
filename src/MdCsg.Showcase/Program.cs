@@ -18,19 +18,25 @@ static unsafe class Program
         bool legacyFailoverMode = Array.Exists(
             args,
             static a => string.Equals(a, "--allow-legacy-failover", StringComparison.OrdinalIgnoreCase));
+        bool strictRobustOnlyMode = Array.Exists(
+            args,
+            static a => string.Equals(a, "--strict-robust-only", StringComparison.OrdinalIgnoreCase));
         ShowcaseRuntimeOptions.UseLegacyCsg = legacyCsgMode;
         ShowcaseRuntimeOptions.AllowLegacyFailover = legacyFailoverMode;
+        ShowcaseRuntimeOptions.UseClosureAttemptRobust = !strictRobustOnlyMode;
         if (legacyCsgMode)
         {
             Console.WriteLine("[showcase] CSG mode: legacy (explicit opt-out)");
         }
         else if (legacyFailoverMode)
         {
-            Console.WriteLine("[showcase] CSG mode: robust-strict with explicit legacy failover");
+            Console.WriteLine(
+                $"[showcase] CSG mode: robust-strict (closureAttempt={(ShowcaseRuntimeOptions.UseClosureAttemptRobust ? 1 : 0)}) with explicit legacy failover");
         }
         else
         {
-            Console.WriteLine("[showcase] CSG mode: robust-strict (no automatic fallback)");
+            Console.WriteLine(
+                $"[showcase] CSG mode: robust-strict (closureAttempt={(ShowcaseRuntimeOptions.UseClosureAttemptRobust ? 1 : 0)}, no automatic fallback)");
         }
 
         AppWindow.Create(1280, 720, "MdCsg Showcase - Loading...");

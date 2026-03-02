@@ -955,3 +955,118 @@ Exit criteria:
 - Blocker ledger/fuzz manifest/signature conformance remain deterministic and in sync.
 - Gate/readiness scripts emit explicit pass signals for collinear-guard and local-retriangulation contracts.
 - Status: Completed (replay/ledger validation passed for `MinimizedReplayManifest_ReplaysToPinnedSignatures`, `LedgerSchema_IsValid_AndDeterministic`, and `FuzzManifestSignatures_ArePresentInLedger` (`7m38s` total); blocker remains unresolved and pinned with same signature class, ledger ownership moved to stage 85 and expected certificate list now includes `deg-local-repair:scope=post-reconstruct;`; robustness gate/readiness scripts now emit `*_COLLINEAR_GUARD_CONTRACT=PASS` and `*_LOCAL_RETRIANGULATION_CONTRACT=PASS` signals).
+
+## Stage 86 - Showcase Closure-Attempt Runtime Contract
+
+Deliverables:
+
+- Expose showcase runtime control to disable closure-attempt heuristics in strict robust mode.
+- Include deterministic `closureAttempt` mode tags in strict-failure and explicit-failover showcase messages.
+- Add showcase contract coverage that asserts `closureAttempt=1` (default strict) and `closureAttempt=0` (strict robust-only).
+
+Exit criteria:
+
+- Strict showcase mode defaults to closure-attempt enabled with explicit contract evidence.
+- Strict robust-only mode deterministically disables closure attempts without changing fail-closed behavior.
+- Status: Completed (`ShowcaseCsg` now builds strict robust options with runtime `AttemptResidualDegenerateClosure`; `Program` supports `--strict-robust-only`; `ShowcaseCsgContractTests.Step3_StrictRobustOnly_DisablesClosureAttempt_InContractMessage` and strict contract slice passed (`7m03s`)).
+
+## Stage 87 - Showcase CLI Mode Parser and Validation
+
+Deliverables:
+
+- Introduce a testable showcase CLI parser that centralizes mode flags (`--legacy-csg`, `--allow-legacy-failover`, `--strict-robust-only`, screenshot args).
+- Enforce deterministic conflict validation so unsupported flag combinations fail fast before window/bootstrap setup.
+- Emit a stable mode-summary string contract for logging and tests.
+
+Exit criteria:
+
+- Program startup mode handling is parser-driven and validated.
+- Contract tests can evaluate mode selection without creating a D3D window.
+
+## Stage 88 - Parser Contract Test Matrix
+
+Deliverables:
+
+- Add deterministic contract tests covering valid/invalid CLI combinations, screenshot-path parsing, and mode summary output.
+- Pin conflict diagnostics text for invalid combinations.
+
+Exit criteria:
+
+- CLI mode behavior is fully covered by deterministic tests with no UI dependencies.
+
+## Stage 89 - Program Wiring and Runtime Preservation
+
+Deliverables:
+
+- Wire parser output into `Program.Main` runtime option setup.
+- Preserve existing robust default behavior while making startup branch selection explicit and auditable.
+
+Exit criteria:
+
+- Showcase startup behavior matches prior contracts for all supported modes.
+
+## Stage 90 - Showcase Runtime Docs Alignment
+
+Deliverables:
+
+- Update README/showcase run instructions with robust mode matrix and explicit fallback semantics.
+- Document strict robust-only mode and expected blocker behavior for chained step-3.
+
+Exit criteria:
+
+- User-facing run docs match executable/runtime behavior exactly.
+
+## Stage 91 - Deterministic Showcase Issue Summary Contracts
+
+Deliverables:
+
+- Normalize robust issue formatting in showcase strict/failover messages to deterministic order and stable shape.
+- Ensure empty/duplicate issue lists produce deterministic output.
+
+Exit criteria:
+
+- Failure/failover logs are stable for test assertions and operational triage.
+
+## Stage 92 - Showcase Message Contract Expansion
+
+Deliverables:
+
+- Add contract tests pinning deterministic issue-summary shape and closure-attempt tags across strict and failover paths.
+- Validate both robust-only and closure-attempt-enabled branches.
+
+Exit criteria:
+
+- Showcase message contracts are regression-safe and auditable.
+
+## Stage 93 - Gate/Readiness Observability Promotion
+
+Deliverables:
+
+- Promote showcase closure-mode/message contracts into robustness gate and readiness observability outputs.
+- Add explicit PASS signals for showcase strict-mode closure contracts.
+
+Exit criteria:
+
+- CI/readiness scripts report showcase closure-contract signals deterministically.
+
+## Stage 94 - Conformance Coverage for Strict Robust-Only Blocker Path
+
+Deliverables:
+
+- Extend robust conformance tests with strict robust-only (`AttemptResidualDegenerateClosure=0`) blocker expectations.
+- Pin local-repair telemetry invariants for closure-attempt disabled path.
+
+Exit criteria:
+
+- Known blocker path is covered for both closure-attempt enabled and disabled strict modes.
+
+## Stage 95 - Stage 86-95 Validation Sweep and Sign-Off
+
+Deliverables:
+
+- Run targeted validation sweep for showcase contracts, conformance blocker coverage, and gate/readiness scripts impacted in stages 86-94.
+- Record durations/outcomes and finalize stage statuses.
+
+Exit criteria:
+
+- Stage batch 86-95 is fully validated, documented, and signed off with deterministic evidence.
