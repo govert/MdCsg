@@ -1006,6 +1006,7 @@ Deliverables:
 Exit criteria:
 
 - Showcase startup behavior matches prior contracts for all supported modes.
+- Status: Completed (`Program.Main` now uses `ShowcaseCliOptions.Parse` for startup mode selection, sets runtime options from parsed contracts, and fails fast on invalid args before window bootstrap; validation: showcase build passed and `CliParser_*` slice passed (7/7, `179 ms`)).
 
 ## Stage 90 - Showcase Runtime Docs Alignment
 

@@ -10,34 +10,21 @@ static unsafe class Program
     [STAThread]
     static void Main(string[] args)
     {
-        bool screenshotMode = args.Length > 0 && args[0] == "--screenshot";
-        string? screenshotDir = screenshotMode && args.Length > 1 ? args[1] : null;
-        bool legacyCsgMode = Array.Exists(
-            args,
-            static a => string.Equals(a, "--legacy-csg", StringComparison.OrdinalIgnoreCase));
-        bool legacyFailoverMode = Array.Exists(
-            args,
-            static a => string.Equals(a, "--allow-legacy-failover", StringComparison.OrdinalIgnoreCase));
-        bool strictRobustOnlyMode = Array.Exists(
-            args,
-            static a => string.Equals(a, "--strict-robust-only", StringComparison.OrdinalIgnoreCase));
-        ShowcaseRuntimeOptions.UseLegacyCsg = legacyCsgMode;
-        ShowcaseRuntimeOptions.AllowLegacyFailover = legacyFailoverMode;
-        ShowcaseRuntimeOptions.UseClosureAttemptRobust = !strictRobustOnlyMode;
-        if (legacyCsgMode)
+        ShowcaseCliOptions cli;
+        try
         {
-            Console.WriteLine("[showcase] CSG mode: legacy (explicit opt-out)");
+            cli = ShowcaseCliOptions.Parse(args);
         }
-        else if (legacyFailoverMode)
+        catch (ArgumentException ex)
         {
-            Console.WriteLine(
-                $"[showcase] CSG mode: robust-strict (closureAttempt={(ShowcaseRuntimeOptions.UseClosureAttemptRobust ? 1 : 0)}) with explicit legacy failover");
+            Console.Error.WriteLine($"[showcase] invalid arguments: {ex.Message}");
+            Environment.ExitCode = 2;
+            return;
         }
-        else
-        {
-            Console.WriteLine(
-                $"[showcase] CSG mode: robust-strict (closureAttempt={(ShowcaseRuntimeOptions.UseClosureAttemptRobust ? 1 : 0)}, no automatic fallback)");
-        }
+        ShowcaseRuntimeOptions.UseLegacyCsg = cli.UseLegacyCsg;
+        ShowcaseRuntimeOptions.AllowLegacyFailover = cli.AllowLegacyFailover;
+        ShowcaseRuntimeOptions.UseClosureAttemptRobust = cli.UseClosureAttemptRobust;
+        Console.WriteLine(cli.ModeSummary);
 
         AppWindow.Create(1280, 720, "MdCsg Showcase - Loading...");
 
@@ -58,9 +45,9 @@ static unsafe class Program
         scenes.AddScene(new PointCloudScene(), renderer);
         scenes.AddScene(new FittingScene(), renderer);
 
-        if (screenshotMode)
+        if (cli.ScreenshotMode)
         {
-            var outDir = screenshotDir ?? Path.Combine(AppContext.BaseDirectory, "screenshots");
+            var outDir = cli.ScreenshotDir ?? Path.Combine(AppContext.BaseDirectory, "screenshots");
             Directory.CreateDirectory(outDir);
 
             for (int i = 0; i < 10; i++)
