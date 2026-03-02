@@ -863,4 +863,4 @@ Deliverables:
 Exit criteria:
 
 - Stage batch 70-78 is fully documented with passing validation for delivered contracts.
-- Status: Pending.
+- Status: Completed (release validation sweep passed: `ReconstructionReplayCorpusTests.CorpusManifest_AllCases_ReplayToExpectedReconstructionContracts` in `12m33s`; `RobustReadinessSnapshotTests.KnownBlockerCorpus_IsExplicitlyFailClosed` in `6m23s`; `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker` in `7m57s`; plus replay contract fix in `ReconstructionReplayCorpusTests` now enforces output-degenerate alignment on `deg-prune:phase=post` only, matching staged pipeline semantics).

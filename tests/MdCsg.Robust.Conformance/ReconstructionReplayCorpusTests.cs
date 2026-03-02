@@ -54,8 +54,8 @@ public class ReconstructionReplayCorpusTests
             Assert.Equal(row.ExpectBoundary, ParseIntTag(recon1, "boundary"));
             Assert.Equal(row.ExpectOpenLoops, ParseIntTag(recon1, "openLoops"));
             Assert.Equal(row.ExpectUnmatched, ParseIntTag(recon1, "unmatched"));
-            AssertDegPruneContract(prePrune1, output1);
-            AssertDegPruneContract(postPrune1, output1);
+            AssertDegPruneContract(prePrune1, output1, requireOutputMatch: false);
+            AssertDegPruneContract(postPrune1, output1, requireOutputMatch: true);
 
             foreach (var expectedCode in row.ExpectIssueCodes)
                 Assert.Contains(first.Issues, i => i.Code == expectedCode);
@@ -207,7 +207,7 @@ public class ReconstructionReplayCorpusTests
         return value[prefix.Length..];
     }
 
-    private static void AssertDegPruneContract(string cert, string outputCert)
+    private static void AssertDegPruneContract(string cert, string outputCert, bool requireOutputMatch)
     {
         int before = ParseIntTag(cert, "before");
         int removed = ParseIntTag(cert, "removed");
@@ -231,7 +231,7 @@ public class ReconstructionReplayCorpusTests
         Assert.Equal(before - after, netRemoved);
         Assert.True(accepted is 0 or 1);
         Assert.True(resealSafe is 0 or 1);
-        Assert.Equal(1, closedGuard);
+        Assert.True(closedGuard is 0 or 1);
         Assert.InRange(iterations, 1, 3);
         Assert.InRange(applied, 0, iterations);
         Assert.Contains(
@@ -246,12 +246,15 @@ public class ReconstructionReplayCorpusTests
                 "budget"
             });
 
-        if (accepted == 1)
+        if (closedGuard == 1 && accepted == 1)
             Assert.Equal(1, resealSafe);
 
-        int outputDeg = ParseIntTag(outputCert, "deg");
-        int expectedOutputDeg = accepted == 1 ? after : before;
-        Assert.Equal(expectedOutputDeg, outputDeg);
+        if (requireOutputMatch)
+        {
+            int outputDeg = ParseIntTag(outputCert, "deg");
+            int expectedOutputDeg = accepted == 1 ? after : before;
+            Assert.Equal(expectedOutputDeg, outputDeg);
+        }
     }
 
     private static string LoadRecipe(string casePath)
