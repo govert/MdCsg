@@ -1066,6 +1066,7 @@ Deliverables:
 Exit criteria:
 
 - Known blocker path is covered for both closure-attempt enabled and disabled strict modes.
+- Status: Completed (added `ChainedCsgSceneCase_Step3_StrictRobustOnly_RemainsPinnedFailClosedBlocker` with explicit `AttemptResidualDegenerateClosure=0` options and pinned `deg-local-repair:*` invariants (`closureAttempt=0`, no pair/triple/retri/exact escalation paths); focused validation passed: 1/1 in `6m04s`).
 
 ## Stage 95 - Stage 86-95 Validation Sweep and Sign-Off
 

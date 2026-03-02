@@ -12,6 +12,13 @@ public class RobustShowcaseParityTests
         Deterministic = true,
         UseRobustTriangulationKernel = true
     };
+    private static readonly RobustOperationOptions StrictRobustOnlyOpts = new()
+    {
+        Mode = RobustMode.Strict,
+        Deterministic = true,
+        UseRobustTriangulationKernel = true,
+        AttemptResidualDegenerateClosure = false
+    };
     private static readonly RobustOperationOptions StrictClosureAttemptOpts = new()
     {
         Mode = RobustMode.Strict,
@@ -286,6 +293,36 @@ public class RobustShowcaseParityTests
         string outputCert = GetStageCertificate(step3, "output:");
         Assert.StartsWith("output:fail;", outputCert, StringComparison.Ordinal);
         Assert.True(ParseIntTag(outputCert, "deg") > 0);
+        Assert.Equal(0, ParseIntTag(outputCert, "boundary"));
+        Assert.Equal(1, ParseIntTag(outputCert, "manifold"));
+
+        RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(step3.Diagnostics);
+    }
+
+    [Fact]
+    public void ChainedCsgSceneCase_Step3_StrictRobustOnly_RemainsPinnedFailClosedBlocker()
+    {
+        var step3 = RunStep3(StrictRobustOnlyOpts);
+        string localRepairCert = GetStageCertificate(step3, "deg-local-repair:");
+        Assert.Equal(0, ParseIntTag(localRepairCert, "closureAttempt"));
+        Assert.True(ParseIntTag(localRepairCert, "budget") >= 1);
+        Assert.Equal(0, ParseIntTag(localRepairCert, "pairTry"));
+        Assert.Equal(0, ParseIntTag(localRepairCert, "tripleTry"));
+        Assert.Equal(0, ParseIntTag(localRepairCert, "multiApplied"));
+        Assert.InRange(ParseIntTag(localRepairCert, "maxArity"), 0, 1);
+        Assert.Equal(0, ParseIntTag(localRepairCert, "colGuard"));
+        Assert.Equal(0, ParseIntTag(localRepairCert, "colReject"));
+        Assert.Equal(0, ParseIntTag(localRepairCert, "colExactCheck"));
+        Assert.Equal(0, ParseIntTag(localRepairCert, "colExactConfirm"));
+        Assert.Equal(0, ParseIntTag(localRepairCert, "retriTry"));
+        Assert.Equal(0, ParseIntTag(localRepairCert, "retriApplied"));
+
+        Assert.False(step3.Succeeded);
+        Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshHasDegenerateFaces);
+        Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);
+        Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotEdgeManifold);
+        string outputCert = GetStageCertificate(step3, "output:");
+        Assert.StartsWith("output:fail;", outputCert, StringComparison.Ordinal);
         Assert.Equal(0, ParseIntTag(outputCert, "boundary"));
         Assert.Equal(1, ParseIntTag(outputCert, "manifold"));
 
