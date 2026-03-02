@@ -24,5 +24,9 @@ public sealed class RobustOperationOptions
 
     public bool FailOnValidationError { get; init; } = true;
 
+    // Optional strict-mode closure attempt for known residual-degenerate blockers.
+    // Disabled by default to preserve current deterministic runtime profile.
+    public bool AttemptResidualDegenerateClosure { get; init; } = false;
+
     public NonManifoldInputPolicy NonManifoldInputPolicy { get; init; } = NonManifoldInputPolicy.Reject;
 }

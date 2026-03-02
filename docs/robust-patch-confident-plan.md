@@ -827,7 +827,7 @@ Deliverables:
 Exit criteria:
 
 - Either blocker resolved with strict success contracts, or unresolved state is explicitly re-pinned with updated evidence.
-- Status: Pending.
+- Status: Completed (added explicit closure-attempt mode `RobustOperationOptions.AttemptResidualDegenerateClosure` with expanded local-repair budget; blocker remains unresolved and is now pinned by `ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker`).
 
 ## Stage 76 - Blocker Ledger Migration
 

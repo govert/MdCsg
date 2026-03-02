@@ -12,6 +12,13 @@ public class RobustShowcaseParityTests
         Deterministic = true,
         UseRobustTriangulationKernel = true
     };
+    private static readonly RobustOperationOptions StrictClosureAttemptOpts = new()
+    {
+        Mode = RobustMode.Strict,
+        Deterministic = true,
+        UseRobustTriangulationKernel = true,
+        AttemptResidualDegenerateClosure = true
+    };
 
     [Fact]
     public void CsgOperationsSceneCases_StrictMode_StayClosed_AndUseZeroFallback()
@@ -220,6 +227,26 @@ public class RobustShowcaseParityTests
         }
     }
 
+    [Fact]
+    public void ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker()
+    {
+        var step3 = RunStep3(StrictClosureAttemptOpts);
+        string localRepairCert = GetStageCertificate(step3, "deg-local-repair:");
+        Assert.Equal(1, ParseIntTag(localRepairCert, "closureAttempt"));
+        Assert.True(ParseIntTag(localRepairCert, "budget") >= 2);
+        Assert.False(step3.Succeeded);
+        Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshHasDegenerateFaces);
+        Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);
+        Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotEdgeManifold);
+        string outputCert = GetStageCertificate(step3, "output:");
+        Assert.StartsWith("output:fail;", outputCert, StringComparison.Ordinal);
+        Assert.True(ParseIntTag(outputCert, "deg") > 0);
+        Assert.Equal(0, ParseIntTag(outputCert, "boundary"));
+        Assert.Equal(1, ParseIntTag(outputCert, "manifold"));
+
+        RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(step3.Diagnostics);
+    }
+
     private static void AssertRobustClosedWithoutFallback(RobustCsgResult result)
     {
         Assert.True(result.Succeeded, BuildIssueMessage(result));
@@ -247,23 +274,24 @@ public class RobustShowcaseParityTests
         return $"{issues} | {fallback}";
     }
 
-    private static RobustCsgResult RunStep3()
+    private static RobustCsgResult RunStep3(RobustOperationOptions? opts = null)
     {
         var y = new Vec3(0, 1, 0);
         var sphere = Primitives.Sphere(Vec3.Zero, 1.3, 3);
         var box = Primitives.Cube(Vec3.Zero, 1.8);
         var cylX = Primitives.Cylinder(new Vec3(-1.5, 0, 0), new Vec3(1, 0, 0), 0.5, 3.0);
         var cylY = Primitives.Cylinder(new Vec3(0, -1.5, 0), y, 0.5, 3.0);
+        var effectiveOpts = opts ?? StrictRobustOpts;
 
-        var step1 = RobustCsg.Intersect(sphere, box, StrictRobustOpts);
+        var step1 = RobustCsg.Intersect(sphere, box, effectiveOpts);
         AssertRobustClosedWithoutFallback(step1);
         var step1Solid = new Solid(step1.Result!.Mesh);
 
-        var step2 = RobustCsg.Difference(step1Solid, cylX, StrictRobustOpts);
+        var step2 = RobustCsg.Difference(step1Solid, cylX, effectiveOpts);
         AssertRobustClosedWithoutFallback(step2);
         var step2Solid = new Solid(step2.Result!.Mesh);
 
-        return RobustCsg.Difference(step2Solid, cylY, StrictRobustOpts);
+        return RobustCsg.Difference(step2Solid, cylY, effectiveOpts);
     }
 
     private static string GetStageCertificate(RobustCsgResult result, string prefix)

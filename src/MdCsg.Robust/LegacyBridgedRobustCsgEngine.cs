@@ -491,10 +491,14 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             out reconstructionSnapDegenerateRejectCount,
             out reconstructionMaxSnapDistance,
             out reconstructionIncidencePreserved);
+        int localRepairBudget = opts.AttemptResidualDegenerateClosure
+            ? LocalDegenerateRepairIterationsClosureAttempt
+            : LocalDegenerateRepairIterationsDefault;
         result = TryLocalDegenerateNeighborhoodRepair(
             result,
             csgOptions.WeldTolerance,
             result.AuthoritativeBoundary,
+            localRepairBudget,
             out int localRepairAuthorityGate,
             out int localRepairDegBefore,
             out int localRepairDegAfter,
@@ -512,6 +516,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"removed={localRepairRemovedFaces};"
             + $"iters={localRepairIterations};"
             + $"applied={localRepairAppliedIterations};"
+            + $"closureAttempt={(opts.AttemptResidualDegenerateClosure ? 1 : 0)};"
+            + $"budget={localRepairBudget};"
             + $"term={localRepairTermination}");
         result = PruneDegenerateOutputFaces(
             result,
@@ -1565,12 +1571,14 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             unmatchedAfter);
     }
 
-    private const int MaxLocalDegenerateRepairIterations = 2;
+    private const int LocalDegenerateRepairIterationsDefault = 2;
+    private const int LocalDegenerateRepairIterationsClosureAttempt = 24;
 
     private static CsgResult TryLocalDegenerateNeighborhoodRepair(
         CsgResult result,
         double weldTolerance,
         ReconstructionBoundaryContract? authoritativeBoundary,
+        int iterationBudget,
         out int authorityGate,
         out int beforeDegenerate,
         out int afterDegenerate,
@@ -1597,7 +1605,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         }
 
         var current = result;
-        for (int iter = 0; iter < MaxLocalDegenerateRepairIterations; iter++)
+        int maxIterations = System.Math.Max(1, iterationBudget);
+        for (int iter = 0; iter < maxIterations; iter++)
         {
             iterations++;
             if (!TryRemoveOneDegenerateFace(
@@ -1624,7 +1633,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 return current;
             }
 
-            if (appliedIterations >= MaxLocalDegenerateRepairIterations)
+            if (appliedIterations >= maxIterations)
             {
                 terminationReason = "budget";
                 return current;
