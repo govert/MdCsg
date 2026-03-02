@@ -1054,6 +1054,7 @@ Deliverables:
 Exit criteria:
 
 - CI/readiness scripts report showcase closure-contract signals deterministically.
+- Status: Completed (`run-robustness-gate.ps1` now emits `ROBUST_GATE_SHOWCASE_CLOSURE_MODE_CONTRACT=PASS` and `ROBUST_GATE_SHOWCASE_ISSUE_SUMMARY_CONTRACT=PASS`; `run-robust-readiness-report.ps1` now emits matching `READINESS_*` showcase contract signals).
 
 ## Stage 94 - Conformance Coverage for Strict Robust-Only Blocker Path
 
