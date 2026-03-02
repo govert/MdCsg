@@ -1018,6 +1018,7 @@ Deliverables:
 Exit criteria:
 
 - User-facing run docs match executable/runtime behavior exactly.
+- Status: Completed (`README.md` now documents showcase robust runtime mode matrix (`default`, `--strict-robust-only`, `--allow-legacy-failover`, `--legacy-csg`, `--screenshot`) and parser-enforced flag conflict constraints).
 
 ## Stage 91 - Deterministic Showcase Issue Summary Contracts
 

@@ -142,6 +142,32 @@ pwsh ./tools/ci/run-robustness-gate.ps1        # Robustness rescue-bar gate (sam
 dotnet run -c Release --project src/MdCsg.Showcase/MdCsg.Showcase.csproj
 ```
 
+### Showcase Runtime Modes
+
+The showcase defaults to strict robust CSG mode and does not automatically fall back to legacy CSG.
+
+```bash
+# Default: robust strict, closure-attempt enabled, no fallback
+dotnet run -c Release --project src/MdCsg.Showcase/MdCsg.Showcase.csproj
+
+# Strict robust-only: disable closure-attempt heuristics
+dotnet run -c Release --project src/MdCsg.Showcase/MdCsg.Showcase.csproj -- --strict-robust-only
+
+# Strict robust with explicit legacy failover opt-in
+dotnet run -c Release --project src/MdCsg.Showcase/MdCsg.Showcase.csproj -- --allow-legacy-failover
+
+# Full legacy mode opt-out from robust path
+dotnet run -c Release --project src/MdCsg.Showcase/MdCsg.Showcase.csproj -- --legacy-csg
+
+# Screenshot mode (optional output directory)
+dotnet run -c Release --project src/MdCsg.Showcase/MdCsg.Showcase.csproj -- --screenshot screenshots
+```
+
+Flag constraints are validated at startup:
+
+- `--legacy-csg` cannot be combined with `--allow-legacy-failover`.
+- `--legacy-csg` cannot be combined with `--strict-robust-only`.
+
 ## Benchmarks
 
 ```bash
