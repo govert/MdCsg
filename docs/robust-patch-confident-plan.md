@@ -890,3 +890,16 @@ Exit criteria:
 - Strict default blocker path remains unchanged (`pairTry=0`, `tripleTry=0`, `maxArity<=1` in strict known-blocker conformance).
 - Closure-attempt path can exercise bounded pair/triple search while preserving strict fail-closed output contracts and deterministic certificates.
 - Status: Completed (`LegacyBridgedRobustCsgEngine` now adds bounded closure-attempt triple-candidate search (`LocalRepairPairCandidateBudget=128`, `LocalRepairTripleCandidateBudget=192`) with deterministic vertex-connected candidate ordering; `deg-local-repair:*` certificate schema extended with `tripleTry` and `maxArity`; release validation passed for `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker` (`8m12s`), `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ReproducesDegenerateOutputDefect_WithZeroFallback` (`6m57s`), and `RobustReadinessSnapshotTests.KnownBlockerCorpus_IsExplicitlyFailClosed` (`6m36s`)).
+
+## Stage 81 - Residual Collinear Forensics v2
+
+Deliverables:
+
+- Extend `deg-residual:*` certificates with deterministic collinear-neighborhood forensics (`collinearOnly`, `colAdjPairs`, `colVertSpan`, `colAdjHash`).
+- Pin conformance assertions so blocker replay captures not only taxonomy totals but collinear structural fingerprints.
+
+Exit criteria:
+
+- Known blocker outputs emit deterministic collinear forensics alongside existing taxonomy hashes/samples.
+- Showcase/readiness conformance enforces the new certificate tags and invariants.
+- Status: Completed (`BuildResidualDegenerateCertificate` now emits collinear-structure tags (`collinearOnly`, `colAdjPairs`, `colVertSpan`, `colAdjHash`) derived from residual-face adjacency/vertex spans; release validation passed for `RobustReadinessSnapshotTests.KnownBlockerCorpus_IsExplicitlyFailClosed` (`6m52s`) and `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker` (`7m54s`)).

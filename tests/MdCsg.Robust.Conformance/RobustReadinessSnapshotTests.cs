@@ -184,8 +184,17 @@ public class RobustReadinessSnapshotTests
         int taxZeroEdge = ParseIntTag(residualCert, "taxZeroEdge");
         int taxDupPos = ParseIntTag(residualCert, "taxDupPos");
         int taxCollinear = ParseIntTag(residualCert, "taxCollinear");
+        int collinearOnly = ParseIntTag(residualCert, "collinearOnly");
+        int colAdjPairs = ParseIntTag(residualCert, "colAdjPairs");
+        int colVertSpan = ParseIntTag(residualCert, "colVertSpan");
         Assert.Equal(outputDeg, taxDupVid + taxZeroEdge + taxDupPos + taxCollinear);
+        Assert.True(collinearOnly is 0 or 1);
+        Assert.True(colAdjPairs >= 0);
+        Assert.True(colVertSpan >= 0);
+        if (taxCollinear == outputDeg && outputDeg > 0)
+            Assert.Equal(1, collinearOnly);
         Assert.Contains("taxHash=", residualCert, StringComparison.Ordinal);
+        Assert.Contains("colAdjHash=", residualCert, StringComparison.Ordinal);
         Assert.Contains("sample=", residualCert, StringComparison.Ordinal);
         int expectedOutputDeg = postAccepted == 1
             ? ParseIntTag(postPrune, "after")

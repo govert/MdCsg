@@ -970,6 +970,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int taxonomyZeroEdge = 0;
         int taxonomyDupPos = 0;
         int taxonomyCollinear = 0;
+        var collinearFaces = new List<(int FaceId, int V0, int V1, int V2)>(16);
         var samples = new List<string>(6);
 
         foreach (var face in mesh.Faces)
@@ -1003,6 +1004,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                     break;
                 default:
                     taxonomyCollinear++;
+                    collinearFaces.Add((face.Id, verts[0].Id, verts[1].Id, verts[2].Id));
                     break;
             }
             MixHash(ref taxonomyHash, (uint)classification);
@@ -1015,6 +1017,39 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         }
 
         int countMatch = degenerateCount == expectedCount ? 1 : 0;
+        int collinearOnly = degenerateCount > 0 && taxonomyCollinear == degenerateCount ? 1 : 0;
+        int colAdjPairs = 0;
+        ulong colAdjHash = 1469598103934665603UL;
+        var colVertices = new HashSet<int>();
+        foreach (var collinear in collinearFaces)
+        {
+            colVertices.Add(collinear.V0);
+            colVertices.Add(collinear.V1);
+            colVertices.Add(collinear.V2);
+        }
+
+        for (int i = 0; i < collinearFaces.Count - 1; i++)
+        {
+            var aCol = collinearFaces[i];
+            for (int j = i + 1; j < collinearFaces.Count; j++)
+            {
+                var bCol = collinearFaces[j];
+                bool shared =
+                    aCol.V0 == bCol.V0 || aCol.V0 == bCol.V1 || aCol.V0 == bCol.V2
+                    || aCol.V1 == bCol.V0 || aCol.V1 == bCol.V1 || aCol.V1 == bCol.V2
+                    || aCol.V2 == bCol.V0 || aCol.V2 == bCol.V1 || aCol.V2 == bCol.V2;
+                if (!shared)
+                    continue;
+
+                colAdjPairs++;
+                uint minFace = unchecked((uint)System.Math.Min(aCol.FaceId, bCol.FaceId));
+                uint maxFace = unchecked((uint)System.Math.Max(aCol.FaceId, bCol.FaceId));
+                MixHash(ref colAdjHash, minFace);
+                MixHash(ref colAdjHash, maxFace);
+            }
+        }
+
+        int colVertSpan = colVertices.Count;
         string sample = samples.Count == 0
             ? "<none>"
             : string.Join("|", samples);
@@ -1031,6 +1066,10 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"taxZeroEdge={taxonomyZeroEdge};"
             + $"taxDupPos={taxonomyDupPos};"
             + $"taxCollinear={taxonomyCollinear};"
+            + $"collinearOnly={collinearOnly};"
+            + $"colAdjPairs={colAdjPairs};"
+            + $"colVertSpan={colVertSpan};"
+            + $"colAdjHash={colAdjHash:x16};"
             + $"taxHash={taxonomyHash:x16};"
             + $"sample={sample}";
     }
