@@ -942,3 +942,16 @@ Exit criteria:
 - Strict default blocker path remains unchanged (`retriTry=0`, `retriApplied=0`).
 - Closure-attempt path includes deterministic retriangulation attempt accounting while preserving fail-closed contracts and deterministic outputs.
 - Status: Completed (`TryRemoveOneDegenerateFace` now includes bounded local retriangulation attempts (`LocalRepairRetriangulationBudget=96`) via deterministic shared-edge pair diagonal-swap candidates before pair/triple face-removal search; `deg-local-repair:*` certificates extended with `retriTry`/`retriApplied`; release validation passed for `RobustReadinessSnapshotTests.KnownBlockerCorpus_IsExplicitlyFailClosed` (`7m19s`) and `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker` (`8m26s`)).
+
+## Stage 85 - Blocker Re-Evaluation and Gate Promotion
+
+Deliverables:
+
+- Re-evaluate pinned blocker signature/ledger against current robust conformance outcomes.
+- Promote Stage 81-84 contract signals into gate/readiness outputs and stage ownership metadata.
+
+Exit criteria:
+
+- Blocker ledger/fuzz manifest/signature conformance remain deterministic and in sync.
+- Gate/readiness scripts emit explicit pass signals for collinear-guard and local-retriangulation contracts.
+- Status: Completed (replay/ledger validation passed for `MinimizedReplayManifest_ReplaysToPinnedSignatures`, `LedgerSchema_IsValid_AndDeterministic`, and `FuzzManifestSignatures_ArePresentInLedger` (`7m38s` total); blocker remains unresolved and pinned with same signature class, ledger ownership moved to stage 85 and expected certificate list now includes `deg-local-repair:scope=post-reconstruct;`; robustness gate/readiness scripts now emit `*_COLLINEAR_GUARD_CONTRACT=PASS` and `*_LOCAL_RETRIANGULATION_CONTRACT=PASS` signals).

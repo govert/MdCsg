@@ -13,9 +13,10 @@
       "expectedCertificates": [
         "reconstruction:pass;",
         "output:fail;",
-        "deg-prune:phase=post;"
+        "deg-prune:phase=post;",
+        "deg-local-repair:scope=post-reconstruct;"
       ],
-      "owningStage": 76
+      "owningStage": 85
     }
   ]
 }
