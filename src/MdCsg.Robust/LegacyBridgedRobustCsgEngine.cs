@@ -515,6 +515,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             out int localRepairCollinearReject,
             out int localRepairCollinearExactCheck,
             out int localRepairCollinearExactConfirm,
+            out int localRepairRetriTry,
+            out int localRepairRetriApplied,
             out int localRepairIterations,
             out int localRepairAppliedIterations,
             out string localRepairTermination);
@@ -534,6 +536,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"colReject={localRepairCollinearReject};"
             + $"colExactCheck={localRepairCollinearExactCheck};"
             + $"colExactConfirm={localRepairCollinearExactConfirm};"
+            + $"retriTry={localRepairRetriTry};"
+            + $"retriApplied={localRepairRetriApplied};"
             + $"iters={localRepairIterations};"
             + $"applied={localRepairAppliedIterations};"
             + $"closureAttempt={(opts.AttemptResidualDegenerateClosure ? 1 : 0)};"
@@ -1634,6 +1638,7 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
     private const int LocalDegenerateRepairIterationsClosureAttempt = 24;
     private const int LocalRepairPairCandidateBudget = 128;
     private const int LocalRepairTripleCandidateBudget = 192;
+    private const int LocalRepairRetriangulationBudget = 96;
     private readonly record struct DegenerateFaceDescriptor(int FaceId, int V0, int V1, int V2);
     private readonly record struct DegenerateClassCounts(
         int Total,
@@ -1662,6 +1667,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         out int collinearReject,
         out int collinearExactCheck,
         out int collinearExactConfirm,
+        out int retriangulationAttempts,
+        out int retriangulationApplied,
         out int iterations,
         out int appliedIterations,
         out string terminationReason)
@@ -1680,6 +1687,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         collinearReject = 0;
         collinearExactCheck = 0;
         collinearExactConfirm = 0;
+        retriangulationAttempts = 0;
+        retriangulationApplied = 0;
         iterations = 0;
         appliedIterations = 0;
         terminationReason = authorityGate == 1 ? "none" : "authority-gated";
@@ -1710,6 +1719,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 out int collinearRejectThisIteration,
                 out int collinearExactCheckThisIteration,
                 out int collinearExactConfirmThisIteration,
+                out int retriTryThisIteration,
+                out int retriAppliedThisIteration,
                 out int afterThisIteration))
             {
                 attemptedFaces += attemptedThisIteration;
@@ -1720,6 +1731,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
                 collinearReject += collinearRejectThisIteration;
                 collinearExactCheck += collinearExactCheckThisIteration;
                 collinearExactConfirm += collinearExactConfirmThisIteration;
+                retriangulationAttempts += retriTryThisIteration;
+                retriangulationApplied += retriAppliedThisIteration;
                 terminationReason = "stalled";
                 break;
             }
@@ -1732,6 +1745,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             collinearReject += collinearRejectThisIteration;
             collinearExactCheck += collinearExactCheckThisIteration;
             collinearExactConfirm += collinearExactConfirmThisIteration;
+            retriangulationAttempts += retriTryThisIteration;
+            retriangulationApplied += retriAppliedThisIteration;
             current = WithMesh(current, repairedMesh);
             removedFaces++;
             if (removedFaceArity > maxRemovedArity)
@@ -1774,6 +1789,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         out int collinearReject,
         out int collinearExactCheck,
         out int collinearExactConfirm,
+        out int retriangulationAttempts,
+        out int retriangulationApplied,
         out int afterDegenerate)
     {
         repairedMesh = mesh;
@@ -1786,6 +1803,8 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         int collinearRejectCount = 0;
         int collinearExactCheckCount = 0;
         int collinearExactConfirmCount = 0;
+        retriangulationAttempts = 0;
+        retriangulationApplied = 0;
         var beforeClasses = CountDegenerateClassesNoTelemetry(mesh, requireExactCollinear: false, out _, out _);
         int beforeDegenerate = beforeClasses.Total;
         afterDegenerate = beforeDegenerate;
@@ -1841,28 +1860,11 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             return false;
         }
 
-        bool TryCandidate(int[] removeFaceIds, out HalfEdgeMesh candidateMesh, out int candidateDegenerate)
+        bool TryEvaluateTriangles(
+            List<(int I0, int I1, int I2)> triangles,
+            out HalfEdgeMesh candidateMesh,
+            out int candidateDegenerate)
         {
-            var triangles = new List<(int I0, int I1, int I2)>(mesh.Faces.Count - removeFaceIds.Length);
-            foreach (var face in mesh.Faces)
-            {
-                bool remove = false;
-                for (int i = 0; i < removeFaceIds.Length; i++)
-                {
-                    if (face.Id == removeFaceIds[i])
-                    {
-                        remove = true;
-                        break;
-                    }
-                }
-
-                if (remove)
-                    continue;
-
-                var verts = face.GetVertices();
-                triangles.Add((verts[0].Id, verts[1].Id, verts[2].Id));
-            }
-
             if (triangles.Count == 0)
             {
                 candidateMesh = mesh;
@@ -1902,6 +1904,74 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             return accepted;
         }
 
+        bool TryCandidate(int[] removeFaceIds, out HalfEdgeMesh candidateMesh, out int candidateDegenerate)
+        {
+            var triangles = new List<(int I0, int I1, int I2)>(mesh.Faces.Count - removeFaceIds.Length);
+            foreach (var face in mesh.Faces)
+            {
+                bool remove = false;
+                for (int i = 0; i < removeFaceIds.Length; i++)
+                {
+                    if (face.Id == removeFaceIds[i])
+                    {
+                        remove = true;
+                        break;
+                    }
+                }
+
+                if (remove)
+                    continue;
+
+                var verts = face.GetVertices();
+                triangles.Add((verts[0].Id, verts[1].Id, verts[2].Id));
+            }
+
+            return TryEvaluateTriangles(triangles, out candidateMesh, out candidateDegenerate);
+        }
+
+        bool TryRetriangulatedCandidate(
+            DegenerateFaceDescriptor faceA,
+            DegenerateFaceDescriptor faceB,
+            out HalfEdgeMesh candidateMesh,
+            out int candidateDegenerate)
+        {
+            if (!TryExtractSharedEdge(faceA, faceB, out int shared0, out int shared1, out int otherA, out int otherB))
+            {
+                candidateMesh = mesh;
+                candidateDegenerate = beforeDegenerate;
+                return false;
+            }
+
+            var removeFaceIds = new[] { faceA.FaceId, faceB.FaceId };
+            var baseTriangles = new List<(int I0, int I1, int I2)>(mesh.Faces.Count);
+            foreach (var face in mesh.Faces)
+            {
+                if (face.Id == removeFaceIds[0] || face.Id == removeFaceIds[1])
+                    continue;
+
+                var verts = face.GetVertices();
+                baseTriangles.Add((verts[0].Id, verts[1].Id, verts[2].Id));
+            }
+
+            var optionA = new List<(int I0, int I1, int I2)>(baseTriangles.Count + 2);
+            optionA.AddRange(baseTriangles);
+            optionA.Add((shared0, otherA, otherB));
+            optionA.Add((shared1, otherB, otherA));
+            if (TryEvaluateTriangles(optionA, out candidateMesh, out candidateDegenerate))
+                return true;
+
+            var optionB = new List<(int I0, int I1, int I2)>(baseTriangles.Count + 2);
+            optionB.AddRange(baseTriangles);
+            optionB.Add((shared1, otherA, otherB));
+            optionB.Add((shared0, otherB, otherA));
+            if (TryEvaluateTriangles(optionB, out candidateMesh, out candidateDegenerate))
+                return true;
+
+            candidateMesh = mesh;
+            candidateDegenerate = beforeDegenerate;
+            return false;
+        }
+
         foreach (var candidateFace in degenerateFaces)
         {
             attemptedFaces++;
@@ -1916,6 +1986,45 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             collinearExactCheck = collinearExactCheckCount;
             collinearExactConfirm = collinearExactConfirmCount;
             return true;
+        }
+
+        if (allowPairCandidates && degenerateFaces.Length >= 2)
+        {
+            int retriBudget = LocalRepairRetriangulationBudget;
+            for (int i = 0; i < degenerateFaces.Length - 1; i++)
+            {
+                for (int j = i + 1; j < degenerateFaces.Length; j++)
+                {
+                    if (!ShareAnyVertex(degenerateFaces[i], degenerateFaces[j]))
+                        continue;
+
+                    attemptedFaces++;
+                    retriangulationAttempts++;
+                    if (retriangulationAttempts > retriBudget)
+                        break;
+
+                    if (!TryRetriangulatedCandidate(
+                        degenerateFaces[i],
+                        degenerateFaces[j],
+                        out var candidateMesh,
+                        out int candidateDegenerate))
+                    {
+                        continue;
+                    }
+
+                    repairedMesh = candidateMesh;
+                    removedFaceArity = 2;
+                    afterDegenerate = candidateDegenerate;
+                    retriangulationApplied++;
+                    collinearReject = collinearRejectCount;
+                    collinearExactCheck = collinearExactCheckCount;
+                    collinearExactConfirm = collinearExactConfirmCount;
+                    return true;
+                }
+
+                if (retriangulationAttempts > retriBudget)
+                    break;
+            }
         }
 
         if (!allowPairCandidates || degenerateFaces.Length < 2)
@@ -2042,6 +2151,63 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
         bool nodeB = ab || bc;
         bool nodeC = ac || bc;
         return nodeA && nodeB && nodeC;
+    }
+
+    private static bool TryExtractSharedEdge(
+        DegenerateFaceDescriptor a,
+        DegenerateFaceDescriptor b,
+        out int shared0,
+        out int shared1,
+        out int otherA,
+        out int otherB)
+    {
+        shared0 = -1;
+        shared1 = -1;
+        otherA = -1;
+        otherB = -1;
+
+        Span<int> av = stackalloc int[3] { a.V0, a.V1, a.V2 };
+        Span<int> bv = stackalloc int[3] { b.V0, b.V1, b.V2 };
+        int sharedCount = 0;
+        foreach (int va in av)
+        {
+            bool has = false;
+            foreach (int vb in bv)
+            {
+                if (va == vb)
+                {
+                    has = true;
+                    break;
+                }
+            }
+
+            if (has)
+            {
+                if (sharedCount == 0)
+                    shared0 = va;
+                else if (sharedCount == 1)
+                    shared1 = va;
+                sharedCount++;
+            }
+            else
+            {
+                otherA = va;
+            }
+        }
+
+        foreach (int vb in bv)
+        {
+            if (vb != shared0 && vb != shared1)
+            {
+                otherB = vb;
+                break;
+            }
+        }
+
+        return sharedCount == 2
+            && otherA >= 0
+            && otherB >= 0
+            && otherA != otherB;
     }
 
     private static int CountDegenerateFacesNoTelemetry(HalfEdgeMesh mesh)

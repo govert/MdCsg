@@ -929,3 +929,16 @@ Exit criteria:
 - Strict default blocker path remains unchanged (`colExactCheck=0`, `colExactConfirm=0`).
 - Closure-attempt path reports non-zero exact-check activity when collinear guard is active, with deterministic counter contracts.
 - Status: Completed (`CountDegenerateClassesNoTelemetry` now supports exact 3D collinearity confirmation via rational cross-component checks (`IsDegenerateTriangleExact3D`) when collinear-guard policy is active; `deg-local-repair:*` certificates extended with `colExactCheck`/`colExactConfirm`; release validation passed for `RobustReadinessSnapshotTests.KnownBlockerCorpus_IsExplicitlyFailClosed` (`5m58s`) and `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker` (`7m20s`)).
+
+## Stage 84 - Deterministic Local Retriangulation Kernel
+
+Deliverables:
+
+- Add deterministic local retriangulation attempts (edge-shared degenerate pair diagonal swap) before destructive multi-face removals.
+- Emit explicit local-repair retriangulation telemetry (`retriTry`, `retriApplied`) in stage certificates.
+
+Exit criteria:
+
+- Strict default blocker path remains unchanged (`retriTry=0`, `retriApplied=0`).
+- Closure-attempt path includes deterministic retriangulation attempt accounting while preserving fail-closed contracts and deterministic outputs.
+- Status: Completed (`TryRemoveOneDegenerateFace` now includes bounded local retriangulation attempts (`LocalRepairRetriangulationBudget=96`) via deterministic shared-edge pair diagonal-swap candidates before pair/triple face-removal search; `deg-local-repair:*` certificates extended with `retriTry`/`retriApplied`; release validation passed for `RobustReadinessSnapshotTests.KnownBlockerCorpus_IsExplicitlyFailClosed` (`7m19s`) and `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker` (`8m26s`)).
