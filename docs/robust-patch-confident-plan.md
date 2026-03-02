@@ -980,8 +980,9 @@ Deliverables:
 
 Exit criteria:
 
-- Program startup mode handling is parser-driven and validated.
-- Contract tests can evaluate mode selection without creating a D3D window.
+- Parser enforces deterministic mode validation before showcase runtime bootstrap.
+- Parser exposes a stable mode-summary contract consumable by startup logging and tests.
+- Status: Completed (added `ShowcaseCliOptions.Parse` with deterministic conflict checks for unsupported flag combinations and stable `ModeSummary` output contract).
 
 ## Stage 88 - Parser Contract Test Matrix
 
