@@ -150,11 +150,17 @@ public class RobustReadinessSnapshotTests
         int localRepairAfter = ParseIntTag(localRepairCert, "after");
         int localRepairAttempted = ParseIntTag(localRepairCert, "attempted");
         int localRepairRemoved = ParseIntTag(localRepairCert, "removed");
+        int localRepairSingleTry = ParseIntTag(localRepairCert, "singleTry");
+        int localRepairPairTry = ParseIntTag(localRepairCert, "pairTry");
+        int localRepairMultiApplied = ParseIntTag(localRepairCert, "multiApplied");
         int localRepairIters = ParseIntTag(localRepairCert, "iters");
         int localRepairApplied = ParseIntTag(localRepairCert, "applied");
         Assert.True(localRepairGate is 0 or 1);
         Assert.True(localRepairBefore >= localRepairAfter);
         Assert.True(localRepairAttempted >= localRepairRemoved);
+        Assert.True(localRepairSingleTry >= 0);
+        Assert.Equal(0, localRepairPairTry);
+        Assert.Equal(0, localRepairMultiApplied);
         Assert.True(localRepairRemoved >= 0);
         Assert.True(localRepairApplied >= 0);
         Assert.True(localRepairIters >= localRepairApplied);

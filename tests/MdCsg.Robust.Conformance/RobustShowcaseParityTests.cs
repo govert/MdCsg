@@ -176,11 +176,17 @@ public class RobustShowcaseParityTests
         int localRepairAfter = ParseIntTag(localRepairCert, "after");
         int localRepairAttempted = ParseIntTag(localRepairCert, "attempted");
         int localRepairRemoved = ParseIntTag(localRepairCert, "removed");
+        int localRepairSingleTry = ParseIntTag(localRepairCert, "singleTry");
+        int localRepairPairTry = ParseIntTag(localRepairCert, "pairTry");
+        int localRepairMultiApplied = ParseIntTag(localRepairCert, "multiApplied");
         int localRepairIters = ParseIntTag(localRepairCert, "iters");
         int localRepairApplied = ParseIntTag(localRepairCert, "applied");
         Assert.True(localRepairGate is 0 or 1);
         Assert.True(localRepairBefore >= localRepairAfter);
         Assert.True(localRepairAttempted >= localRepairRemoved);
+        Assert.True(localRepairSingleTry >= 0);
+        Assert.Equal(0, localRepairPairTry);
+        Assert.Equal(0, localRepairMultiApplied);
         Assert.True(localRepairRemoved >= 0);
         Assert.True(localRepairApplied >= 0);
         Assert.True(localRepairIters >= localRepairApplied);
@@ -234,6 +240,9 @@ public class RobustShowcaseParityTests
         string localRepairCert = GetStageCertificate(step3, "deg-local-repair:");
         Assert.Equal(1, ParseIntTag(localRepairCert, "closureAttempt"));
         Assert.True(ParseIntTag(localRepairCert, "budget") >= 2);
+        Assert.True(ParseIntTag(localRepairCert, "singleTry") >= 0);
+        Assert.True(ParseIntTag(localRepairCert, "pairTry") >= 0);
+        Assert.True(ParseIntTag(localRepairCert, "multiApplied") >= 0);
         Assert.False(step3.Succeeded);
         Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshHasDegenerateFaces);
         Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);

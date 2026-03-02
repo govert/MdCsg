@@ -864,3 +864,16 @@ Exit criteria:
 
 - Stage batch 70-78 is fully documented with passing validation for delivered contracts.
 - Status: Completed (release validation sweep passed: `ReconstructionReplayCorpusTests.CorpusManifest_AllCases_ReplayToExpectedReconstructionContracts` in `12m33s`; `RobustReadinessSnapshotTests.KnownBlockerCorpus_IsExplicitlyFailClosed` in `6m23s`; `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker` in `7m57s`; plus replay contract fix in `ReconstructionReplayCorpusTests` now enforces output-degenerate alignment on `deg-prune:phase=post` only, matching staged pipeline semantics).
+
+## Stage 79 - Closure-Attempt Pair-Candidate Local Repair
+
+Deliverables:
+
+- Extend `deg-local-repair` search under closure-attempt mode to include deterministic local pair-face removal candidates (single-face search remains first).
+- Emit deterministic search telemetry in `deg-local-repair:*` certificates (`singleTry`, `pairTry`, `multiApplied`) to make closure-attempt search behavior auditable.
+
+Exit criteria:
+
+- Strict default blocker path remains unchanged (`pairTry=0`, `multiApplied=0` in strict known-blocker conformance).
+- Closure-attempt path emits the new search telemetry without relaxing fail-closed output contracts.
+- Status: Completed (`LegacyBridgedRobustCsgEngine` now allows pair-candidate local repair attempts only when `AttemptResidualDegenerateClosure=1`; `deg-local-repair:*` certificate schema extended with `singleTry`, `pairTry`, `multiApplied`; release validation passed for `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker` (`6m55s`), `RobustShowcaseParityTests.ChainedCsgSceneCase_Step3_ReproducesDegenerateOutputDefect_WithZeroFallback` (`6m49s`), and `RobustReadinessSnapshotTests.KnownBlockerCorpus_IsExplicitlyFailClosed` (`6m22s`)).
