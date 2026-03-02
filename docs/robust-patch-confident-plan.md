@@ -507,7 +507,7 @@ Deliverables:
 Exit criteria:
 
 - Step-3 blocker reproduces deterministically with closed/manifold topology preserved and residual degenerate faces as the sole strict failure class.
-- Status: Completed (`FUZZ-BLOCKER-0001` signature now pins `issues=OutputMeshHasDegenerateFaces|StageInvariantViolation;boundary=0;openLoops=0;unmatched=0` with `reconstruction:pass;` + `output:fail;` contracts).
+- Status: Completed (`FUZZ-BLOCKER-0001` signature now pins `issues=OutputMeshHasDegenerateFaces|StageInvariantViolation;boundary=0;openLoops=0;unmatched=0;deg=3;tax=collinear` with `reconstruction:pass;` + `output:fail;` contracts).
 
 ## Stage 59 - Lock Degenerate-Repair Baseline Contracts
 
@@ -839,7 +839,7 @@ Deliverables:
 Exit criteria:
 
 - Ledger matches actual blocker classes and ownership stages.
-- Status: Pending.
+- Status: Completed (fuzz blocker signatures now include residual taxonomy shape (`deg`, dominant `tax`); `FUZZ-BLOCKER-0001` manifest/ledger migrated to `issues=...;boundary=0;openLoops=0;unmatched=0;deg=3;tax=collinear` with owning stage 76).
 
 ## Stage 77 - Gate and Readiness Promotion
 

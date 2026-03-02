@@ -284,10 +284,39 @@ public class RobustFuzzEscalationTests
         string reconstruction = result.Diagnostics.StageInvariantCertificates
             .LastOrDefault(static c => c.StartsWith("reconstruction:", StringComparison.Ordinal))
             ?? string.Empty;
+        string output = result.Diagnostics.StageInvariantCertificates
+            .LastOrDefault(static c => c.StartsWith("output:", StringComparison.Ordinal))
+            ?? string.Empty;
+        string residual = result.Diagnostics.StageInvariantCertificates
+            .LastOrDefault(static c => c.StartsWith("deg-residual:", StringComparison.Ordinal))
+            ?? string.Empty;
         int boundary = ParseIntTagOrDefault(reconstruction, "boundary", -1);
         int openLoops = ParseIntTagOrDefault(reconstruction, "openLoops", -1);
         int unmatched = ParseIntTagOrDefault(reconstruction, "unmatched", -1);
-        return $"issues={issues};boundary={boundary};openLoops={openLoops};unmatched={unmatched}";
+        int deg = ParseIntTagOrDefault(output, "deg", -1);
+        int taxDupVid = ParseIntTagOrDefault(residual, "taxDupVid", 0);
+        int taxZeroEdge = ParseIntTagOrDefault(residual, "taxZeroEdge", 0);
+        int taxDupPos = ParseIntTagOrDefault(residual, "taxDupPos", 0);
+        int taxCollinear = ParseIntTagOrDefault(residual, "taxCollinear", 0);
+        string taxonomy = DominantTaxonomy(taxDupVid, taxZeroEdge, taxDupPos, taxCollinear);
+        return $"issues={issues};boundary={boundary};openLoops={openLoops};unmatched={unmatched};deg={deg};tax={taxonomy}";
+    }
+
+    private static string DominantTaxonomy(int dupVid, int zeroEdge, int dupPos, int collinear)
+    {
+        var buckets = new[]
+        {
+            ("dupVid", dupVid),
+            ("zeroEdge", zeroEdge),
+            ("dupPos", dupPos),
+            ("collinear", collinear)
+        };
+
+        var best = buckets
+            .OrderByDescending(static b => b.Item2)
+            .ThenBy(static b => b.Item1, StringComparer.Ordinal)
+            .First();
+        return best.Item2 <= 0 ? "none" : best.Item1;
     }
 
     private static int ParseIntTagOrDefault(string cert, string tag, int fallback)
