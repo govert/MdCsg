@@ -994,6 +994,7 @@ Deliverables:
 Exit criteria:
 
 - CLI mode behavior is fully covered by deterministic tests with no UI dependencies.
+- Status: Completed (added `CliParser_*` contract matrix in `MdCsg.Showcase.ContractTests` for valid mode combinations, screenshot parsing, and invalid argument conflicts; focused slice passed: 7/7 in `165 ms`).
 
 ## Stage 89 - Program Wiring and Runtime Preservation
 

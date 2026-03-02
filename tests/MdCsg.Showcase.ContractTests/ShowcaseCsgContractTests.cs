@@ -18,6 +18,83 @@ public sealed class ShowcaseCsgContractTests : IDisposable
     }
 
     [Fact]
+    public void CliParser_DefaultsToStrictClosureAttemptMode()
+    {
+        var opts = ShowcaseCliOptions.Parse(Array.Empty<string>());
+
+        Assert.False(opts.UseLegacyCsg);
+        Assert.False(opts.AllowLegacyFailover);
+        Assert.False(opts.StrictRobustOnly);
+        Assert.True(opts.UseClosureAttemptRobust);
+        Assert.Equal(
+            "[showcase] CSG mode: robust-strict (closureAttempt=1, no automatic fallback)",
+            opts.ModeSummary);
+    }
+
+    [Fact]
+    public void CliParser_LegacyMode_ProducesLegacySummary()
+    {
+        var opts = ShowcaseCliOptions.Parse(new[] { "--legacy-csg" });
+
+        Assert.True(opts.UseLegacyCsg);
+        Assert.False(opts.AllowLegacyFailover);
+        Assert.False(opts.StrictRobustOnly);
+        Assert.Equal("[showcase] CSG mode: legacy (explicit opt-out)", opts.ModeSummary);
+    }
+
+    [Fact]
+    public void CliParser_StrictRobustOnly_WithFailover_HasClosureAttemptDisabled()
+    {
+        var opts = ShowcaseCliOptions.Parse(new[] { "--strict-robust-only", "--allow-legacy-failover" });
+
+        Assert.False(opts.UseLegacyCsg);
+        Assert.True(opts.AllowLegacyFailover);
+        Assert.True(opts.StrictRobustOnly);
+        Assert.False(opts.UseClosureAttemptRobust);
+        Assert.Equal(
+            "[showcase] CSG mode: robust-strict (closureAttempt=0) with explicit legacy failover",
+            opts.ModeSummary);
+    }
+
+    [Fact]
+    public void CliParser_ScreenshotDirectory_IsParsed()
+    {
+        var opts = ShowcaseCliOptions.Parse(new[] { "--screenshot", "captures" });
+
+        Assert.True(opts.ScreenshotMode);
+        Assert.Equal("captures", opts.ScreenshotDir);
+    }
+
+    [Fact]
+    public void CliParser_RejectsLegacyAndFailoverConflict()
+    {
+        var ex = Assert.Throws<ArgumentException>(
+            () => ShowcaseCliOptions.Parse(new[] { "--legacy-csg", "--allow-legacy-failover" }));
+
+        Assert.Contains("--legacy-csg", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("--allow-legacy-failover", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CliParser_RejectsLegacyAndStrictOnlyConflict()
+    {
+        var ex = Assert.Throws<ArgumentException>(
+            () => ShowcaseCliOptions.Parse(new[] { "--legacy-csg", "--strict-robust-only" }));
+
+        Assert.Contains("--legacy-csg", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("--strict-robust-only", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CliParser_RejectsUnknownArgument()
+    {
+        var ex = Assert.Throws<ArgumentException>(
+            () => ShowcaseCliOptions.Parse(new[] { "--not-a-real-option" }));
+
+        Assert.Contains("--not-a-real-option", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Step3_StrictNoFailover_ThrowsWithContractMessage()
     {
         ShowcaseRuntimeOptions.UseLegacyCsg = false;
