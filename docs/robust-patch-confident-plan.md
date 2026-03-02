@@ -803,7 +803,7 @@ Deliverables:
 Exit criteria:
 
 - Local repair removes targeted residual classes without topology regression.
-- Status: Pending.
+- Status: Completed (added arrangement-authority-gated `deg-local-repair:*` deterministic local single-face neighborhood repair pass before post-prune, with explicit attempt/remove/iteration/termination telemetry and strict non-worsening acceptance checks).
 
 ## Stage 74 - Snap/Collapse Safety Hardening
 

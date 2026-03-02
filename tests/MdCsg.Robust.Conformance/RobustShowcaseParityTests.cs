@@ -161,6 +161,21 @@ public class RobustShowcaseParityTests
             Assert.Equal(0, ParseIntTag(degPrunePost, "boundaryAfter"));
             Assert.Equal(0, ParseIntTag(degPrunePost, "unmatchedAfter"));
         }
+        string localRepairCert = GetStageCertificate(step3, "deg-local-repair:");
+        int localRepairGate = ParseIntTag(localRepairCert, "gate");
+        int localRepairBefore = ParseIntTag(localRepairCert, "before");
+        int localRepairAfter = ParseIntTag(localRepairCert, "after");
+        int localRepairAttempted = ParseIntTag(localRepairCert, "attempted");
+        int localRepairRemoved = ParseIntTag(localRepairCert, "removed");
+        int localRepairIters = ParseIntTag(localRepairCert, "iters");
+        int localRepairApplied = ParseIntTag(localRepairCert, "applied");
+        Assert.True(localRepairGate is 0 or 1);
+        Assert.True(localRepairBefore >= localRepairAfter);
+        Assert.True(localRepairAttempted >= localRepairRemoved);
+        Assert.True(localRepairRemoved >= 0);
+        Assert.True(localRepairApplied >= 0);
+        Assert.True(localRepairIters >= localRepairApplied);
+        Assert.Contains("term=", localRepairCert, StringComparison.Ordinal);
         string outputCert = GetStageCertificate(step3, "output:");
         Assert.Contains("output:fail;", outputCert, StringComparison.Ordinal);
         Assert.Equal(0, ParseIntTag(outputCert, "boundary"));

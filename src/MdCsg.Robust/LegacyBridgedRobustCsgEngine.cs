@@ -487,6 +487,28 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             out reconstructionLoopAssemblySkippedDegenerateCount,
             out reconstructionMaxSnapDistance,
             out reconstructionIncidencePreserved);
+        result = TryLocalDegenerateNeighborhoodRepair(
+            result,
+            csgOptions.WeldTolerance,
+            result.AuthoritativeBoundary,
+            out int localRepairAuthorityGate,
+            out int localRepairDegBefore,
+            out int localRepairDegAfter,
+            out int localRepairAttemptedFaces,
+            out int localRepairRemovedFaces,
+            out int localRepairIterations,
+            out int localRepairAppliedIterations,
+            out string localRepairTermination);
+        stageCertificates.Add(
+            "deg-local-repair:scope=post-reconstruct;"
+            + $"gate={localRepairAuthorityGate};"
+            + $"before={localRepairDegBefore};"
+            + $"after={localRepairDegAfter};"
+            + $"attempted={localRepairAttemptedFaces};"
+            + $"removed={localRepairRemovedFaces};"
+            + $"iters={localRepairIterations};"
+            + $"applied={localRepairAppliedIterations};"
+            + $"term={localRepairTermination}");
         result = PruneDegenerateOutputFaces(
             result,
             csgOptions.WeldTolerance,
@@ -1535,6 +1557,176 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             boundaryAfter,
             unmatchedBefore,
             unmatchedAfter);
+    }
+
+    private const int MaxLocalDegenerateRepairIterations = 2;
+
+    private static CsgResult TryLocalDegenerateNeighborhoodRepair(
+        CsgResult result,
+        double weldTolerance,
+        ReconstructionBoundaryContract? authoritativeBoundary,
+        out int authorityGate,
+        out int beforeDegenerate,
+        out int afterDegenerate,
+        out int attemptedFaces,
+        out int removedFaces,
+        out int iterations,
+        out int appliedIterations,
+        out string terminationReason)
+    {
+        authorityGate = authoritativeBoundary?.Authority == PatchBoundaryAuthority.Arrangement ? 1 : 0;
+        beforeDegenerate = CountDegenerateFacesNoTelemetry(result.Mesh);
+        afterDegenerate = beforeDegenerate;
+        attemptedFaces = 0;
+        removedFaces = 0;
+        iterations = 0;
+        appliedIterations = 0;
+        terminationReason = authorityGate == 1 ? "none" : "authority-gated";
+
+        if (authorityGate == 0 || beforeDegenerate == 0)
+        {
+            if (authorityGate == 1)
+                terminationReason = "already-clean";
+            return result;
+        }
+
+        var current = result;
+        for (int iter = 0; iter < MaxLocalDegenerateRepairIterations; iter++)
+        {
+            iterations++;
+            if (!TryRemoveOneDegenerateFace(
+                current.Mesh,
+                weldTolerance,
+                out var repairedMesh,
+                out int attemptedThisIteration,
+                out int afterThisIteration))
+            {
+                attemptedFaces += attemptedThisIteration;
+                terminationReason = "stalled";
+                break;
+            }
+
+            attemptedFaces += attemptedThisIteration;
+            current = WithMesh(current, repairedMesh);
+            removedFaces++;
+            appliedIterations++;
+            afterDegenerate = afterThisIteration;
+
+            if (afterDegenerate == 0)
+            {
+                terminationReason = "cleared";
+                return current;
+            }
+
+            if (appliedIterations >= MaxLocalDegenerateRepairIterations)
+            {
+                terminationReason = "budget";
+                return current;
+            }
+        }
+
+        if (terminationReason == "none")
+            terminationReason = "stalled";
+
+        return current;
+    }
+
+    private static bool TryRemoveOneDegenerateFace(
+        HalfEdgeMesh mesh,
+        double weldTolerance,
+        out HalfEdgeMesh repairedMesh,
+        out int attemptedFaces,
+        out int afterDegenerate)
+    {
+        repairedMesh = mesh;
+        attemptedFaces = 0;
+        int beforeDegenerate = CountDegenerateFacesNoTelemetry(mesh);
+        afterDegenerate = beforeDegenerate;
+        if (beforeDegenerate == 0)
+            return false;
+
+        var baselineIncidence = MeshStitcher.AnalyzeBoundaryIncidence(mesh);
+        var baselineComponents = AnalyzeComponentTopology(mesh);
+        bool preserveClosedContract =
+            baselineIncidence.BoundaryHalfEdgeCount == 0
+            && baselineIncidence.UnmatchedUndirectedEdgeCount == 0;
+
+        var positions = new List<Vec3>(mesh.Vertices.Count);
+        foreach (var v in mesh.Vertices)
+            positions.Add(v.Position);
+
+        var degenerateFaceIds = mesh.Faces
+            .Where(IsDegenerateFaceNoTelemetry)
+            .Select(static f => f.Id)
+            .OrderBy(static id => id)
+            .ToArray();
+        if (degenerateFaceIds.Length == 0)
+            return false;
+
+        foreach (int removeFaceId in degenerateFaceIds)
+        {
+            attemptedFaces++;
+
+            var triangles = new List<(int I0, int I1, int I2)>(mesh.Faces.Count - 1);
+            foreach (var face in mesh.Faces)
+            {
+                if (face.Id == removeFaceId)
+                    continue;
+                var verts = face.GetVertices();
+                triangles.Add((verts[0].Id, verts[1].Id, verts[2].Id));
+            }
+
+            if (triangles.Count == 0)
+                continue;
+
+            var candidate = new MeshBuilder(weldTolerance).Build(positions, triangles);
+            candidate.IsComplemented = mesh.IsComplemented;
+            int candidateDegenerate = CountDegenerateFacesNoTelemetry(candidate);
+            if (candidateDegenerate >= beforeDegenerate)
+                continue;
+
+            var candidateIncidence = MeshStitcher.AnalyzeBoundaryIncidence(candidate);
+            var candidateComponents = AnalyzeComponentTopology(candidate);
+            bool accepted = candidateIncidence.NonManifoldUndirectedEdgeCount <= baselineIncidence.NonManifoldUndirectedEdgeCount
+                && candidateComponents.InvalidComponentCount <= baselineComponents.InvalidComponentCount;
+            if (preserveClosedContract)
+            {
+                accepted = accepted
+                    && candidateIncidence.BoundaryHalfEdgeCount <= baselineIncidence.BoundaryHalfEdgeCount
+                    && candidateIncidence.UnmatchedUndirectedEdgeCount <= baselineIncidence.UnmatchedUndirectedEdgeCount;
+            }
+
+            if (!accepted)
+                continue;
+
+            repairedMesh = candidate;
+            afterDegenerate = candidateDegenerate;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static int CountDegenerateFacesNoTelemetry(HalfEdgeMesh mesh)
+    {
+        int count = 0;
+        foreach (var face in mesh.Faces)
+        {
+            if (IsDegenerateFaceNoTelemetry(face))
+                count++;
+        }
+
+        return count;
+    }
+
+    private static bool IsDegenerateFaceNoTelemetry(Face face)
+    {
+        var verts = face.GetVertices();
+        var areaSign = EvaluateProjectedAreaSign(
+            verts[0].Position,
+            verts[1].Position,
+            verts[2].Position);
+        return areaSign.Sign == PredicateSign.Zero;
     }
 
     private readonly record struct BoundaryResealStats(
