@@ -1030,6 +1030,7 @@ Deliverables:
 Exit criteria:
 
 - Failure/failover logs are stable for test assertions and operational triage.
+- Status: Completed (`ShowcaseCsg.FormatIssues` now de-duplicates and deterministically orders issues by severity (`Error` -> `Warning` -> `Info`), code, and message, yielding stable strict/failover message shapes; showcase build validation passed).
 
 ## Stage 92 - Showcase Message Contract Expansion
 

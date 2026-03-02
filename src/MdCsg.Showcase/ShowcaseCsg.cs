@@ -74,5 +74,19 @@ internal static class ShowcaseCsg
             ? "<none>"
             : string.Join(
                 " | ",
-                robust.Issues.Select(static i => $"{i.Severity}:{i.Code}:{i.Message}"));
+                robust.Issues
+                    .Distinct()
+                    .OrderBy(static i => SeverityOrder(i.Severity))
+                    .ThenBy(static i => i.Code)
+                    .ThenBy(static i => i.Message, StringComparer.Ordinal)
+                    .Select(static i => $"{i.Severity}:{i.Code}:{i.Message}"));
+
+    private static int SeverityOrder(RobustIssueSeverity severity)
+        => severity switch
+        {
+            RobustIssueSeverity.Error => 0,
+            RobustIssueSeverity.Warning => 1,
+            RobustIssueSeverity.Info => 2,
+            _ => 3
+        };
 }
