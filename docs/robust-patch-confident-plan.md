@@ -851,7 +851,7 @@ Deliverables:
 Exit criteria:
 
 - CI/gate/readiness enforce the updated blocker policy deterministically.
-- Status: Pending.
+- Status: Completed (gate/readiness scripts now emit blocker signatures explicitly; readiness filter includes closure-attempt blocker test and reports `READINESS_CLOSURE_ATTEMPT_CONTRACT=PASS` with stage-owned blocker detail/signature output).
 
 ## Stage 78 - Validation Sweep and Batch Sign-Off
 

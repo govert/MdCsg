@@ -47,7 +47,7 @@ function Invoke-GateSlice([string]$label, [string]$projectPath, [string]$filter)
 }
 
 Invoke-GateSlice `
-    "1/4: Showcase/backlog/replay + deg-prune contract robustness gates..." `
+    "1/4: Showcase/backlog/replay + deg-prune + closure-attempt contract robustness gates..." `
     $robustProject `
     "(FullyQualifiedName~RobustShowcaseParityTests|FullyQualifiedName~RobustConformanceBacklogTests|FullyQualifiedName~ArrangementReplayCorpusTests|FullyQualifiedName~TriangulationReplayCorpusTests|FullyQualifiedName~ReconstructionReplayCorpusTests|FullyQualifiedName~KnownBlockerCorpus_IsExplicitlyFailClosed|FullyQualifiedName~RobustBlockerLedgerTests)"
 
@@ -73,12 +73,18 @@ if (-not (Test-Path $ledgerPath))
 
 $ledger = Get-Content $ledgerPath -Raw | ConvertFrom-Json
 $knownBlocked = @($ledger.blockers | ForEach-Object { $_.id }) -join ","
+$knownSignatures = @($ledger.blockers | ForEach-Object { $_.signature }) -join ","
 if ([string]::IsNullOrWhiteSpace($knownBlocked))
 {
     $knownBlocked = "none"
+}
+if ([string]::IsNullOrWhiteSpace($knownSignatures))
+{
+    $knownSignatures = "none"
 }
 
 Write-Host "ROBUST_GATE_BAND_HARD_FAIL=PASS"
 Write-Host "ROBUST_GATE_BAND_KNOWN_BLOCKED=$knownBlocked"
 Write-Host "ROBUST_GATE_BAND_OBSERVABILITY=PASS"
 Write-Host "ROBUST_GATE_DEG_PRUNE_CONTRACT=PASS"
+Write-Host "ROBUST_GATE_KNOWN_BLOCKER_SIGNATURES=$knownSignatures"
