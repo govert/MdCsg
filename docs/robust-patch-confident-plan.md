@@ -1042,6 +1042,7 @@ Deliverables:
 Exit criteria:
 
 - Showcase message contracts are regression-safe and auditable.
+- Status: Completed (added deterministic summary contract test `IssueSummary_IsDeterministicAndDeduplicated`, and expanded strict/failover Step3 message contracts to assert `closureAttempt` + `Issues:` tags; focused validation slice passed: 3/3 in `16m32s`).
 
 ## Stage 93 - Gate/Readiness Observability Promotion
 

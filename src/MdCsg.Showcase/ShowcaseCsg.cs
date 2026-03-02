@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using MdCsg.Api;
 using MdCsg.Robust;
@@ -44,7 +45,7 @@ internal static class ShowcaseCsg
         if (robust.Succeeded && robust.Result is not null)
             return new Solid(robust.Result.Mesh);
 
-        string issues = FormatIssues(robust);
+        string issues = BuildIssueSummary(robust.Issues);
         int closureAttempt = ShowcaseRuntimeOptions.UseClosureAttemptRobust ? 1 : 0;
 
         if (!ShowcaseRuntimeOptions.AllowLegacyFailover)
@@ -69,12 +70,12 @@ internal static class ShowcaseCsg
             AttemptResidualDegenerateClosure = ShowcaseRuntimeOptions.UseClosureAttemptRobust
         };
 
-    private static string FormatIssues(RobustCsgResult robust)
-        => robust.Issues.Count == 0
+    internal static string BuildIssueSummary(IReadOnlyList<RobustIssue> issues)
+        => issues.Count == 0
             ? "<none>"
             : string.Join(
                 " | ",
-                robust.Issues
+                issues
                     .Distinct()
                     .OrderBy(static i => SeverityOrder(i.Severity))
                     .ThenBy(static i => i.Code)

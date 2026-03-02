@@ -1,6 +1,7 @@
 using System.IO;
 using MdCsg.Api;
 using MdCsg.Math;
+using MdCsg.Robust;
 using MdCsg.Showcase;
 
 namespace MdCsg.Showcase.ContractTests;
@@ -105,6 +106,7 @@ public sealed class ShowcaseCsgContractTests : IDisposable
         var ex = Assert.Throws<InvalidOperationException>(() => ShowcaseCsg.Difference(step2, cylY));
         Assert.Contains("strict mode", ex.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("closureAttempt=1", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Issues:", ex.Message, StringComparison.Ordinal);
         Assert.Contains("--allow-legacy-failover", ex.Message, StringComparison.Ordinal);
     }
 
@@ -136,12 +138,32 @@ public sealed class ShowcaseCsgContractTests : IDisposable
             Solid step3 = ShowcaseCsg.Difference(step2, cylY);
 
             Assert.True(step3.Mesh.Faces.Count > 0);
+            Assert.Contains("closureAttempt=1", output.ToString(), StringComparison.Ordinal);
+            Assert.Contains("Issues:", output.ToString(), StringComparison.Ordinal);
             Assert.Contains("using explicit legacy failover", output.ToString(), StringComparison.Ordinal);
         }
         finally
         {
             Console.SetOut(previous);
         }
+    }
+
+    [Fact]
+    public void IssueSummary_IsDeterministicAndDeduplicated()
+    {
+        var issues = new[]
+        {
+            new RobustIssue(RobustIssueSeverity.Warning, RobustIssueCode.OutputMeshHasDegenerateFaces, "warn"),
+            new RobustIssue(RobustIssueSeverity.Error, RobustIssueCode.OutputMeshNotEdgeManifold, "err-b"),
+            new RobustIssue(RobustIssueSeverity.Info, RobustIssueCode.StageInvariantViolation, "info"),
+            new RobustIssue(RobustIssueSeverity.Error, RobustIssueCode.OutputMeshNotClosed, "err-a"),
+            new RobustIssue(RobustIssueSeverity.Error, RobustIssueCode.OutputMeshNotClosed, "err-a")
+        };
+
+        string summary = ShowcaseCsg.BuildIssueSummary(issues);
+        Assert.Equal(
+            "Error:OutputMeshNotClosed:err-a | Error:OutputMeshNotEdgeManifold:err-b | Warning:OutputMeshHasDegenerateFaces:warn | Info:StageInvariantViolation:info",
+            summary);
     }
 
     [Fact]
