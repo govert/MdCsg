@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFrameworks>net10.0-windows</TargetFrameworks>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MdCsg\MdCsg.csproj" />
+    <ProjectReference Include="..\MdCsg.Robust\MdCsg.Robust.csproj" />
+    <PackageReference Include="TerraFX.Interop.Windows" Version="10.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\MdCsg.Showcase\Window.cs" Link="Shared\Window.cs" />
+    <Compile Include="..\MdCsg.Showcase\Camera.cs" Link="Shared\Camera.cs" />
+    <Compile Include="..\MdCsg.Showcase\D3DHelper.cs" Link="Shared\D3DHelper.cs" />
+    <Compile Include="..\MdCsg.Showcase\MeshBuffer.cs" Link="Shared\MeshBuffer.cs" />
+    <Compile Include="..\MdCsg.Showcase\Renderer.cs" Link="Shared\Renderer.cs" />
+    <Compile Include="..\MdCsg.Showcase\ShaderManager.cs" Link="Shared\ShaderManager.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\MdCsg.Showcase\Shaders\*.hlsl" Link="Shaders\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

@@ -8,6 +8,7 @@
     <Project Path="src/MdCsg.Gpu/MdCsg.Gpu.csproj" />
     <Project Path="src/MdCsg.Robust/MdCsg.Robust.csproj" />
     <Project Path="src/MdCsg.Showcase/MdCsg.Showcase.csproj" />
+    <Project Path="src/MdCsg.Showcase.RobustTest/MdCsg.Showcase.RobustTest.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MdCsg.ScalingTests/MdCsg.ScalingTests.csproj" />
