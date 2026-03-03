@@ -1,2 +1,1 @@
 case_file,blocker_id,signature
-showcase-chained-step3.case,FUZZ-BLOCKER-0001,issues=OutputMeshHasDegenerateFaces|StageInvariantViolation;boundary=0;openLoops=0;unmatched=0;deg=3;tax=collinear

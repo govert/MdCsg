@@ -5,18 +5,5 @@
     "known-blocked": "Known unresolved blocker signature reproduced with expected certificates.",
     "observability": "Non-blocking telemetry or trend-only diagnostics."
   },
-  "blockers": [
-    {
-      "id": "FUZZ-BLOCKER-0001",
-      "source": "tests/MdCsg.Robust.Conformance/ReplayCorpus/fuzz/showcase-chained-step3.case",
-      "signature": "issues=OutputMeshHasDegenerateFaces|StageInvariantViolation;boundary=0;openLoops=0;unmatched=0;deg=3;tax=collinear",
-      "expectedCertificates": [
-        "reconstruction:pass;",
-        "output:fail;",
-        "deg-prune:phase=post;",
-        "deg-local-repair:scope=post-reconstruct;"
-      ],
-      "owningStage": 85
-    }
-  ]
+  "blockers": []
 }

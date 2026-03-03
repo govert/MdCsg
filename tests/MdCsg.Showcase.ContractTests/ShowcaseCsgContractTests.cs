@@ -96,22 +96,19 @@ public sealed class ShowcaseCsgContractTests : IDisposable
     }
 
     [Fact]
-    public void Step3_StrictNoFailover_ThrowsWithContractMessage()
+    public void Step3_StrictNoFailover_SucceedsWithRobustResult()
     {
         ShowcaseRuntimeOptions.UseLegacyCsg = false;
         ShowcaseRuntimeOptions.AllowLegacyFailover = false;
 
         (Solid step2, Solid cylY) = BuildStep2Input();
 
-        var ex = Assert.Throws<InvalidOperationException>(() => ShowcaseCsg.Difference(step2, cylY));
-        Assert.Contains("strict mode", ex.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("closureAttempt=1", ex.Message, StringComparison.Ordinal);
-        Assert.Contains("Issues:", ex.Message, StringComparison.Ordinal);
-        Assert.Contains("--allow-legacy-failover", ex.Message, StringComparison.Ordinal);
+        Solid step3 = ShowcaseCsg.Difference(step2, cylY);
+        Assert.True(step3.Mesh.Faces.Count > 0);
     }
 
     [Fact]
-    public void Step3_StrictRobustOnly_DisablesClosureAttempt_InContractMessage()
+    public void Step3_StrictRobustOnly_SucceedsWithRobustResult()
     {
         ShowcaseRuntimeOptions.UseLegacyCsg = false;
         ShowcaseRuntimeOptions.AllowLegacyFailover = false;
@@ -119,12 +116,12 @@ public sealed class ShowcaseCsgContractTests : IDisposable
 
         (Solid step2, Solid cylY) = BuildStep2Input();
 
-        var ex = Assert.Throws<InvalidOperationException>(() => ShowcaseCsg.Difference(step2, cylY));
-        Assert.Contains("closureAttempt=0", ex.Message, StringComparison.Ordinal);
+        Solid step3 = ShowcaseCsg.Difference(step2, cylY);
+        Assert.True(step3.Mesh.Faces.Count > 0);
     }
 
     [Fact]
-    public void Step3_ExplicitFailover_ReturnsLegacyResult_AndLogsFailover()
+    public void Step3_ExplicitFailover_SucceedsDirectlyWithoutFailover()
     {
         ShowcaseRuntimeOptions.UseLegacyCsg = false;
         ShowcaseRuntimeOptions.AllowLegacyFailover = true;
@@ -138,9 +135,8 @@ public sealed class ShowcaseCsgContractTests : IDisposable
             Solid step3 = ShowcaseCsg.Difference(step2, cylY);
 
             Assert.True(step3.Mesh.Faces.Count > 0);
-            Assert.Contains("closureAttempt=1", output.ToString(), StringComparison.Ordinal);
-            Assert.Contains("Issues:", output.ToString(), StringComparison.Ordinal);
-            Assert.Contains("using explicit legacy failover", output.ToString(), StringComparison.Ordinal);
+            // No failover message since robust now succeeds directly
+            Assert.DoesNotContain("using explicit legacy failover", output.ToString(), StringComparison.Ordinal);
         }
         finally
         {

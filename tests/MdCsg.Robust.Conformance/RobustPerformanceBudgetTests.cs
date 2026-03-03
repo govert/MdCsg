@@ -50,9 +50,9 @@ public class RobustPerformanceBudgetTests
         Assert.True(step2.Succeeded);
         var step3 = RobustCsg.Difference(new Solid(step2.Result!.Mesh), cylY, StrictOpts);
 
-        Assert.False(step3.Succeeded);
+        Assert.True(step3.Succeeded);
         Assert.True(
             step3.Diagnostics.OperationElapsed <= TimeSpan.FromMinutes(8),
-            $"step3 fail-closed budget exceeded: {step3.Diagnostics.OperationElapsed} > 00:08:00.");
+            $"step3 budget exceeded: {step3.Diagnostics.OperationElapsed} > 00:08:00.");
     }
 }

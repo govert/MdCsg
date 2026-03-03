@@ -543,6 +543,19 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             + $"closureAttempt={(opts.AttemptResidualDegenerateClosure ? 1 : 0)};"
             + $"budget={localRepairBudget};"
             + $"term={localRepairTermination}");
+        result = TryCollapseCollinearDegenerates(
+            result,
+            csgOptions.WeldTolerance,
+            out int colCollapseDegBefore,
+            out int colCollapseMerged,
+            out int colCollapseDegAfter,
+            out string colCollapseTermination);
+        stageCertificates.Add(
+            "deg-collinear-collapse:scope=post-reconstruct;"
+            + $"before={colCollapseDegBefore};"
+            + $"merged={colCollapseMerged};"
+            + $"after={colCollapseDegAfter};"
+            + $"term={colCollapseTermination}");
         result = PruneDegenerateOutputFaces(
             result,
             csgOptions.WeldTolerance,
@@ -1773,6 +1786,204 @@ public sealed class LegacyBridgedRobustCsgEngine : IRobustCsgEngine
             terminationReason = "stalled";
 
         return current;
+    }
+
+    private static CsgResult TryCollapseCollinearDegenerates(
+        CsgResult result,
+        double weldTolerance,
+        out int beforeDegenerate,
+        out int merged,
+        out int afterDegenerate,
+        out string terminationReason,
+        int maxIterations = 4)
+    {
+        beforeDegenerate = CountDegenerateFacesNoTelemetry(result.Mesh);
+        merged = 0;
+        afterDegenerate = beforeDegenerate;
+        terminationReason = "none";
+
+        if (beforeDegenerate == 0)
+        {
+            terminationReason = "already-clean";
+            return result;
+        }
+
+        var current = result;
+        for (int iter = 0; iter < maxIterations; iter++)
+        {
+            var mesh = current.Mesh;
+            var degenerateFaces = new List<(int FaceIndex, int V0, int V1, int V2)>();
+
+            for (int fi = 0; fi < mesh.Faces.Count; fi++)
+            {
+                var face = mesh.Faces[fi];
+                var verts = face.GetVertices();
+                var areaSign = EvaluateProjectedAreaSign(
+                    verts[0].Position,
+                    verts[1].Position,
+                    verts[2].Position);
+                if (areaSign.Sign == PredicateSign.Zero)
+                {
+                    var cls = ClassifyResidualDegenerateFace(verts[0], verts[1], verts[2]);
+                    if (cls == ResidualDegenerateClass.Collinear)
+                        degenerateFaces.Add((fi, verts[0].Id, verts[1].Id, verts[2].Id));
+                }
+            }
+
+            if (degenerateFaces.Count == 0)
+            {
+                terminationReason = iter == 0 ? "no-collinear" : "cleared";
+                break;
+            }
+
+            // Build merge map: for each collinear face, merge the middle vertex into the nearer endpoint
+            var mergeMap = new Dictionary<int, int>();
+            foreach (var (_, v0Id, v1Id, v2Id) in degenerateFaces)
+            {
+                var p0 = mesh.Vertices[v0Id].Position;
+                var p1 = mesh.Vertices[v1Id].Position;
+                var p2 = mesh.Vertices[v2Id].Position;
+
+                // Find the middle vertex by parametric position along the longest span
+                int middleId, targetId;
+                FindCollinearMiddleVertex(
+                    v0Id, p0, v1Id, p1, v2Id, p2,
+                    out middleId, out targetId);
+
+                if (middleId < 0 || targetId < 0) continue;
+                if (mergeMap.ContainsKey(middleId)) continue; // already mapped
+
+                // Ensure no conflicting transitive merges
+                int finalTarget = targetId;
+                while (mergeMap.TryGetValue(finalTarget, out int next))
+                    finalTarget = next;
+                mergeMap[middleId] = finalTarget;
+            }
+
+            if (mergeMap.Count == 0)
+            {
+                terminationReason = "no-mergeable";
+                break;
+            }
+
+            // Resolve transitive chains in merge map
+            foreach (var key in mergeMap.Keys.ToArray())
+            {
+                int target = mergeMap[key];
+                while (mergeMap.TryGetValue(target, out int next))
+                    target = next;
+                mergeMap[key] = target;
+            }
+
+            // Rebuild mesh with merged vertices
+            var positions = new List<Vec3>(mesh.Vertices.Count);
+            var vertIdToNew = new int[mesh.Vertices.Count];
+            for (int i = 0; i < mesh.Vertices.Count; i++)
+            {
+                int mapped = mergeMap.TryGetValue(i, out int t) ? t : i;
+                // Resolve once more in case target itself is merged
+                while (mergeMap.TryGetValue(mapped, out int next) && next != mapped)
+                    mapped = next;
+                vertIdToNew[i] = mapped;
+            }
+
+            // Collect unique vertex positions
+            var newVertMap = new Dictionary<int, int>(); // old vertex id → new position index
+            var newPositions = new List<Vec3>();
+            for (int i = 0; i < mesh.Vertices.Count; i++)
+            {
+                int canonical = vertIdToNew[i];
+                if (!newVertMap.ContainsKey(canonical))
+                {
+                    newVertMap[canonical] = newPositions.Count;
+                    newPositions.Add(mesh.Vertices[canonical].Position);
+                }
+            }
+
+            // Build triangles, skipping faces with duplicate vertices after remapping
+            var triangles = new List<(int I0, int I1, int I2)>();
+            for (int fi = 0; fi < mesh.Faces.Count; fi++)
+            {
+                var face = mesh.Faces[fi];
+                var verts = face.GetVertices();
+                int ni0 = newVertMap[vertIdToNew[verts[0].Id]];
+                int ni1 = newVertMap[vertIdToNew[verts[1].Id]];
+                int ni2 = newVertMap[vertIdToNew[verts[2].Id]];
+                if (ni0 == ni1 || ni1 == ni2 || ni2 == ni0) continue;
+                triangles.Add((ni0, ni1, ni2));
+            }
+
+            var candidate = new MeshBuilder(weldTolerance).Build(newPositions, triangles);
+            candidate.IsComplemented = mesh.IsComplemented;
+
+            // Validate: boundary and manifold must not worsen
+            var beforeIncidence = MeshStitcher.AnalyzeBoundaryIncidence(mesh);
+            var afterIncidence = MeshStitcher.AnalyzeBoundaryIncidence(candidate);
+            if (afterIncidence.BoundaryHalfEdgeCount > beforeIncidence.BoundaryHalfEdgeCount
+                || afterIncidence.UnmatchedUndirectedEdgeCount > beforeIncidence.UnmatchedUndirectedEdgeCount)
+            {
+                terminationReason = "validation-rejected";
+                break;
+            }
+
+            int candidateDegenerate = CountDegenerateFacesNoTelemetry(candidate);
+            if (candidateDegenerate >= afterDegenerate)
+            {
+                terminationReason = "no-progress";
+                break;
+            }
+
+            current = WithMesh(current, candidate);
+            merged += mergeMap.Count;
+            afterDegenerate = candidateDegenerate;
+
+            if (candidateDegenerate == 0)
+            {
+                terminationReason = "cleared";
+                break;
+            }
+        }
+
+        if (terminationReason == "none")
+            terminationReason = "budget";
+
+        return current;
+    }
+
+    private static void FindCollinearMiddleVertex(
+        int id0, Vec3 p0, int id1, Vec3 p1, int id2, Vec3 p2,
+        out int middleId, out int targetId)
+    {
+        // Parameterize along the longest edge to find the middle vertex
+        double d01 = Vec3.DistanceSquared(p0, p1);
+        double d12 = Vec3.DistanceSquared(p1, p2);
+        double d02 = Vec3.DistanceSquared(p0, p2);
+
+        if (d02 >= d01 && d02 >= d12)
+        {
+            // p0-p2 is longest span, p1 is in the middle
+            middleId = id1;
+            // Merge to nearer endpoint
+            double t1_to_0 = Vec3.DistanceSquared(p1, p0);
+            double t1_to_2 = Vec3.DistanceSquared(p1, p2);
+            targetId = t1_to_0 <= t1_to_2 ? id0 : id2;
+        }
+        else if (d01 >= d12)
+        {
+            // p0-p1 is longest span, p2 is in the middle
+            middleId = id2;
+            double t2_to_0 = Vec3.DistanceSquared(p2, p0);
+            double t2_to_1 = Vec3.DistanceSquared(p2, p1);
+            targetId = t2_to_0 <= t2_to_1 ? id0 : id1;
+        }
+        else
+        {
+            // p1-p2 is longest span, p0 is in the middle
+            middleId = id0;
+            double t0_to_1 = Vec3.DistanceSquared(p0, p1);
+            double t0_to_2 = Vec3.DistanceSquared(p0, p2);
+            targetId = t0_to_1 <= t0_to_2 ? id1 : id2;
+        }
     }
 
     private static bool TryRemoveOneDegenerateFace(

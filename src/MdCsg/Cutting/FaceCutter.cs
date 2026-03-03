@@ -1,5 +1,6 @@
 using MdCsg.Intersection;
 using MdCsg.Math;
+using MdCsg.Predicates;
 
 namespace MdCsg.Cutting;
 
@@ -210,7 +211,13 @@ public static class FaceCutter
             var pb = vertices[b];
             var pc = vertices[c];
             double areaSq = Vec3.Cross(pb - pa, pc - pa).LengthSquared;
-            if (areaSq < 1e-30) continue; // Skip truly degenerate triangles
+            if (areaSq < 1e-30) continue; // Fast path: definitely degenerate
+
+            // For near-degenerate triangles, use certified predicate (same as output validator)
+            if (areaSq < 1e-16)
+            {
+                if (IsProjectedAreaZero(pa, pb, pc)) continue;
+            }
 
             // Check each edge individually: A-B (bit 0), B-C (bit 1), C-A (bit 2)
             byte edgeFlags = 0;
@@ -278,6 +285,20 @@ public static class FaceCutter
         const double eps = 1e-8;
         return t0 >= -eps && t0 <= 1.0 + eps &&
                t1 >= -eps && t1 <= 1.0 + eps;
+    }
+
+    private static bool IsProjectedAreaZero(Vec3 a, Vec3 b, Vec3 c)
+    {
+        Vec3 n = Vec3.Cross(b - a, c - a);
+        double ax = System.Math.Abs(n.X), ay = System.Math.Abs(n.Y), az = System.Math.Abs(n.Z);
+        Vec2 pa, pb, pc;
+        if (ax >= ay && ax >= az)
+        { pa = new Vec2(a.Y, a.Z); pb = new Vec2(b.Y, b.Z); pc = new Vec2(c.Y, c.Z); }
+        else if (ay >= az)
+        { pa = new Vec2(a.X, a.Z); pb = new Vec2(b.X, b.Z); pc = new Vec2(c.X, c.Z); }
+        else
+        { pa = new Vec2(a.X, a.Y); pb = new Vec2(b.X, b.Y); pc = new Vec2(c.X, c.Y); }
+        return Orient2D.Evaluate(pa, pb, pc) == PredicateSign.Zero;
     }
 
     private static bool IsFinite(Vec3 v) =>

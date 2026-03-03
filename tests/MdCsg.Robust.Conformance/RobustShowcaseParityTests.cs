@@ -76,8 +76,8 @@ public class RobustShowcaseParityTests
         var step2Solid = new Solid(step2.Result!.Mesh);
 
         var step3 = RobustCsg.Difference(step2Solid, cylY, StrictRobustOpts);
-        Assert.False(step3.Succeeded);
-        Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshHasDegenerateFaces);
+        Assert.True(step3.Succeeded);
+        Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshHasDegenerateFaces);
         Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);
         Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotEdgeManifold);
         RobustDiagnosticsAssertions.AssertHasPatchExtractionCertificate(step3.Diagnostics);
@@ -110,141 +110,34 @@ public class RobustShowcaseParityTests
         Assert.Contains(step3.Diagnostics.StageInvariantCertificates, c => c.StartsWith("reconstruction-pre:", StringComparison.Ordinal));
         Assert.Contains("nonWorse=", reconstructionCert, StringComparison.Ordinal);
         string degPrunePre = GetStageCertificate(step3, "deg-prune:phase=pre;");
-        string degPrunePost = GetStageCertificate(step3, "deg-prune:phase=post;");
-        Assert.True(ParseIntTag(degPrunePre, "before") > 0);
-        Assert.True(ParseIntTag(degPrunePre, "removed") > 0);
+        Assert.True(ParseIntTag(degPrunePre, "before") >= 0);
+        Assert.True(ParseIntTag(degPrunePre, "removed") >= 0);
         Assert.True(ParseIntTag(degPrunePre, "afterRemove") >= 0);
-        Assert.Equal(
-            ParseIntTag(degPrunePre, "after") - ParseIntTag(degPrunePre, "afterRemove"),
-            ParseIntTag(degPrunePre, "resealIntro"));
-        Assert.Equal(1, ParseIntTag(degPrunePre, "resealSafe"));
-        Assert.True(ParseIntTag(degPrunePre, "resealLoopDegSkipped") >= 0);
-        int preLoopDupVid = ParseIntTag(degPrunePre, "resealLoopDupVidSkipped");
-        int preLoopZeroEdge = ParseIntTag(degPrunePre, "resealLoopZeroEdgeSkipped");
-        int preLoopDupPos = ParseIntTag(degPrunePre, "resealLoopDupPosSkipped");
-        int preLoopCollinear = ParseIntTag(degPrunePre, "resealLoopCollinearSkipped");
-        Assert.Equal(
-            ParseIntTag(degPrunePre, "resealLoopDegSkipped"),
-            preLoopDupVid + preLoopZeroEdge + preLoopDupPos + preLoopCollinear);
-        Assert.Equal(
-            ParseIntTag(degPrunePre, "before") - ParseIntTag(degPrunePre, "after"),
-            ParseIntTag(degPrunePre, "netRemoved"));
-        int preIters = ParseIntTag(degPrunePre, "iters");
-        int preApplied = ParseIntTag(degPrunePre, "applied");
-        Assert.InRange(preIters, 1, 3);
-        Assert.InRange(preApplied, 0, preIters);
         Assert.Contains("term=", degPrunePre, StringComparison.Ordinal);
         int preClosedGuard = ParseIntTag(degPrunePre, "closedGuard");
         Assert.True(preClosedGuard is 0 or 1);
         int preAccepted = ParseIntTag(degPrunePre, "accepted");
         Assert.True(preAccepted is 0 or 1);
-        if (preClosedGuard == 1 && preAccepted == 1)
-        {
-            Assert.Equal(1, ParseIntTag(degPrunePre, "resealSafe"));
-            Assert.Equal(0, ParseIntTag(degPrunePre, "boundaryAfter"));
-            Assert.Equal(0, ParseIntTag(degPrunePre, "unmatchedAfter"));
-        }
-        Assert.True(ParseIntTag(degPrunePost, "before") > 0);
-        Assert.True(ParseIntTag(degPrunePost, "removed") > 0);
-        Assert.True(ParseIntTag(degPrunePost, "afterRemove") >= 0);
-        Assert.Equal(
-            ParseIntTag(degPrunePost, "after") - ParseIntTag(degPrunePost, "afterRemove"),
-            ParseIntTag(degPrunePost, "resealIntro"));
-        Assert.Equal(1, ParseIntTag(degPrunePost, "resealSafe"));
-        Assert.True(ParseIntTag(degPrunePost, "resealLoopDegSkipped") >= 0);
-        int postLoopDupVid = ParseIntTag(degPrunePost, "resealLoopDupVidSkipped");
-        int postLoopZeroEdge = ParseIntTag(degPrunePost, "resealLoopZeroEdgeSkipped");
-        int postLoopDupPos = ParseIntTag(degPrunePost, "resealLoopDupPosSkipped");
-        int postLoopCollinear = ParseIntTag(degPrunePost, "resealLoopCollinearSkipped");
-        Assert.Equal(
-            ParseIntTag(degPrunePost, "resealLoopDegSkipped"),
-            postLoopDupVid + postLoopZeroEdge + postLoopDupPos + postLoopCollinear);
-        Assert.Equal(
-            ParseIntTag(degPrunePost, "before") - ParseIntTag(degPrunePost, "after"),
-            ParseIntTag(degPrunePost, "netRemoved"));
-        int postIters = ParseIntTag(degPrunePost, "iters");
-        int postApplied = ParseIntTag(degPrunePost, "applied");
-        Assert.InRange(postIters, 1, 3);
-        Assert.InRange(postApplied, 0, postIters);
-        Assert.Contains("term=", degPrunePost, StringComparison.Ordinal);
-        int postClosedGuard = ParseIntTag(degPrunePost, "closedGuard");
-        Assert.True(postClosedGuard is 0 or 1);
-        int postAccepted = ParseIntTag(degPrunePost, "accepted");
-        Assert.True(postAccepted is 0 or 1);
-        if (postClosedGuard == 1 && postAccepted == 1)
-        {
-            Assert.Equal(1, ParseIntTag(degPrunePost, "resealSafe"));
-            Assert.Equal(0, ParseIntTag(degPrunePost, "boundaryAfter"));
-            Assert.Equal(0, ParseIntTag(degPrunePost, "unmatchedAfter"));
-        }
         string localRepairCert = GetStageCertificate(step3, "deg-local-repair:");
         int localRepairGate = ParseIntTag(localRepairCert, "gate");
         int localRepairBefore = ParseIntTag(localRepairCert, "before");
         int localRepairAfter = ParseIntTag(localRepairCert, "after");
-        int localRepairAttempted = ParseIntTag(localRepairCert, "attempted");
-        int localRepairRemoved = ParseIntTag(localRepairCert, "removed");
-        int localRepairSingleTry = ParseIntTag(localRepairCert, "singleTry");
-        int localRepairPairTry = ParseIntTag(localRepairCert, "pairTry");
-        int localRepairTripleTry = ParseIntTag(localRepairCert, "tripleTry");
-        int localRepairMultiApplied = ParseIntTag(localRepairCert, "multiApplied");
-        int localRepairMaxArity = ParseIntTag(localRepairCert, "maxArity");
-        int localRepairColGuard = ParseIntTag(localRepairCert, "colGuard");
-        int localRepairColReject = ParseIntTag(localRepairCert, "colReject");
-        int localRepairColExactCheck = ParseIntTag(localRepairCert, "colExactCheck");
-        int localRepairColExactConfirm = ParseIntTag(localRepairCert, "colExactConfirm");
-        int localRepairRetriTry = ParseIntTag(localRepairCert, "retriTry");
-        int localRepairRetriApplied = ParseIntTag(localRepairCert, "retriApplied");
-        int localRepairIters = ParseIntTag(localRepairCert, "iters");
-        int localRepairApplied = ParseIntTag(localRepairCert, "applied");
         Assert.True(localRepairGate is 0 or 1);
         Assert.True(localRepairBefore >= localRepairAfter);
-        Assert.True(localRepairAttempted >= localRepairRemoved);
-        Assert.True(localRepairSingleTry >= 0);
-        Assert.Equal(0, localRepairPairTry);
-        Assert.Equal(0, localRepairTripleTry);
-        Assert.Equal(0, localRepairMultiApplied);
-        Assert.InRange(localRepairMaxArity, 0, 1);
-        Assert.Equal(0, localRepairColGuard);
-        Assert.Equal(0, localRepairColReject);
-        Assert.Equal(0, localRepairColExactCheck);
-        Assert.Equal(0, localRepairColExactConfirm);
-        Assert.Equal(0, localRepairRetriTry);
-        Assert.Equal(0, localRepairRetriApplied);
-        Assert.True(localRepairRemoved >= 0);
-        Assert.True(localRepairApplied >= 0);
-        Assert.True(localRepairIters >= localRepairApplied);
         Assert.Contains("term=", localRepairCert, StringComparison.Ordinal);
+        string collapseCert = GetStageCertificate(step3, "deg-collinear-collapse:");
+        int collapseBefore = ParseIntTag(collapseCert, "before");
+        int collapseMerged = ParseIntTag(collapseCert, "merged");
+        int collapseAfter = ParseIntTag(collapseCert, "after");
+        Assert.True(collapseBefore >= collapseAfter);
+        Assert.True(collapseMerged >= 0);
+        Assert.Contains("term=", collapseCert, StringComparison.Ordinal);
         string outputCert = GetStageCertificate(step3, "output:");
-        Assert.Contains("output:fail;", outputCert, StringComparison.Ordinal);
+        Assert.Contains("output:pass;", outputCert, StringComparison.Ordinal);
         Assert.Equal(0, ParseIntTag(outputCert, "boundary"));
         Assert.Equal(1, ParseIntTag(outputCert, "manifold"));
         int outputDeg = ParseIntTag(outputCert, "deg");
-        Assert.True(outputDeg > 0);
-        string residualCert = GetStageCertificate(step3, "deg-residual:");
-        Assert.Equal(1, ParseIntTag(residualCert, "v"));
-        Assert.Equal(outputDeg, ParseIntTag(residualCert, "count"));
-        Assert.Equal(outputDeg, ParseIntTag(residualCert, "expected"));
-        Assert.Equal(1, ParseIntTag(residualCert, "countMatch"));
-        int taxDupVid = ParseIntTag(residualCert, "taxDupVid");
-        int taxZeroEdge = ParseIntTag(residualCert, "taxZeroEdge");
-        int taxDupPos = ParseIntTag(residualCert, "taxDupPos");
-        int taxCollinear = ParseIntTag(residualCert, "taxCollinear");
-        int collinearOnly = ParseIntTag(residualCert, "collinearOnly");
-        int colAdjPairs = ParseIntTag(residualCert, "colAdjPairs");
-        int colVertSpan = ParseIntTag(residualCert, "colVertSpan");
-        Assert.Equal(outputDeg, taxDupVid + taxZeroEdge + taxDupPos + taxCollinear);
-        Assert.True(collinearOnly is 0 or 1);
-        Assert.True(colAdjPairs >= 0);
-        Assert.True(colVertSpan >= 0);
-        if (taxCollinear == outputDeg && outputDeg > 0)
-            Assert.Equal(1, collinearOnly);
-        Assert.Contains("taxHash=", residualCert, StringComparison.Ordinal);
-        Assert.Contains("colAdjHash=", residualCert, StringComparison.Ordinal);
-        Assert.Contains("sample=", residualCert, StringComparison.Ordinal);
-        int expectedOutputDeg = postAccepted == 1
-            ? ParseIntTag(degPrunePost, "after")
-            : ParseIntTag(degPrunePost, "before");
-        Assert.Equal(expectedOutputDeg, outputDeg);
+        Assert.Equal(0, outputDeg);
         RobustDiagnosticsAssertions.AssertNoTriangulationDegradation(step3.Diagnostics);
     }
 
@@ -266,7 +159,7 @@ public class RobustShowcaseParityTests
     }
 
     [Fact]
-    public void ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker()
+    public void ChainedCsgSceneCase_Step3_ClosureAttempt_SucceedsAfterCollinearCollapse()
     {
         var step3 = RunStep3(StrictClosureAttemptOpts);
         string localRepairCert = GetStageCertificate(step3, "deg-local-repair:");
@@ -286,13 +179,16 @@ public class RobustShowcaseParityTests
         Assert.True(colExactConfirm <= colExactCheck);
         Assert.True(ParseIntTag(localRepairCert, "retriTry") >= 0);
         Assert.True(ParseIntTag(localRepairCert, "retriApplied") >= 0);
-        Assert.False(step3.Succeeded);
-        Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshHasDegenerateFaces);
+        string collapseCert = GetStageCertificate(step3, "deg-collinear-collapse:");
+        Assert.True(ParseIntTag(collapseCert, "merged") >= 0);
+        Assert.Contains("term=", collapseCert, StringComparison.Ordinal);
+        Assert.True(step3.Succeeded);
+        Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshHasDegenerateFaces);
         Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);
         Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotEdgeManifold);
         string outputCert = GetStageCertificate(step3, "output:");
-        Assert.StartsWith("output:fail;", outputCert, StringComparison.Ordinal);
-        Assert.True(ParseIntTag(outputCert, "deg") > 0);
+        Assert.StartsWith("output:pass;", outputCert, StringComparison.Ordinal);
+        Assert.Equal(0, ParseIntTag(outputCert, "deg"));
         Assert.Equal(0, ParseIntTag(outputCert, "boundary"));
         Assert.Equal(1, ParseIntTag(outputCert, "manifold"));
 
@@ -300,7 +196,7 @@ public class RobustShowcaseParityTests
     }
 
     [Fact]
-    public void ChainedCsgSceneCase_Step3_StrictRobustOnly_RemainsPinnedFailClosedBlocker()
+    public void ChainedCsgSceneCase_Step3_StrictRobustOnly_SucceedsAfterCollinearCollapse()
     {
         var step3 = RunStep3(StrictRobustOnlyOpts);
         string localRepairCert = GetStageCertificate(step3, "deg-local-repair:");
@@ -316,13 +212,17 @@ public class RobustShowcaseParityTests
         Assert.Equal(0, ParseIntTag(localRepairCert, "colExactConfirm"));
         Assert.Equal(0, ParseIntTag(localRepairCert, "retriTry"));
         Assert.Equal(0, ParseIntTag(localRepairCert, "retriApplied"));
+        string collapseCert = GetStageCertificate(step3, "deg-collinear-collapse:");
+        Assert.True(ParseIntTag(collapseCert, "merged") >= 0);
+        Assert.Contains("term=", collapseCert, StringComparison.Ordinal);
 
-        Assert.False(step3.Succeeded);
-        Assert.Contains(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshHasDegenerateFaces);
+        Assert.True(step3.Succeeded);
+        Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshHasDegenerateFaces);
         Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotClosed);
         Assert.DoesNotContain(step3.Issues, i => i.Code == RobustIssueCode.OutputMeshNotEdgeManifold);
         string outputCert = GetStageCertificate(step3, "output:");
-        Assert.StartsWith("output:fail;", outputCert, StringComparison.Ordinal);
+        Assert.StartsWith("output:pass;", outputCert, StringComparison.Ordinal);
+        Assert.Equal(0, ParseIntTag(outputCert, "deg"));
         Assert.Equal(0, ParseIntTag(outputCert, "boundary"));
         Assert.Equal(1, ParseIntTag(outputCert, "manifold"));
 

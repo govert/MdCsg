@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 Write-Host "Running strict robust readiness snapshot..."
 
 $project = "tests/MdCsg.Robust.Conformance/MdCsg.Robust.Conformance.csproj"
-$filter = "(FullyQualifiedName~RobustReadinessSnapshotTests|FullyQualifiedName~RobustBlockerLedgerTests|FullyQualifiedName~ChainedCsgSceneCase_Step3_ClosureAttempt_RemainsPinnedFailClosedBlocker)"
+$filter = "(FullyQualifiedName~RobustReadinessSnapshotTests|FullyQualifiedName~RobustBlockerLedgerTests|FullyQualifiedName~ChainedCsgSceneCase_Step3_ClosureAttempt_SucceedsAfterCollinearCollapse)"
 $args = @($project, "-c", "Release", "--nologo", "--blame-hang-timeout", "25m", "--filter", $filter)
 $ledgerPath = "tools/ci/robust-blocker-ledger.json"
 
@@ -13,7 +13,6 @@ if ($LASTEXITCODE -ne 0)
     throw "Strict readiness snapshot failed."
 }
 
-Write-Host "READINESS_STATUS=BLOCKED"
 if (-not (Test-Path $ledgerPath))
 {
     throw "Missing blocker ledger: $ledgerPath"
@@ -34,6 +33,15 @@ if ([string]::IsNullOrWhiteSpace($knownBlockedDetail))
 if ([string]::IsNullOrWhiteSpace($knownSignatures))
 {
     $knownSignatures = "none"
+}
+
+if ($knownBlocked -eq "none")
+{
+    Write-Host "READINESS_STATUS=PASS"
+}
+else
+{
+    Write-Host "READINESS_STATUS=BLOCKED"
 }
 
 Write-Host "KNOWN_BLOCKER=$knownBlocked"
