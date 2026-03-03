@@ -1078,3 +1078,4 @@ Deliverables:
 Exit criteria:
 
 - Stage batch 86-95 is fully validated, documented, and signed off with deterministic evidence.
+- Status: Completed (validation sweep passed: `MdCsg.Showcase.ContractTests` full suite 12/12 in `22m25s`; `MdCsg.Robust.Conformance` strict blocker pair (`closureAttempt=1` + `closureAttempt=0`) 2/2 in `15m56s`; `run-robust-readiness-report.ps1` passed in `~13m42s` with `READINESS_SHOWCASE_CLOSURE_MODE_CONTRACT=PASS` and `READINESS_SHOWCASE_ISSUE_SUMMARY_CONTRACT=PASS`; readiness remains explicitly blocked only by pinned `FUZZ-BLOCKER-0001@stage85`).
